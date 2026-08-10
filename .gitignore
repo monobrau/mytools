@@ -1,0 +1,42 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+credentials*.json
+secrets*.json
+config.json
+settings.json
+exceptions.json
+
+# Prefer templates over live data
+*.json
+!*.example.json
+!package.json
+!tsconfig.json
+!*.schema.json
+
+# Ticket / investigation artifacts (often contain PII)
+Ticket-*.txt
+*-Ticket-*.zip
+ClientExceptions-*.txt
+debug-*.log
+
+# Local scratch and outputs
+output/
+tmp/
+temp/
+*.log
+archive/

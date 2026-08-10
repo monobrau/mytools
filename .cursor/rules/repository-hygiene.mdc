@@ -1,0 +1,15 @@
+---
+description: Repository hygiene — no PII or live secrets in commits; align with CONTRIBUTING and CI.
+alwaysApply: true
+---
+
+# mytools repository hygiene
+
+When editing or generating **code, docs, examples, fixtures, or test data** for this repo:
+
+1. **Do not** add real client names, emails, phone numbers, addresses, ticket bodies, production URLs, API keys, tokens, or credentials. Use obvious placeholders (`user@example.com`, `Contoso`, synthetic samples) and follow [CONTRIBUTING.md](CONTRIBUTING.md).
+2. **Config and data files** — Real configs and investigation outputs stay **local** (gitignored). Only commit `*.example` templates with non-sensitive samples.
+3. **Before suggesting a commit** that adds new files or large pasted content, assume it may be scanned by **Gitleaks** in CI (`.github/workflows/gitleaks.yml`). If something looks like a secret, redact or use env vars / secret stores, not the repo.
+4. **Screenshots and markdown** — Redact or fake identifiers; do not copy live MSP or customer data into the repository.
+
+This rule does not replace CI; it keeps Cursor aligned with the same policy.
