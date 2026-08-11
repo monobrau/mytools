@@ -2,7 +2,7 @@
 
 Post-cleanup **verification** that Classic Microsoft Teams / per-user Teams leftovers are gone (vuln-scan remediation evidence).
 
-Does **not** uninstall. Run your cleanup script first, then this check from GitHub / ScreenConnect.
+Default is **check only**. Pass **`-Remediate`** to remove Classic MWI / per-user Classic / Run keys / installer folder, then re-scan.
 
 ## What it flags (fail)
 
@@ -32,6 +32,7 @@ Does **not** uninstall. Run your cleanup script first, then this check from GitH
 | Parameter | Meaning |
 | --- | --- |
 | _(none)_ | Run check |
+| `-Remediate` | Remove Classic remnants, then re-scan |
 | `-Detailed` | Treat warn items (e.g. shortcuts) as failing; include empty-folder noise |
 | `-Json` | Emit JSON summary after logs |
 | `-NoExit` / `-Exit` | Host lifecycle for Backstage vs Commands |
