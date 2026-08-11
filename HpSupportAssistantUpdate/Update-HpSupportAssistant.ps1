@@ -55,7 +55,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.1'
+$ScriptVersion = '1.1.2'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 # Do NOT match "HP Support Solutions Framework" - that is a companion with a different version scheme (12.x vs HPSA 9.x).
@@ -832,9 +832,19 @@ if (-not $needUpdate) {
     return
 }
 
+# Windows 10: never install/update via this tool. SoftPaqs that run on Win10 are still
+# below the patched minimum, and HPSA installs have been seen to destabilize .NET on 22H2.
+if (-not $osInfo.IsWindows11 -and -not $SoftPaqUrl) {
+    Write-HpsaLog 'Refusing -Update on Windows 10.' 'ERROR'
+    Write-HpsaLog 'Win10 SoftPaqs remain vulnerable; installs can also break .NET Framework.' 'ERROR'
+    Write-HpsaLog 'Use -Uninstall for v-scan remediation, then repair .NET if needed.' 'ERROR'
+    Complete-Hpsa -Code 3
+    return
+}
+
 if ($targetVulnerable -and -not $SoftPaqUrl) {
     Write-HpsaLog 'Refusing -Update: OS-appropriate SoftPaq is still in the vulnerable range.' 'ERROR'
-    Write-HpsaLog 'Use -Uninstall for v-scan remediation (recommended on Windows 10).' 'ERROR'
+    Write-HpsaLog 'Use -Uninstall for v-scan remediation.' 'ERROR'
     Complete-Hpsa -Code 3
     return
 }

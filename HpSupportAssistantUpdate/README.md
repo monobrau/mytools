@@ -14,7 +14,17 @@ Recent HP advisories include local privilege-escalation issues fixed only in new
 
 The SoftPaq that carries those fixes (**9.47 / sp171501**) often **will not install on Windows 10** (“incompatible with your operating system”). Win10-installable SoftPaqs such as **9.39** / **8.8** remain **below** the patched minimum, so they are still in the vulnerable range for vuln-scan purposes.
 
-**Recommendation:** on Windows 10, use **`-Uninstall`** (HPSA + Support Solutions Framework) for remediation. On Windows 11, `-Update` to winget latest (≥ 9.47) is viable when the SoftPaq installs.
+**Recommendation:** on Windows 10, use **`-Uninstall`** (HPSA + Support Solutions Framework) for remediation. **`-Update` is refused on Windows 10** (vulnerable SoftPaqs only; installs have also been seen to crash .NET Framework on 22H2). On Windows 11, `-Update` to winget latest (≥ 9.47) is viable when the SoftPaq installs.
+
+### If .NET crashed after an HPSA install (Win10)
+
+1. Run **`-Uninstall`** (remove HPSA + Framework).
+2. Reboot.
+3. Repair .NET Framework 4.x:
+   - Settings → Apps → optional features / Windows features: confirm **.NET Framework 4.8** Advanced Services is enabled, **or**
+   - Download Microsoft **.NET Framework Repair Tool** (`NetFxRepairTool`), **or**
+   - `DISM /Online /Cleanup-Image /RestoreHealth` then `sfc /scannow`
+4. Do **not** reinstall HPSA on Win10 for vuln remediation.
 
 ## Behavior
 
