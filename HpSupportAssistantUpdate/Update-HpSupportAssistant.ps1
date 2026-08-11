@@ -55,7 +55,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.2'
+$ScriptVersion = '1.1.3'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 # Do NOT match "HP Support Solutions Framework" - that is a companion with a different version scheme (12.x vs HPSA 9.x).
@@ -100,7 +100,9 @@ catch {
 function Write-HpsaLog {
     param([string]$Message, [string]$Level = 'INFO')
     $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-    Write-Output "[$ts][$Level] $Message"
+    # Write-Host (not Write-Output): logs must not pollute function return values
+    # (e.g. $uCode = Invoke-HpsaUninstall would become Object[] and break Complete-Hpsa -Code).
+    Write-Host "[$ts][$Level] $Message"
 }
 
 function Test-IsWindowsHost {
@@ -760,7 +762,9 @@ if ($Uninstall) {
         return
     }
     $uCode = Invoke-HpsaUninstall
-    Complete-Hpsa -Code $uCode
+    # Defensive: if any pipeline noise remains, take the last int-like value.
+    if ($uCode -is [array]) { $uCode = @($uCode)[-1] }
+    Complete-Hpsa -Code ([int]$uCode)
     return
 }
 
