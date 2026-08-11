@@ -87,17 +87,28 @@ function Get-UninstallEntries {
     }
 }
 
+function Test-PathSafe {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+    try {
+        return [bool](Test-Path -LiteralPath $Path -ErrorAction SilentlyContinue)
+    }
+    catch {
+        return $false
+    }
+}
+
 function Get-FileVersionSafe {
     param([string]$Path)
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    if (-not (Test-PathSafe -Path $Path)) { return $null }
     try {
-        return [string](Get-Item -LiteralPath $Path).VersionInfo.FileVersion
+        return [string](Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue).VersionInfo.FileVersion
     }
     catch { return $null }
 }
 
 function Get-UserProfileRoots {
-    $roots = New-Object System.Collections.Generic.List[object]
+    $roots = @()
     $seen = @{}
     $skip = @('Public', 'Default', 'Default User', 'All Users', 'desktop.ini')
 
@@ -105,56 +116,55 @@ function Get-UserProfileRoots {
     Get-ChildItem -Path $profilesKey -ErrorAction SilentlyContinue | ForEach-Object {
         $p = Get-ItemProperty -Path $_.PSPath -ErrorAction SilentlyContinue
         $profilePath = [string]$p.ProfileImagePath
-        if (-not $profilePath) { return }
-        $name = Split-Path -Leaf $profilePath
+        if ([string]::IsNullOrWhiteSpace($profilePath)) { return }
+        $name = [string](Split-Path -Leaf $profilePath)
         if ($skip -contains $name) { return }
-        if ($profilePath -match '(?i)\\(ServiceProfiles|systemprofile|config\\systemprofile)\\') { return }
-        if ($profilePath -match '(?i)\\Windows\\System32\\') { return }
-        $exists = $false
-        try { $exists = Test-Path -LiteralPath $profilePath -ErrorAction SilentlyContinue } catch { $exists = $false }
-        if (-not $exists) { return }
+        if ($profilePath -match '(?i)ServiceProfiles|systemprofile|Windows\\System32') { return }
+        if (-not (Test-PathSafe -Path $profilePath)) { return }
         $key = $profilePath.ToLowerInvariant()
         if ($seen.ContainsKey($key)) { return }
         $seen[$key] = $true
-        $roots.Add([pscustomobject]@{
-                Name = $name
-                Path = $profilePath
-                Sid  = [string]$_.PSChildName
-            })
-    }
-
-    $usersRoot = Join-Path $env:SystemDrive 'Users'
-    if (Test-Path -LiteralPath $usersRoot) {
-        Get-ChildItem -LiteralPath $usersRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            if ($skip -contains $_.Name) { return }
-            $key = $_.FullName.ToLowerInvariant()
-            if ($seen.ContainsKey($key)) { return }
-            $seen[$key] = $true
-            $roots.Add([pscustomobject]@{
-                    Name = $_.Name
-                    Path = $_.FullName
-                    Sid  = ''
-                })
+        $roots += [pscustomobject]@{
+            Name = $name
+            Path = $profilePath
+            Sid  = [string]$_.PSChildName
         }
     }
 
-    return @($roots)
+    $usersRoot = Join-Path $env:SystemDrive 'Users'
+    if (Test-PathSafe -Path $usersRoot) {
+        Get-ChildItem -LiteralPath $usersRoot -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $name = [string]$_.Name
+            if ($skip -contains $name) { return }
+            $full = [string]$_.FullName
+            $key = $full.ToLowerInvariant()
+            if ($seen.ContainsKey($key)) { return }
+            $seen[$key] = $true
+            $roots += [pscustomobject]@{
+                Name = $name
+                Path = $full
+                Sid  = ''
+            }
+        }
+    }
+
+    return ,$roots
 }
 
 function Add-Finding {
     param(
-        $List,
+        [System.Collections.ArrayList]$List,
         [string]$Category,
         [string]$Path,
         [string]$Detail,
         [string]$Severity = 'fail'
     )
-    $List.Add([pscustomobject]@{
+    [void]$List.Add([pscustomobject]@{
             Category = $Category
             Path     = $Path
             Detail   = $Detail
             Severity = $Severity
-        }) | Out-Null
+        })
 }
 
 function Get-ClassicTeamsMachineWide {
@@ -214,7 +224,7 @@ if (-not (Test-IsWindowsHost)) {
     return
 }
 
-$findings = New-Object System.Collections.Generic.List[object]
+$findings = New-Object System.Collections.ArrayList
 
 # 1) Machine-Wide Installer
 $mwi = Get-ClassicTeamsMachineWide
@@ -235,7 +245,7 @@ $installerDirs = @(
     "$env:ProgramFiles\Teams Installer"
 )
 foreach ($dir in $installerDirs) {
-    if (Test-Path -LiteralPath $dir) {
+    if (Test-PathSafe -Path $dir) {
         $teamsExe = Join-Path $dir 'Teams.exe'
         $ver = Get-FileVersionSafe -Path $teamsExe
         $detail = if ($ver) { "Teams Installer folder present; Teams.exe version=$ver" } else { 'Teams Installer folder present' }
@@ -272,27 +282,31 @@ foreach ($profile in $profiles) {
     $updateExe = Join-Path $teamsRoot 'Update.exe'
     $squirrel = Join-Path $teamsRoot 'Squirrel.exe'
 
-    if (Test-Path -LiteralPath $teamsExe) {
+    if (Test-PathSafe -Path $teamsExe) {
         $ver = Get-FileVersionSafe -Path $teamsExe
         Add-Finding -List $findings -Category 'PerUserTeamsExe' -Path $teamsExe `
             -Detail ("profile={0} version={1}" -f $profile.Name, $(if ($ver) { $ver } else { 'unknown' }))
     }
-    elseif (Test-Path -LiteralPath $updateExe) {
+    elseif (Test-PathSafe -Path $updateExe) {
         Add-Finding -List $findings -Category 'PerUserUpdateExe' -Path $updateExe `
             -Detail ("profile={0}" -f $profile.Name)
     }
-    elseif (Test-Path -LiteralPath $squirrel) {
+    elseif (Test-PathSafe -Path $squirrel) {
         Add-Finding -List $findings -Category 'PerUserSquirrel' -Path $squirrel `
             -Detail ("profile={0}" -f $profile.Name)
     }
-    elseif ((Test-Path -LiteralPath $teamsRoot) -and $Detailed) {
+    elseif ((Test-PathSafe -Path $teamsRoot) -and $Detailed) {
         Add-Finding -List $findings -Category 'PerUserTeamsFolder' -Path $teamsRoot `
             -Detail ("profile={0} (folder only)" -f $profile.Name) -Severity 'warn'
     }
-    elseif (Test-Path -LiteralPath $teamsRoot) {
+    elseif (Test-PathSafe -Path $teamsRoot) {
         # Non-empty classic tree without current\Teams.exe still counts as remnant.
-        $any = Get-ChildItem -LiteralPath $teamsRoot -Recurse -File -ErrorAction SilentlyContinue |
-            Select-Object -First 1
+        $any = $null
+        try {
+            $any = Get-ChildItem -LiteralPath $teamsRoot -Recurse -File -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+        }
+        catch { $any = $null }
         if ($any) {
             Add-Finding -List $findings -Category 'PerUserTeamsFolder' -Path $teamsRoot `
                 -Detail ("profile={0} (files present, no current\\Teams.exe)" -f $profile.Name)
@@ -304,7 +318,7 @@ foreach ($profile in $profiles) {
         (Join-Path $profile.Path 'Desktop')
     )
     foreach ($folder in $shortcutFolders) {
-        if (-not (Test-Path -LiteralPath $folder)) { continue }
+        if (-not (Test-PathSafe -Path $folder)) { continue }
         Get-ChildItem -LiteralPath $folder -Filter '*Teams*.lnk' -ErrorAction SilentlyContinue | ForEach-Object {
             $sev = if ($Detailed) { 'fail' } else { 'warn' }
             Add-Finding -List $findings -Category 'Shortcut' -Path $_.FullName `
