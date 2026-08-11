@@ -38,18 +38,37 @@ param(
 
 Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 $DisplayNamePattern = 'HP Support Assistant|HP Support Solutions Framework'
 
 if ($Force) { $Update = $true }
 
+# TLS 1.2 for Windows PowerShell 5.1 / older .NET; harmless on pwsh (.NET Core).
+try {
+    [Net.ServicePointManager]::SecurityProtocol = (
+        [Net.ServicePointManager]::SecurityProtocol -bor
+        [Net.SecurityProtocolType]::Tls12
+    )
+}
+catch {
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+}
+
 function Write-HpsaLog {
     param([string]$Message, [string]$Level = 'INFO')
     $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     Write-Output "[$ts][$Level] $Message"
+}
+
+function Test-IsWindowsHost {
+    if ($null -ne (Get-Variable -Name IsWindows -Scope Global -ErrorAction SilentlyContinue)) {
+        return [bool]$IsWindows
+    }
+    return ($env:OS -like 'Windows*')
 }
 
 function Test-IsElevated {
@@ -66,11 +85,42 @@ function ConvertTo-HpsaVersion {
     if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
     $clean = ($Text -replace '[^\d\.]', '').Trim('.')
     if ([string]::IsNullOrWhiteSpace($clean)) { return $null }
-    # Normalize to up to 4 parts for [version]
-    $parts = $clean.Split('.') | Where-Object { $_ -ne '' }
+    # Force array: a single Split result is a [string] in Windows PowerShell (Count = length).
+    $parts = @($clean.Split('.') | Where-Object { $_ -ne '' })
     while ($parts.Count -lt 2) { $parts += '0' }
     if ($parts.Count -gt 4) { $parts = $parts[0..3] }
     try { return [version](($parts -join '.')) } catch { return $null }
+}
+
+function ConvertTo-HpsaText {
+    # Normalize Invoke-WebRequest Content for Windows PowerShell 5.1 and pwsh 7+.
+    param($Content)
+    if ($null -eq $Content) { return '' }
+    if ($Content -is [byte[]]) {
+        return [System.Text.Encoding]::UTF8.GetString($Content)
+    }
+    $text = [string]$Content
+    if ($text.Length -gt 0 -and [int][char]$text[0] -eq 0xFEFF) {
+        $text = $text.Substring(1)
+    }
+    return $text
+}
+
+function Invoke-HpsaWebRequest {
+    param(
+        [Parameter(Mandatory)][string]$Uri,
+        [hashtable]$Headers,
+        [string]$OutFile,
+        [int]$TimeoutSec = 60
+    )
+    $params = @{
+        Uri             = $Uri
+        UseBasicParsing = $true
+        TimeoutSec      = $TimeoutSec
+    }
+    if ($Headers) { $params['Headers'] = $Headers }
+    if ($OutFile) { $params['OutFile'] = $OutFile }
+    return Invoke-WebRequest @params
 }
 
 function Get-InstalledHpSupportAssistant {
@@ -107,8 +157,9 @@ function Invoke-GitHubJson {
         'User-Agent' = "HpSupportAssistantUpdate/$ScriptVersion"
         'Accept'     = 'application/vnd.github+json'
     }
-    $resp = Invoke-WebRequest -Uri $Uri -Headers $headers -UseBasicParsing -TimeoutSec 60
-    return ($resp.Content | ConvertFrom-Json)
+    $resp = Invoke-HpsaWebRequest -Uri $Uri -Headers $headers -TimeoutSec 60
+    $json = ConvertTo-HpsaText -Content $resp.Content
+    return ($json | ConvertFrom-Json)
 }
 
 function Get-LatestHpSupportAssistantFromWingetCli {
@@ -159,7 +210,8 @@ function Get-LatestHpSupportAssistantFromWingetPkgs {
     if (-not $yamlUrl) {
         $yamlUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/h/HPInc/HPSupportAssistant/$latestName/$($installer.name)"
     }
-    $yaml = (Invoke-WebRequest -Uri $yamlUrl -UseBasicParsing -TimeoutSec 60).Content
+    $yamlResp = Invoke-HpsaWebRequest -Uri $yamlUrl -TimeoutSec 60
+    $yaml = ConvertTo-HpsaText -Content $yamlResp.Content
     $urlMatch = [regex]::Match($yaml, 'InstallerUrl:\s*(\S+)')
     $hashMatch = [regex]::Match($yaml, 'InstallerSha256:\s*([A-Fa-f0-9]{64})')
     if (-not $urlMatch.Success) {
@@ -243,11 +295,13 @@ function Invoke-SoftPaqSilentInstall {
 }
 
 # --- main ---
+$hostEdition = if ($PSVersionTable.PSEdition) { [string]$PSVersionTable.PSEdition } else { 'Desktop' }
 Write-HpsaLog ("HpSupportAssistantUpdate {0}" -f $ScriptVersion)
+Write-HpsaLog ("Host: PowerShell {0} ({1})" -f $PSVersionTable.PSVersion, $hostEdition)
 Write-HpsaLog ("User: {0} | Elevated: {1} | Force={2} Update={3}" -f `
         [Security.Principal.WindowsIdentity]::GetCurrent().Name, (Test-IsElevated), $Force, $Update)
 
-if ($env:OS -notlike '*Windows*') {
+if (-not (Test-IsWindowsHost)) {
     Write-HpsaLog 'Windows only.' 'ERROR'
     exit 1
 }
@@ -328,8 +382,7 @@ $extractDir = Join-Path $WorkingDirectory ("extract_$stamp")
 
 try {
     Write-HpsaLog "Downloading SoftPaq to $softpaqPath"
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri $latest.InstallerUrl -OutFile $softpaqPath -UseBasicParsing -TimeoutSec 600
+    Invoke-HpsaWebRequest -Uri $latest.InstallerUrl -OutFile $softpaqPath -TimeoutSec 600 | Out-Null
 
     if ($latest.Sha256) {
         $actual = Get-FileSha256 -Path $softpaqPath
