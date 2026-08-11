@@ -24,7 +24,7 @@ Exit codes:
 ## Verdict (what you’ll see)
 
 ```
-======== M365 APPS UPDATE STATUS: UP TO DATE — NO UPDATES NEEDED ========
+======== M365 APPS UPDATE STATUS: UP TO DATE - NO UPDATES NEEDED ========
 No updates needed. Local 16.0.x >= channel latest 16.0.x (Current).
 ================================================
 ```
@@ -32,7 +32,7 @@ No updates needed. Local 16.0.x >= channel latest 16.0.x (Current).
 or
 
 ```
-======== M365 APPS UPDATE STATUS: UPDATE AVAILABLE — UPDATES NEEDED ========
+======== M365 APPS UPDATE STATUS: UPDATE AVAILABLE - UPDATES NEEDED ========
 Updates needed. Local 16.0.x < channel latest 16.0.x (Current).
 ================================================
 ```
