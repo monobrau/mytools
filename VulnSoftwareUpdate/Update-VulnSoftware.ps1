@@ -51,7 +51,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.2.0'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -177,6 +177,51 @@ function Get-VulnCatalog {
         [pscustomobject]@{
             Id = 'FoxitReader'; Name = 'Foxit PDF Reader'; Method = 'Winget'; WingetId = 'Foxit.FoxitReader'
             Match = @('Foxit PDF Reader', 'Foxit Reader')
+        }
+        # Phase 1 — high-volume / completely safe winget targets
+        [pscustomobject]@{
+            Id = 'SevenZip'; Name = '7-Zip'; Method = 'Winget'; WingetId = '7zip.7zip'
+            Match = @('^7-Zip', '7-Zip ')
+        }
+        [pscustomobject]@{
+            Id = 'NotepadPlusPlus'; Name = 'Notepad++'; Method = 'Winget'; WingetId = 'Notepad++.Notepad++'
+            Match = @('Notepad\+\+')
+        }
+        [pscustomobject]@{
+            Id = 'VcRedistX64'; Name = 'Visual C++ Redistributable (x64)'
+            Method = 'Winget'; WingetId = 'Microsoft.VCRedist.2015+.x64'
+            Match = @('Visual C\+\+ 2015-2022 Redistributable \(x64\)', 'Visual C\+\+ 2015-2019 Redistributable \(x64\)')
+        }
+        [pscustomobject]@{
+            Id = 'VcRedistX86'; Name = 'Visual C++ Redistributable (x86)'
+            Method = 'Winget'; WingetId = 'Microsoft.VCRedist.2015+.x86'
+            Match = @('Visual C\+\+ 2015-2022 Redistributable \(x86\)', 'Visual C\+\+ 2015-2019 Redistributable \(x86\)')
+        }
+        [pscustomobject]@{
+            Id = 'PuTTY'; Name = 'PuTTY'; Method = 'Winget'; WingetId = 'PuTTY.PuTTY'
+            Match = @('^PuTTY', 'PuTTY release')
+        }
+        [pscustomobject]@{
+            Id = 'WinSCP'; Name = 'WinSCP'; Method = 'Winget'; WingetId = 'WinSCP.WinSCP'
+            Match = @('^WinSCP')
+        }
+        [pscustomobject]@{
+            Id = 'VLC'; Name = 'VLC media player'; Method = 'Winget'; WingetId = 'VideoLAN.VLC'
+            Match = @('VLC media player')
+        }
+        [pscustomobject]@{
+            Id = 'WebView2'; Name = 'Microsoft Edge WebView2 Runtime'
+            Method = 'Winget'; WingetId = 'Microsoft.EdgeWebView2Runtime'
+            Match = @('WebView2 Runtime', 'Microsoft Edge WebView2')
+        }
+        [pscustomobject]@{
+            Id = 'PowerShell7'; Name = 'PowerShell 7'; Method = 'Winget'; WingetId = 'Microsoft.PowerShell'
+            Match = @('^PowerShell 7', 'PowerShell 7-')
+            Notes = 'Does not replace Windows PowerShell 5.1'
+        }
+        [pscustomobject]@{
+            Id = 'FileZilla'; Name = 'FileZilla'; Method = 'Winget'; WingetId = 'FileZilla.FileZilla'
+            Match = @('^FileZilla')
         }
     )
 }
