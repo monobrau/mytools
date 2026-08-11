@@ -26,6 +26,13 @@
 
 .PARAMETER WorkingDirectory
     Folder for download/extract. Default: %ProgramData%\HpSupportAssistantUpdate
+
+.PARAMETER NoExit
+    Do not call exit (keeps ScreenConnect Backstage PowerShell open). Implied automatically
+    when the script is invoked via ScriptBlock in an interactive host.
+
+.PARAMETER Exit
+    Always call exit with the result code (use for ScreenConnect Commands / automation).
 #>
 [CmdletBinding()]
 param(
@@ -33,14 +40,16 @@ param(
     [switch]$Force,
     [string]$SoftPaqUrl,
     [string]$LatestVersion,
-    [string]$WorkingDirectory = (Join-Path $env:ProgramData 'HpSupportAssistantUpdate')
+    [string]$WorkingDirectory = (Join-Path $env:ProgramData 'HpSupportAssistantUpdate'),
+    [switch]$NoExit,
+    [switch]$Exit
 )
 
 Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.1'
+$ScriptVersion = '1.0.2'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 $DisplayNamePattern = 'HP Support Assistant|HP Support Solutions Framework'
@@ -294,6 +303,30 @@ function Invoke-SoftPaqSilentInstall {
     return $p3.ExitCode
 }
 
+function Test-HpsaShouldExitProcess {
+    # exit kills the whole ScreenConnect Backstage console when invoked via ScriptBlock.
+    if ($NoExit) { return $false }
+    if ($Exit) { return $true }
+    # File / -File invocation: exit so callers get a process code.
+    if (-not [string]::IsNullOrEmpty($PSCommandPath)) { return $true }
+    # ScriptBlock + interactive host (typical Backstage): keep the console open.
+    if ([Environment]::UserInteractive) { return $false }
+    return $true
+}
+
+function Complete-Hpsa {
+    param([Parameter(Mandatory)][int]$Code)
+    $global:LASTEXITCODE = $Code
+    try { $global:HpsaResultCode = $Code } catch { }
+
+    if (Test-HpsaShouldExitProcess) {
+        exit $Code
+    }
+
+    Write-HpsaLog ("Done. ResultCode={0} (PowerShell host kept open)." -f $Code)
+    return
+}
+
 # --- main ---
 $hostEdition = if ($PSVersionTable.PSEdition) { [string]$PSVersionTable.PSEdition } else { 'Desktop' }
 Write-HpsaLog ("HpSupportAssistantUpdate {0}" -f $ScriptVersion)
@@ -303,7 +336,8 @@ Write-HpsaLog ("User: {0} | Elevated: {1} | Force={2} Update={3}" -f `
 
 if (-not (Test-IsWindowsHost)) {
     Write-HpsaLog 'Windows only.' 'ERROR'
-    exit 1
+    Complete-Hpsa -Code 1
+    return
 }
 
 $installed = Get-InstalledHpSupportAssistant
@@ -332,7 +366,8 @@ try {
 }
 catch {
     Write-HpsaLog "Failed to resolve latest package: $($_.Exception.Message)" 'ERROR'
-    exit 1
+    Complete-Hpsa -Code 1
+    return
 }
 
 Write-HpsaLog ("Latest:  {0} ({1})" -f $latest.Version, $latest.Source)
@@ -362,17 +397,20 @@ else {
 
 if (-not $Update) {
     Write-HpsaLog 'Check-only complete (pass -Update to install).'
-    if ($needUpdate) { exit 2 } else { exit 0 }
+    if ($needUpdate) { Complete-Hpsa -Code 2 } else { Complete-Hpsa -Code 0 }
+    return
 }
 
 if (-not $needUpdate) {
     Write-HpsaLog 'Nothing to do.'
-    exit 0
+    Complete-Hpsa -Code 0
+    return
 }
 
 if (-not (Test-IsElevated)) {
     Write-HpsaLog 'Elevation required for install (run as SYSTEM / Administrator).' 'ERROR'
-    exit 1
+    Complete-Hpsa -Code 1
+    return
 }
 
 New-Item -ItemType Directory -Path $WorkingDirectory -Force | Out-Null
@@ -407,15 +445,18 @@ try {
         if ($exitCode -eq 3010) {
             Write-HpsaLog 'Exit 3010: reboot required to finish install.' 'WARN'
         }
-        exit $exitCode
+        Complete-Hpsa -Code $exitCode
+        return
     }
 
     Write-HpsaLog "Update finished with exit code $exitCode." 'ERROR'
-    exit $exitCode
+    Complete-Hpsa -Code $exitCode
+    return
 }
 catch {
     Write-HpsaLog $_.Exception.Message 'ERROR'
-    exit 1
+    Complete-Hpsa -Code 1
+    return
 }
 finally {
     # Keep SoftPaq for troubleshooting on failure; remove extract tree always.
