@@ -12,7 +12,6 @@ Checks what’s installed, prints a clear per-product verdict, and can silently 
 | HP Support Assistant (extra) | `HpSupportAssistant` | Delegates to [HpSupportAssistantUpdate](../HpSupportAssistantUpdate/) |
 | ShareX | `ShareX` | winget `ShareX.ShareX` |
 | Adobe Acrobat (64-bit) / Reader | `AdobeAcrobat` | winget Reader 64-bit or Acrobat Pro (auto-picked) |
-| Duo Security Authentication Proxy | `DuoAuthProxy` | Vendor `duoauthproxy-latest.exe /S` |
 | Visual Studio Code (User) | `VSCode` | winget `Microsoft.VisualStudioCode` (user-scope may need a logged-on user) |
 | Git | `Git` | winget `Git.Git` |
 | GIMP | `GIMP` | winget `GIMP.GIMP` |
@@ -46,14 +45,14 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.0.1'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes
 
 - Requires **winget** on the endpoint for most third-party apps (SYSTEM context can be flaky; machine-scope installs work best).
-- **Duo Auth Proxy** silent upgrade can briefly interrupt 2FA authentication — coordinate for servers.
 - **M365 Apps** stays on Click-to-Run (same non-disruptive defaults as M365AppsUpdate).
+- Duo Authentication Proxy is intentionally out of scope (use the dedicated Duo tooling if needed).
 - Add new products by extending the catalog in `Update-VulnSoftware.ps1`.
 
 ## Local
