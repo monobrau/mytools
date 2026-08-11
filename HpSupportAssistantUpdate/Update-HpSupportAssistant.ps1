@@ -1,25 +1,30 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Checks installed HP Support Assistant version and silently updates to the latest SoftPaq.
+    Checks / updates / uninstalls HP Support Assistant for ScreenConnect and vuln-scan remediation.
 
 .DESCRIPTION
     Designed for ConnectWise ScreenConnect Backstage (SYSTEM) and the Commands tab (#!ps).
-    Resolves the latest package from winget-pkgs (GitHub) or winget CLI (HPInc.HPSupportAssistant),
-    compares to the installed DisplayVersion, downloads the SoftPaq from ftp.hp.com, and installs
-    silently.
 
-    Check-only by default. Pass -Update to install when older (or missing). Pass -Force to reinstall
-    even when already current.
+    Recent HP advisories (e.g. CVE-2025-10578, CVE-2025-43019, CVE-2025-43026) are fixed only in
+    HPSA builds around 9.44–9.47. The SoftPaq that carries those fixes often will not install on
+    Windows 10 (incompatible-OS dialog). Win10 SoftPaqs such as 9.39 / 8.8 remain below the fixed
+    versions, so vuln-scan remediation on Windows 10 should uninstall HPSA (+ Framework).
+
+    Check-only by default. -Uninstall for remediation. -Update only when a patched SoftPaq can be
+    installed (typically Windows 11).
+
+.PARAMETER Uninstall
+    Silently remove HP Support Assistant and HP Support Solutions Framework (v-scan remediation).
 
 .PARAMETER Update
-    Download and silently install when installed version is older than latest (or not installed).
+    Download and silently install when installed version is older than the OS-appropriate target.
 
 .PARAMETER Force
-    Reinstall even if installed version is equal to or newer than latest. Implies -Update.
+    With -Update: reinstall even if current. With -Uninstall: continue cleanup even if not detected.
 
 .PARAMETER SoftPaqUrl
-    Optional override SoftPaq URL (skips winget-pkgs lookup). Still uses -LatestVersion if provided.
+    Optional override SoftPaq URL (skips catalog/winget lookup). Still uses -LatestVersion if provided.
 
 .PARAMETER LatestVersion
     Optional override for the "latest" version string used in comparisons (e.g. 9.47.41.0).
@@ -36,6 +41,7 @@
 #>
 [CmdletBinding()]
 param(
+    [switch]$Uninstall,
     [switch]$Update,
     [switch]$Force,
     [string]$SoftPaqUrl,
@@ -49,12 +55,14 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.4'
+$ScriptVersion = '1.1.0'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 # Do NOT match "HP Support Solutions Framework" — that is a companion with a different version scheme (12.x vs HPSA 9.x).
 $HpsaDisplayNamePattern = '^HP Support Assistant(\s|$)'
 $FrameworkDisplayNamePattern = '^HP Support Solutions Framework(\s|$)'
+# Minimum build that covers recent HP bulletins (CVE-2025-10578 requires < 9.47.41.0 fixed).
+$PatchedMinimumVersion = [version]'9.47.41.0'
 
 # Current winget SoftPaq (9.47 / sp171501) rejects many Windows 10 hosts with an "incompatible OS" dialog.
 # Win10 path uses SoftPaqs that still declare Windows 10 support on ftp.hp.com.
@@ -73,7 +81,10 @@ $Win10SoftPaqCandidates = @(
     }
 )
 
-if ($Force) { $Update = $true }
+if ($Force -and -not $Uninstall) { $Update = $true }
+if ($Uninstall -and $Update) {
+    throw 'Specify only one of -Uninstall or -Update.'
+}
 
 # TLS 1.2 for Windows PowerShell 5.1 / older .NET; harmless on pwsh (.NET Core).
 try {
@@ -424,6 +435,174 @@ function Get-FileSha256 {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToUpperInvariant()
 }
 
+function Test-HpsaVersionVulnerable {
+    param($Installed)
+    if (-not $Installed -or -not $Installed.Version) {
+        return [pscustomobject]@{ IsVulnerable = $false; Reason = 'not installed' }
+    }
+    if ($Installed.Version -lt $PatchedMinimumVersion) {
+        return [pscustomobject]@{
+            IsVulnerable = $true
+            Reason       = ("{0} < patched minimum {1} (CVE-2025-10578 / CVE-2025-43019 / CVE-2025-43026 family)" -f `
+                    $Installed.Version, $PatchedMinimumVersion)
+        }
+    }
+    return [pscustomobject]@{ IsVulnerable = $false; Reason = ("{0} >= {1}" -f $Installed.Version, $PatchedMinimumVersion) }
+}
+
+function Stop-HpsaServices {
+    $names = @(
+        'HPAppHelperCap', 'HPDiagsCap', 'HPNetworkCap', 'HPSysInfoCap',
+        'HpTouchpointAnalyticsService', 'HPSupportSolutionsFrameworkService'
+    )
+    foreach ($n in $names) {
+        try {
+            $svc = Get-Service -Name $n -ErrorAction SilentlyContinue
+            if ($svc -and $svc.Status -ne 'Stopped') {
+                Write-HpsaLog ("Stopping service {0}" -f $n)
+                Stop-Service -Name $n -Force -ErrorAction SilentlyContinue
+            }
+        }
+        catch { }
+    }
+}
+
+function Get-HpsaVendorUninstaller {
+    $candidates = @(
+        "${env:ProgramFiles(x86)}\HP\HP Support Framework\UninstallHPSA.exe"
+        "${env:ProgramFiles(x86)}\Hewlett-Packard\HP Support Framework\UninstallHPSA.exe"
+        "${env:ProgramFiles}\HP\HP Support Framework\UninstallHPSA.exe"
+        "${env:ProgramFiles}\Hewlett-Packard\HP Support Framework\UninstallHPSA.exe"
+    )
+    foreach ($p in $candidates) {
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+function Uninstall-ArpProductByPattern {
+    param([Parameter(Mandatory)][string]$Pattern)
+    $hits = @(
+        Get-UninstallEntries | Where-Object {
+            $_.DisplayName -and ($_.DisplayName -match $Pattern)
+        }
+    )
+    $code = 0
+    foreach ($hit in $hits) {
+        $name = [string]$hit.DisplayName
+        $uninstall = [string]$hit.UninstallString
+        $quietUninstall = $null
+        try { $quietUninstall = [string]$hit.QuietUninstallString } catch { }
+        Write-HpsaLog ("ARP uninstall: {0}" -f $name)
+
+        if ($quietUninstall) {
+            # QuietUninstallString is often a full command line.
+            Write-HpsaLog ("Running QuietUninstallString for {0}" -f $name)
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $quietUninstall) -Wait -PassThru -WindowStyle Hidden
+            Write-HpsaLog ("QuietUninstall exit: {0}" -f $p.ExitCode)
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+            continue
+        }
+
+        if ($uninstall -match 'MsiExec\.exe.*?(\{[0-9A-Fa-f-]{36}\})') {
+            $guid = $Matches[1]
+            Write-HpsaLog ("msiexec /x {0} /qn /norestart" -f $guid)
+            $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/x', $guid, '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+            Write-HpsaLog ("msiexec exit: {0}" -f $p.ExitCode)
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+            continue
+        }
+
+        if ($uninstall) {
+            Write-HpsaLog ("Running UninstallString via cmd for {0}" -f $name)
+            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $uninstall, '/S', '/qn') -Wait -PassThru -WindowStyle Hidden
+            Write-HpsaLog ("UninstallString exit: {0}" -f $p.ExitCode)
+            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+        }
+    }
+    return $code
+}
+
+function Remove-HpsaAppxPackages {
+    try {
+        $pkgs = @(Get-AppxPackage -AllUsers -Name '*HPSupportAssistant*' -ErrorAction SilentlyContinue)
+        foreach ($pkg in $pkgs) {
+            Write-HpsaLog ("Removing AppX {0} {1}" -f $pkg.Name, $pkg.Version)
+            Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+        }
+    }
+    catch {
+        Write-HpsaLog ("AppX removal note: {0}" -f $_.Exception.Message) 'WARN'
+    }
+}
+
+function Remove-HpsaResiduals {
+    $paths = @(
+        "${env:ProgramFiles(x86)}\HP\HP Support Framework"
+        "${env:ProgramFiles(x86)}\Hewlett-Packard\HP Support Framework"
+        "${env:ProgramFiles}\HP\HP Support Framework"
+        "${env:ProgramData}\HP\HP Support Framework"
+        'HKLM:\SOFTWARE\WOW6432Node\Hewlett-Packard\HPActiveSupport'
+        'HKLM:\SOFTWARE\WOW6432Node\HP\HPActiveSupport'
+        'HKLM:\SOFTWARE\Hewlett-Packard\HPActiveSupport'
+        'HKLM:\SOFTWARE\HP\HPActiveSupport'
+    )
+    foreach ($p in $paths) {
+        if (-not (Test-Path -LiteralPath $p)) { continue }
+        Write-HpsaLog ("Removing residual {0}" -f $p)
+        try {
+            Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        catch {
+            Write-HpsaLog ("Could not remove {0}: {1}" -f $p, $_.Exception.Message) 'WARN'
+        }
+    }
+}
+
+function Invoke-HpsaUninstall {
+    Write-HpsaLog 'Starting silent uninstall (HPSA + Support Solutions Framework)...'
+    Stop-HpsaServices
+
+    $vendor = Get-HpsaVendorUninstaller
+    $code = 0
+    if ($vendor) {
+        Write-HpsaLog ("Running vendor uninstaller: {0}" -f $vendor)
+        # Prefer /v"..." form; also accepted: /s /v/qn UninstallKeepPreferences=FALSE
+        $args = @('/s', '/v/qn', 'UninstallKeepPreferences=FALSE')
+        $p = Start-Process -FilePath $vendor -ArgumentList $args -Wait -PassThru -WindowStyle Hidden
+        Write-HpsaLog ("UninstallHPSA exit: {0}" -f $p.ExitCode)
+        if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+    }
+    else {
+        Write-HpsaLog 'UninstallHPSA.exe not found; using ARP / msiexec fallbacks.' 'WARN'
+    }
+
+    $c1 = Uninstall-ArpProductByPattern -Pattern $HpsaDisplayNamePattern
+    $c2 = Uninstall-ArpProductByPattern -Pattern $FrameworkDisplayNamePattern
+    if ($c1 -ne 0) { $code = $c1 }
+    if ($c2 -ne 0) { $code = $c2 }
+
+    Remove-HpsaAppxPackages
+    Remove-HpsaResiduals
+
+    Start-Sleep -Seconds 2
+    $stillHpsa = Get-InstalledHpSupportAssistant
+    $stillFw = Get-HpSupportFrameworkCompanion
+    if ($stillHpsa) {
+        Write-HpsaLog ("HPSA still present after uninstall: {0} {1}" -f $stillHpsa.DisplayName, $stillHpsa.DisplayVersion) 'ERROR'
+        return 1
+    }
+    if ($stillFw) {
+        Write-HpsaLog ("Framework still present after uninstall: {0} {1}" -f $stillFw.DisplayName, $stillFw.DisplayVersion) 'WARN'
+        # Treat leftover framework as incomplete remediation.
+        return 1
+    }
+
+    Write-HpsaLog 'Uninstall complete — HPSA and Framework not detected.'
+    if ($code -eq 3010) { return 3010 }
+    return 0
+}
+
 function Invoke-SoftPaqSilentInstall {
     param(
         [Parameter(Mandatory)]
@@ -494,8 +673,8 @@ function Complete-Hpsa {
 $hostEdition = if ($PSVersionTable.PSEdition) { [string]$PSVersionTable.PSEdition } else { 'Desktop' }
 Write-HpsaLog ("HpSupportAssistantUpdate {0}" -f $ScriptVersion)
 Write-HpsaLog ("Host: PowerShell {0} ({1})" -f $PSVersionTable.PSVersion, $hostEdition)
-Write-HpsaLog ("User: {0} | Elevated: {1} | Force={2} Update={3}" -f `
-        [Security.Principal.WindowsIdentity]::GetCurrent().Name, (Test-IsElevated), $Force, $Update)
+Write-HpsaLog ("User: {0} | Elevated: {1} | Force={2} Update={3} Uninstall={4}" -f `
+        [Security.Principal.WindowsIdentity]::GetCurrent().Name, (Test-IsElevated), $Force, $Update, $Uninstall)
 
 if (-not (Test-IsWindowsHost)) {
     Write-HpsaLog 'Windows only.' 'ERROR'
@@ -520,6 +699,31 @@ if ($installed) {
 }
 else {
     Write-HpsaLog 'Installed HPSA: not found (Programs and Features / file / AppX)'
+}
+
+$vuln = Test-HpsaVersionVulnerable -Installed $installed
+if ($vuln.IsVulnerable) {
+    Write-HpsaLog ("Vuln status: VULNERABLE — {0}" -f $vuln.Reason) 'WARN'
+    Write-HpsaLog 'Patched SoftPaq (~9.47) often will not install on Windows 10; prefer -Uninstall for v-scan remediation.' 'WARN'
+}
+else {
+    Write-HpsaLog ("Vuln status: {0}" -f $vuln.Reason)
+}
+
+if ($Uninstall) {
+    if (-not (Test-IsElevated)) {
+        Write-HpsaLog 'Elevation required for uninstall (run as SYSTEM / Administrator).' 'ERROR'
+        Complete-Hpsa -Code 1
+        return
+    }
+    if (-not $installed -and -not $framework -and -not $Force) {
+        Write-HpsaLog 'Nothing to uninstall.'
+        Complete-Hpsa -Code 0
+        return
+    }
+    $uCode = Invoke-HpsaUninstall
+    Complete-Hpsa -Code $uCode
+    return
 }
 
 try {
@@ -548,6 +752,12 @@ catch {
 Write-HpsaLog ("Target:  {0} ({1})" -f $latest.Version, $latest.Source)
 Write-HpsaLog ("SoftPaq: {0}" -f $latest.InstallerUrl)
 
+$targetVulnerable = $false
+if ($latest.VersionObj -and $latest.VersionObj -lt $PatchedMinimumVersion) {
+    $targetVulnerable = $true
+    Write-HpsaLog ("Target SoftPaq {0} is below patched minimum {1}." -f $latest.Version, $PatchedMinimumVersion) 'WARN'
+}
+
 $needUpdate = $false
 if (-not $installed -or -not $installed.Version) {
     $needUpdate = $true
@@ -562,7 +772,7 @@ elseif ($latest.VersionObj -and $installed.Version -lt $latest.VersionObj) {
     Write-HpsaLog ("Decision: update needed ({0} < {1})." -f $installed.Version, $latest.VersionObj)
 }
 elseif ($latest.VersionObj -and $installed.Version -ge $latest.VersionObj) {
-    Write-HpsaLog ("Decision: already current ({0} >= {1})." -f $installed.Version, $latest.VersionObj)
+    Write-HpsaLog ("Decision: already current for this OS channel ({0} >= {1})." -f $installed.Version, $latest.VersionObj)
 }
 else {
     # Latest version string not parseable (override without -LatestVersion)
@@ -571,14 +781,23 @@ else {
 }
 
 if (-not $Update) {
-    Write-HpsaLog 'Check-only complete (pass -Update to install).'
-    if ($needUpdate) { Complete-Hpsa -Code 2 } else { Complete-Hpsa -Code 0 }
+    Write-HpsaLog 'Check-only complete (pass -Uninstall for remediation, or -Update on Win11).'
+    if ($vuln.IsVulnerable) { Complete-Hpsa -Code 2 }
+    elseif ($needUpdate) { Complete-Hpsa -Code 2 }
+    else { Complete-Hpsa -Code 0 }
     return
 }
 
 if (-not $needUpdate) {
     Write-HpsaLog 'Nothing to do.'
     Complete-Hpsa -Code 0
+    return
+}
+
+if ($targetVulnerable -and -not $SoftPaqUrl) {
+    Write-HpsaLog 'Refusing -Update: OS-appropriate SoftPaq is still in the vulnerable range.' 'ERROR'
+    Write-HpsaLog 'Use -Uninstall for v-scan remediation (recommended on Windows 10).' 'ERROR'
+    Complete-Hpsa -Code 3
     return
 }
 
