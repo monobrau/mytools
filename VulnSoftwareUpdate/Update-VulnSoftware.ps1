@@ -10,16 +10,22 @@
     Reuses mytools handlers where they exist (M365 Click-to-Run, HP Support Assistant)
     and uses winget / vendor silent installers for other common products.
 
-    Default: check all catalog products that are installed; update those that are behind.
+    Default: check/update installed catalog products except browsers.
     -CheckOnly: verdicts only.
     -Product Id1,Id2: limit to specific catalog IDs (see -List).
+    -IncludeBrowsers: also process Chrome / Edge / Firefox (session-disruptive).
     -List: print catalog and exit.
 
 .PARAMETER CheckOnly
     Do not change the system; print per-product status only.
 
 .PARAMETER Product
-    One or more catalog IDs (e.g. M365Apps, ShareX, Git). Default: all.
+    One or more catalog IDs (e.g. M365Apps, ShareX, Git). Default: all non-browser products.
+    Explicit browser Ids (Chrome, Edge, Firefox) are allowed without -IncludeBrowsers.
+
+.PARAMETER IncludeBrowsers
+    Opt-in: include Chrome, Edge, and Firefox in the default catalog run.
+    Browser upgrades may close open browser sessions.
 
 .PARAMETER List
     Show catalog IDs and exit.
@@ -40,6 +46,7 @@
 param(
     [switch]$CheckOnly,
     [string[]]$Product,
+    [switch]$IncludeBrowsers,
     [switch]$List,
     [switch]$Force,
     [switch]$ForceAppShutdown,
@@ -51,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.0'
+$ScriptVersion = '1.4.1'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -266,21 +273,24 @@ function Get-VulnCatalog {
             Id = 'SysinternalsSuite'; Name = 'Sysinternals Suite'; Method = 'Winget'; WingetId = 'Microsoft.Sysinternals.Suite'
             Match = @('Sysinternals Suite')
         }
-        # Browsers — high ticket volume; upgrades may close open browser sessions
+        # Browsers — opt-in only (-IncludeBrowsers or explicit -Product); may close sessions
         [pscustomobject]@{
             Id = 'Chrome'; Name = 'Google Chrome'; Method = 'Winget'; WingetId = 'Google.Chrome'
             Match = @('^Google Chrome$')
-            Notes = 'May close Chrome tabs/windows during upgrade; prefer off-hours or warn the user'
+            OptionalGroup = 'Browsers'
+            Notes = 'Opt-in (-IncludeBrowsers). May close Chrome tabs/windows during upgrade'
         }
         [pscustomobject]@{
             Id = 'Edge'; Name = 'Microsoft Edge'; Method = 'Winget'; WingetId = 'Microsoft.Edge'
             Match = @('^Microsoft Edge$')
-            Notes = 'Stable channel only. May close Edge sessions; WU/Intune is preferred when healthy'
+            OptionalGroup = 'Browsers'
+            Notes = 'Opt-in (-IncludeBrowsers). Stable only; may close Edge sessions'
         }
         [pscustomobject]@{
             Id = 'Firefox'; Name = 'Mozilla Firefox'; Method = 'Winget'; WingetId = 'Mozilla.Firefox'
             Match = @('^Mozilla Firefox', '^Firefox$')
-            Notes = 'Stable channel only (not Beta/Dev). May close Firefox sessions during upgrade'
+            OptionalGroup = 'Browsers'
+            Notes = 'Opt-in (-IncludeBrowsers). Stable only; may close Firefox sessions'
         }
     )
 }
@@ -527,8 +537,8 @@ function Add-Result {
 
 # --- main ---
 Write-VulnLog ("VulnSoftwareUpdate {0}" -f $ScriptVersion)
-Write-VulnLog ("User: {0} | CheckOnly={1} Force={2}" -f `
-        [Security.Principal.WindowsIdentity]::GetCurrent().Name, $CheckOnly, $Force)
+Write-VulnLog ("User: {0} | CheckOnly={1} Force={2} IncludeBrowsers={3}" -f `
+        [Security.Principal.WindowsIdentity]::GetCurrent().Name, $CheckOnly, $Force, $IncludeBrowsers)
 
 $catalog = @(Get-VulnCatalog)
 
@@ -536,7 +546,8 @@ if ($List) {
     Write-Host ''
     Write-Host 'Catalog IDs:'
     foreach ($c in $catalog) {
-        Write-Host ("  {0,-22} {1,-40} {2}" -f $c.Id, $c.Name, $c.Method)
+        $opt = if ($c.OptionalGroup) { (" [opt-in: -IncludeBrowsers or -Product {0}]" -f $c.Id) } else { '' }
+        Write-Host ("  {0,-22} {1,-40} {2}{3}" -f $c.Id, $c.Name, $c.Method, $opt)
         if ($c.Notes) { Write-Host ("    notes: {0}" -f $c.Notes) }
     }
     Complete-Vuln -Code 0
@@ -546,6 +557,7 @@ if ($List) {
 $selected = $catalog
 if ($Product -and $Product.Count -gt 0) {
     # Support -Product A,B,C (single string) and -Product A -Product B
+    # Explicit -Product Chrome/Edge/Firefox does not require -IncludeBrowsers.
     $wanted = @(
         $Product |
             ForEach-Object { $_ -split ',' } |
@@ -562,6 +574,13 @@ if ($Product -and $Product.Count -gt 0) {
         Complete-Vuln -Code 1
         return
     }
+}
+elseif (-not $IncludeBrowsers) {
+    $selected = @($catalog | Where-Object { $_.OptionalGroup -ne 'Browsers' })
+    Write-VulnLog 'Browsers (Chrome/Edge/Firefox) skipped by default. Pass -IncludeBrowsers or -Product Chrome,Edge,Firefox to opt in.'
+}
+else {
+    Write-VulnLog 'IncludeBrowsers enabled - Chrome/Edge/Firefox will be assessed (updates may close open browser sessions).' 'WARN'
 }
 
 $installedApps = @(Get-InstalledApps)

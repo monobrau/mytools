@@ -41,21 +41,22 @@ Checks what’s installed, prints a clear per-product verdict, and can silently 
 | Windows Terminal | `WindowsTerminal` | winget `Microsoft.WindowsTerminal` |
 | AWS CLI | `AwsCli` | winget `Amazon.AWSCLI` |
 | Sysinternals Suite | `SysinternalsSuite` | winget `Microsoft.Sysinternals.Suite` |
-| Google Chrome | `Chrome` | winget `Google.Chrome` — **may close open Chrome sessions** |
-| Microsoft Edge | `Edge` | winget `Microsoft.Edge` — **may close open Edge sessions** |
-| Mozilla Firefox | `Firefox` | winget `Mozilla.Firefox` — **may close open Firefox sessions** |
+| Google Chrome | `Chrome` | **Opt-in** — `-IncludeBrowsers` or `-Product Chrome` (may close sessions) |
+| Microsoft Edge | `Edge` | **Opt-in** — `-IncludeBrowsers` or `-Product Edge` (may close sessions) |
+| Mozilla Firefox | `Firefox` | **Opt-in** — `-IncludeBrowsers` or `-Product Firefox` (may close sessions) |
 
 Not installed on the host → `SKIPPED_NOT_INSTALLED` (not a failure).
 
-Still out of scope: Zoom/Slack/Teams, VPN, Java, EDR, Duo Proxy, GPU drivers. Browser updates are included for scan volume but are **session-disruptive** — check first, then update (or `-Product Chrome,Edge,Firefox`).
+Browsers are **not** in the default run. Use `-IncludeBrowsers` or explicit `-Product Chrome,Edge,Firefox`. Still out of scope: Zoom/Slack/Teams, VPN, Java, EDR, Duo Proxy, GPU drivers.
 
 ## Modes
 
 | Mode | Behavior |
 | --- | --- |
 | `-CheckOnly` | Verdicts only |
-| Default | Update installed products that look behind |
-| `-Product Id1,Id2` | Limit scope (e.g. `-Product ShareX,Git`) |
+| Default | Update installed products that look behind (**excludes browsers**) |
+| `-IncludeBrowsers` | Also process Chrome / Edge / Firefox (session-disruptive) |
+| `-Product Id1,Id2` | Limit scope (e.g. `-Product ShareX,Git` or `-Product Chrome`) |
 | `-List` | Print catalog IDs |
 | `-ForceAppShutdown` | Passed to M365 C2R (closes Office apps; opt-in) |
 
@@ -71,7 +72,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.1'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes
