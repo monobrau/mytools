@@ -8,6 +8,12 @@ Public collection of work tools and scripts.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Gitleaks runs on pushes and pull requests to `main`.
 
+## Tools
+
+| Tool | Description |
+| --- | --- |
+| [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / silently update HP Support Assistant (ScreenConnect Backstage SYSTEM + `#!ps` Commands) |
+
 ## Layout
 
-Tools may live as subfolders under this repo as they are added. Prefer clear, self-contained directories with their own short README when a tool is more than a single script.
+Tools live as subfolders under this repo. Prefer clear, self-contained directories with their own short README when a tool is more than a single script.
