@@ -14,9 +14,9 @@ Compatible with **Windows PowerShell 5.1** and **PowerShell 7+ (pwsh)**. Check-o
 ## Behavior
 
 1. Detect **HP Support Assistant** version from ARP (`DisplayName` starting with that product), then file version (8.x–11.x), then AppX. **HP Support Solutions Framework** is logged as a companion only — its 12.x version is never compared to SoftPaq 9.x.
-2. Resolve latest SoftPaq URL + version from winget-pkgs (GitHub), with `winget show` as fallback
-3. Compare HPSA vs latest SoftPaq
-4. With `-Update`: download SoftPaq to `%ProgramData%\HpSupportAssistantUpdate`, verify SHA256 when published, silent install (`/s`, with extract + `InstallHPSA.exe /S /v/qn` fallback)
+2. Detect OS channel: **Windows 11** uses winget-pkgs latest SoftPaq; **Windows 10** uses a Win10 SoftPaq catalog (`sp155262` / 9.39.17.0, then legacy `sp114036` / 8.8.34.31). Current winget SoftPaq 9.47 often shows “incompatible with your operating system” on Win10 22H2.
+3. Compare installed HPSA vs the OS-appropriate target SoftPaq
+4. With `-Update`: download SoftPaq to `%ProgramData%\HpSupportAssistantUpdate`, verify SHA256 when published, silent install (`/s`, with extract + `InstallHPSA.exe /S /v/qn` fallback). On Win10, failed installs try the next catalog SoftPaq.
 
 ## Parameters
 
@@ -49,7 +49,7 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?ref=main'); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script)) -Update
 ```
 
-You should see `Downloaded ~20700 chars` (not ~16847), then **`HpSupportAssistantUpdate 1.0.3`**, companion Framework line (if present), then HPSA not found / update needed.
+You should see **`HpSupportAssistantUpdate 1.0.4`**, an `OS: ... [Windows10|Windows11]` line, then the SoftPaq chosen for that OS. On Win10 expect target **9.39.17.0** (`sp155262`), not 9.47.
 
 ## ScreenConnect Commands
 
