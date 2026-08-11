@@ -5,9 +5,9 @@ Checks the installed **HP Support Assistant** version, resolves the latest SoftP
 Built for **ConnectWise ScreenConnect**:
 
 - **Backstage** (runs as SYSTEM)
-- **Commands** tab with `#!ps`
+- **Commands** tab with `#!ps` (Windows PowerShell 5.1) or `#!pwsh` (PowerShell 7+)
 
-Check-only by default. Pass `-Update` to install.
+Compatible with **Windows PowerShell 5.1** and **PowerShell 7+ (pwsh)**. Check-only by default; pass `-Update` to install.
 
 ## Behavior
 
@@ -31,68 +31,86 @@ GitHub is preferred because `winget` is often unavailable or flaky as SYSTEM in 
 
 ## Backstage (SYSTEM)
 
-In Backstage PowerShell (already SYSTEM), either copy `Update-HpSupportAssistant.ps1` to the endpoint or pull from GitHub:
+Works in either host. Paste into Backstage PowerShell:
 
 **Check only**
 
 ```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1"
-$script = (Invoke-WebRequest -Uri $url -UseBasicParsing).Content
-& ([ScriptBlock]::Create($script))
-```
-
-**Update**
-
-```powershell
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = 'SilentlyContinue'
+try {
+    [Net.ServicePointManager]::SecurityProtocol = (
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    )
+} catch {
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+}
 $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
-$script = (Invoke-WebRequest -Uri $url -UseBasicParsing).Content
-& ([ScriptBlock]::Create($script)) -Update
+$wc = New-Object System.Net.WebClient
+$wc.Encoding = [System.Text.Encoding]::UTF8
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$script = $wc.DownloadString($url)
+if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
+& ([scriptblock]::Create($script))
 ```
 
-## ScreenConnect Commands (`#!ps`)
+**Update** — same bootstrap, last line:
 
-Paste into the **Commands** tab. Run check first, then update.
+```powershell
+& ([scriptblock]::Create($script)) -Update
+```
 
-### Check only
+## ScreenConnect Commands
+
+Paste **one** block into the **Commands** tab. Full copies also live in [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1).
+
+### Check only (`#!ps` — Windows PowerShell 5.1)
 
 ```powershell
 #!ps
 #timeout=300000
 #maxlength=100000
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = 'SilentlyContinue'
+try {
+    [Net.ServicePointManager]::SecurityProtocol = (
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    )
+} catch {
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+}
 $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
-$script = (Invoke-WebRequest -Uri $url -UseBasicParsing).Content
-& ([ScriptBlock]::Create($script))
+$wc = New-Object System.Net.WebClient
+$wc.Encoding = [System.Text.Encoding]::UTF8
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$script = $wc.DownloadString($url)
+if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
+& ([scriptblock]::Create($script))
 ```
 
-### Silent update
+### Silent update (`#!ps`)
+
+Same as check, but `#timeout=600000` and:
 
 ```powershell
-#!ps
-#timeout=600000
-#maxlength=100000
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
-$script = (Invoke-WebRequest -Uri $url -UseBasicParsing).Content
-& ([ScriptBlock]::Create($script)) -Update
+& ([scriptblock]::Create($script)) -Update
 ```
+
+### PowerShell 7+ (`#!pwsh`)
+
+Same body as above; change the shebang to `#!pwsh` (TLS lines are optional on pwsh). Use when the endpoint has PowerShell 7 installed and ScreenConnect should run that host.
 
 Use a long timeout — SoftPaq download + install often exceeds two minutes.
 
 ## Requirements
 
-- Windows PowerShell 5.1+ (or PowerShell 7)
+- Windows PowerShell **5.1+** or PowerShell **7+** (`pwsh`)
 - Elevation / SYSTEM for `-Update`
 - Outbound HTTPS to `raw.githubusercontent.com`, `api.github.com`, and `ftp.hp.com`
 
 ## Notes
 
+- Bootstrap uses `WebClient.DownloadString` so the downloaded script is always a .NET string on both 5.1 and pwsh (avoids `Invoke-WebRequest` content-type differences).
 - Latest resolution tracks the winget-pkgs repo, not a hardcoded SoftPaq number.
 - Exit `3010` means success with reboot required.
-- This updates Support Assistant only; it does not remove HP Touchpoint Analytics (see `hp-touchpointanalytics-cleanup` if that is the goal).
+- This updates Support Assistant only; it does not remove HP Touchpoint Analytics.
