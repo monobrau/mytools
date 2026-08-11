@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.2'
+$ScriptVersion = '1.4.3'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -129,9 +129,9 @@ function Get-VulnCatalog {
             DelegatePath = 'HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1'
             ResultVariable = 'HpsaResultCode'
             Match = @('HP Support Assistant')
-            # Standalone HPSA tool defaults to Win10 uninstall - orchestrator must never trigger that.
-            CheckOnlyDelegate = $true
-            Notes = 'Orchestrator always check-only; use HpSupportAssistantUpdate directly to remediate'
+            # Win10: HPSA SoftPaqs stay below patched builds (EOL/vulnerable) -> default uninstall.
+            # Win11: default update to patched SoftPaq. Pass -CheckOnly to assess only.
+            Notes = 'Win10 uninstall by default (EOL/vulnerable); Win11 update. Use -CheckOnly to skip changes.'
         }
         [pscustomobject]@{
             Id = 'DotNet'; Name = '.NET 6+ Runtime / Desktop / ASP.NET / SDK'
