@@ -14,7 +14,12 @@
     Exit 0 = clean. Exit 2 = remnants still present. Exit 1 = error.
 
 .PARAMETER Remediate
-    Remove Classic Teams remnants (MWI, per-user, Run keys, installer folder).
+    Remove Classic Teams remnants only (MWI, classic per-user folder, classic Run keys,
+    Teams Installer folder). Never removes New Teams (MSTeams Appx).
+
+.PARAMETER ForceClassicUserRemoval
+    With -Remediate: remove classic per-user installs even when New Teams is not detected.
+    Default is safer: only strip classic per-user when New Teams is present on the device.
 
 .PARAMETER Detailed
     Include low-signal items; with check, shortcuts fail the result.
@@ -31,6 +36,7 @@
 [CmdletBinding()]
 param(
     [switch]$Remediate,
+    [switch]$ForceClassicUserRemoval,
     [switch]$Detailed,
     [switch]$Json,
     [switch]$NoExit,
@@ -41,7 +47,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.2.0'
 $KnownMwiGuid = '{731F6BAA-A986-45A4-8936-7C3AAAAA760B}'
 
 try {
@@ -317,11 +323,35 @@ function Invoke-TeamsScan {
     return $findings
 }
 
+function Test-IsClassicTeamsProcess {
+    param($Process)
+    # Never touch New Teams (ms-teams / WindowsApps / MSTeams).
+    $path = ''
+    try { $path = [string]$Process.Path } catch { $path = '' }
+    if ([string]::IsNullOrWhiteSpace($path)) {
+        try { $path = [string]$Process.MainModule.FileName } catch { $path = '' }
+    }
+    $name = [string]$Process.ProcessName
+    if ($name -match '(?i)^ms-teams$') { return $false }
+    if ($path -match '(?i)WindowsApps|MSTeams|ms-teams\.exe') { return $false }
+
+    # Classic squirrel client / updater only.
+    if ($path -match '(?i)\\AppData\\Local\\Microsoft\\Teams\\') { return $true }
+    if ($path -match '(?i)\\Teams Installer\\') { return $true }
+    if ($name -match '(?i)^(Teams|Update|Squirrel)$' -and $path -match '(?i)\\Teams') { return $true }
+    return $false
+}
+
 function Stop-ClassicTeamsProcesses {
-    foreach ($n in @('Teams', 'Update', 'Squirrel', 'ms-teams')) {
+    # Do NOT stop ms-teams - that is New Teams.
+    foreach ($n in @('Teams', 'Update', 'Squirrel')) {
         Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {
+            if (-not (Test-IsClassicTeamsProcess -Process $_)) {
+                Write-TeamsLog ("Skipping non-classic process {0} (PID {1})" -f $_.ProcessName, $_.Id)
+                return
+            }
             try {
-                Write-TeamsLog ("Stopping process {0} (PID {1})" -f $_.ProcessName, $_.Id)
+                Write-TeamsLog ("Stopping classic process {0} (PID {1})" -f $_.ProcessName, $_.Id)
                 Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
             }
             catch { }
@@ -329,10 +359,37 @@ function Stop-ClassicTeamsProcesses {
     }
 }
 
+function Test-ShortcutTargetsClassicTeams {
+    param([string]$LnkPath)
+    try {
+        $sh = New-Object -ComObject WScript.Shell
+        $sc = $sh.CreateShortcut($LnkPath)
+        $target = [string]$sc.TargetPath
+        $args = [string]$sc.Arguments
+        if ($target -match '(?i)WindowsApps|ms-teams|MSTeams') { return $false }
+        if ($target -match '(?i)\\AppData\\Local\\Microsoft\\Teams\\') { return $true }
+        if ($target -match '(?i)\\Teams Installer\\') { return $true }
+        if ($args -match '(?i)Local\\Microsoft\\Teams') { return $true }
+        return $false
+    }
+    catch { return $false }
+}
+
 function Invoke-ClassicTeamsRemediate {
-    Write-TeamsLog 'Starting Classic Teams remediation...'
+    Write-TeamsLog 'Starting Classic-only Teams remediation (New Teams / MSTeams will be left alone)...'
+
+    $newTeams = @(Test-NewTeamsPresent)
+    $newTeamsPresent = ($newTeams.Count -gt 0)
+    if ($newTeamsPresent) {
+        Write-TeamsLog ("New Teams detected - safe to remove Classic per-user clients: {0}" -f ($newTeams -join '; '))
+    }
+    else {
+        Write-TeamsLog 'New Teams NOT detected. Will remove MWI/installer/run keys, but skip per-user Classic folders unless -ForceClassicUserRemoval.' 'WARN'
+    }
+
     Stop-ClassicTeamsProcesses
 
+    # Machine-wide Classic stager (does not remove New Teams).
     $guids = New-Object System.Collections.ArrayList
     [void]$guids.Add($KnownMwiGuid)
     foreach ($item in (Get-ClassicTeamsMachineWide)) {
@@ -342,7 +399,7 @@ function Invoke-ClassicTeamsRemediate {
 
     foreach ($guid in $guids) {
         if ($guid -notmatch '^\{[0-9A-Fa-f-]{36}\}$') { continue }
-        Write-TeamsLog ("msiexec /x {0} /qn /norestart" -f $guid)
+        Write-TeamsLog ("msiexec /x {0} /qn /norestart (Classic MWI)" -f $guid)
         $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/x', $guid, '/qn', '/norestart') `
             -Wait -PassThru -WindowStyle Hidden
         Write-TeamsLog ("msiexec exit: {0}" -f $p.ExitCode)
@@ -356,7 +413,12 @@ function Invoke-ClassicTeamsRemediate {
             try {
                 $props = Get-ItemProperty -Path $rk -ErrorAction SilentlyContinue
                 if ($null -ne $props -and $null -ne $props.$name) {
-                    Write-TeamsLog ("Removing Run value {0}\{1}" -f $rk, $name)
+                    $val = [string]$props.$name
+                    if ($val -match '(?i)WindowsApps|ms-teams|MSTeams') {
+                        Write-TeamsLog ("Skipping Run value (looks like New Teams): {0}\{1}" -f $rk, $name)
+                        continue
+                    }
+                    Write-TeamsLog ("Removing Classic Run value {0}\{1}" -f $rk, $name)
                     Remove-ItemProperty -Path $rk -Name $name -Force -ErrorAction SilentlyContinue
                 }
             }
@@ -366,32 +428,46 @@ function Invoke-ClassicTeamsRemediate {
 
     foreach ($dir in @("${env:ProgramFiles(x86)}\Teams Installer", "$env:ProgramFiles\Teams Installer")) {
         if (Test-PathSafe -Path $dir) {
-            Write-TeamsLog ("Removing folder {0}" -f $dir)
+            Write-TeamsLog ("Removing Classic installer folder {0}" -f $dir)
             try { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
             catch { Write-TeamsLog ("Could not remove {0}: {1}" -f $dir, $_.Exception.Message) 'WARN' }
         }
     }
 
+    $removePerUser = $newTeamsPresent -or $ForceClassicUserRemoval
+    if (-not $removePerUser) {
+        Write-TeamsLog 'Skipping per-user Classic removal (no New Teams on device). Use -ForceClassicUserRemoval to override.' 'WARN'
+    }
+
     foreach ($profile in (Get-UserProfileRoots)) {
         $teamsRoot = Join-Path $profile.Path 'AppData\Local\Microsoft\Teams'
         $updateExe = Join-Path $teamsRoot 'Update.exe'
-        if (Test-PathSafe -Path $updateExe) {
-            Write-TeamsLog ("Per-user silent uninstall: {0}" -f $updateExe)
-            try {
-                $p = Start-Process -FilePath $updateExe -ArgumentList @('--uninstall', '-s') `
-                    -Wait -PassThru -WindowStyle Hidden
-                Write-TeamsLog ("Update.exe uninstall exit: {0} (profile={1})" -f $p.ExitCode, $profile.Name)
+        $classicExe = Join-Path $teamsRoot 'current\Teams.exe'
+        $isClassicTree = (Test-PathSafe -Path $updateExe) -or (Test-PathSafe -Path $classicExe) -or (Test-PathSafe -Path (Join-Path $teamsRoot 'Squirrel.exe'))
+
+        if ($removePerUser -and $isClassicTree) {
+            if (Test-PathSafe -Path $updateExe) {
+                Write-TeamsLog ("Per-user Classic silent uninstall: {0}" -f $updateExe)
+                try {
+                    $p = Start-Process -FilePath $updateExe -ArgumentList @('--uninstall', '-s') `
+                        -Wait -PassThru -WindowStyle Hidden
+                    Write-TeamsLog ("Update.exe uninstall exit: {0} (profile={1})" -f $p.ExitCode, $profile.Name)
+                }
+                catch {
+                    Write-TeamsLog ("Update.exe uninstall failed for {0}: {1}" -f $profile.Name, $_.Exception.Message) 'WARN'
+                }
             }
-            catch {
-                Write-TeamsLog ("Update.exe uninstall failed for {0}: {1}" -f $profile.Name, $_.Exception.Message) 'WARN'
+            if (Test-PathSafe -Path $teamsRoot) {
+                Write-TeamsLog ("Removing Classic per-user folder: {0}" -f $teamsRoot)
+                try { Remove-Item -LiteralPath $teamsRoot -Recurse -Force -ErrorAction SilentlyContinue }
+                catch { Write-TeamsLog ("Could not remove {0}" -f $teamsRoot) 'WARN' }
             }
         }
-        if (Test-PathSafe -Path $teamsRoot) {
-            Write-TeamsLog ("Removing per-user Classic folder: {0}" -f $teamsRoot)
-            try { Remove-Item -LiteralPath $teamsRoot -Recurse -Force -ErrorAction SilentlyContinue }
-            catch { Write-TeamsLog ("Could not remove {0}" -f $teamsRoot) 'WARN' }
+        elseif ($isClassicTree -and -not $removePerUser) {
+            Write-TeamsLog ("Kept Classic per-user folder (no New Teams / no force): {0}" -f $teamsRoot) 'WARN'
         }
 
+        # Shortcuts: only delete those that target Classic paths (never New Teams).
         foreach ($folder in @(
                 (Join-Path $profile.Path 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup')
                 (Join-Path $profile.Path 'Desktop')
@@ -400,8 +476,13 @@ function Invoke-ClassicTeamsRemediate {
             if (-not (Test-PathSafe -Path $folder)) { continue }
             Get-ChildItem -LiteralPath $folder -Filter '*Teams*.lnk' -Recurse -ErrorAction SilentlyContinue |
                 ForEach-Object {
-                    Write-TeamsLog ("Removing shortcut {0}" -f $_.FullName)
-                    Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                    if (Test-ShortcutTargetsClassicTeams -LnkPath $_.FullName) {
+                        Write-TeamsLog ("Removing Classic shortcut {0}" -f $_.FullName)
+                        Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
+                    }
+                    else {
+                        Write-TeamsLog ("Keeping shortcut (not Classic target): {0}" -f $_.FullName)
+                    }
                 }
         }
     }
@@ -414,7 +495,12 @@ function Invoke-ClassicTeamsRemediate {
             try {
                 $props = Get-ItemProperty -Path $rk -ErrorAction SilentlyContinue
                 if ($null -ne $props -and $null -ne $props.$name) {
-                    Write-TeamsLog ("Removing HKU Run {0}" -f $name)
+                    $val = [string]$props.$name
+                    if ($val -match '(?i)WindowsApps|ms-teams|MSTeams') {
+                        Write-TeamsLog ("Skipping HKU Run (New Teams): {0}" -f $name)
+                        continue
+                    }
+                    Write-TeamsLog ("Removing Classic HKU Run {0}" -f $name)
                     Remove-ItemProperty -Path $rk -Name $name -Force -ErrorAction SilentlyContinue
                 }
             }
@@ -423,14 +509,15 @@ function Invoke-ClassicTeamsRemediate {
     }
 
     Write-TeamsLog 'Remediation pass complete. Re-scanning...'
-    Write-TeamsLog 'Note: Office/PROPLUS can reinstall Teams Machine-Wide Installer at next app deployment if classic Teams is still in the Office channel.' 'WARN'
+    Write-TeamsLog 'Note: Office/PROPLUS can reinstall Classic MWI if classic Teams remains in the Office deployment channel.' 'WARN'
 }
 
 # --- main ---
 $hostEdition = if ($PSVersionTable.PSEdition) { [string]$PSVersionTable.PSEdition } else { 'Desktop' }
 Write-TeamsLog ("TeamsClassicRemnantCheck {0}" -f $ScriptVersion)
 Write-TeamsLog ("Host: PowerShell {0} ({1})" -f $PSVersionTable.PSVersion, $hostEdition)
-Write-TeamsLog ("User: {0} | Remediate={1}" -f [Security.Principal.WindowsIdentity]::GetCurrent().Name, $Remediate)
+Write-TeamsLog ("User: {0} | Remediate={1} ForceClassicUserRemoval={2}" -f `
+        [Security.Principal.WindowsIdentity]::GetCurrent().Name, $Remediate, $ForceClassicUserRemoval)
 
 if (-not (Test-IsWindowsHost)) {
     Write-TeamsLog 'Windows only.' 'ERROR'
