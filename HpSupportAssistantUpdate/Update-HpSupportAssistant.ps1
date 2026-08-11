@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Checks / updates / uninstalls HP Support Assistant for ScreenConnect and vuln-scan remediation.
@@ -7,7 +7,7 @@
     Designed for ConnectWise ScreenConnect Backstage (SYSTEM) and the Commands tab (#!ps).
 
     Recent HP advisories (e.g. CVE-2025-10578, CVE-2025-43019, CVE-2025-43026) are fixed only in
-    HPSA builds around 9.44–9.47. The SoftPaq that carries those fixes often will not install on
+    HPSA builds around 9.44-9.47. The SoftPaq that carries those fixes often will not install on
     Windows 10 (incompatible-OS dialog). Win10 SoftPaqs such as 9.39 / 8.8 remain below the fixed
     versions, so vuln-scan remediation on Windows 10 should uninstall HPSA (+ Framework).
 
@@ -58,7 +58,7 @@ $ProgressPreference = 'SilentlyContinue'
 $ScriptVersion = '1.1.0'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
-# Do NOT match "HP Support Solutions Framework" — that is a companion with a different version scheme (12.x vs HPSA 9.x).
+# Do NOT match "HP Support Solutions Framework" - that is a companion with a different version scheme (12.x vs HPSA 9.x).
 $HpsaDisplayNamePattern = '^HP Support Assistant(\s|$)'
 $FrameworkDisplayNamePattern = '^HP Support Solutions Framework(\s|$)'
 # Minimum build that covers recent HP bulletins (CVE-2025-10578 requires < 9.47.41.0 fixed).
@@ -71,13 +71,13 @@ $Win10SoftPaqCandidates = @(
         Version      = '9.39.17.0'
         InstallerUrl = 'https://ftp.hp.com/pub/softpaq/sp155001-155500/sp155262.exe'
         SoftPaq      = 'sp155262'
-        Note         = 'HPSA 9.39 — CVA lists Windows 10 + 11'
+        Note         = 'HPSA 9.39 - CVA lists Windows 10 + 11'
     }
     [pscustomobject]@{
         Version      = '8.8.34.31'
         InstallerUrl = 'https://ftp.hp.com/pub/softpaq/sp114001-114500/sp114036.exe'
         SoftPaq      = 'sp114036'
-        Note         = 'Legacy HPSA 8.8 — common Win10 fallback'
+        Note         = 'Legacy HPSA 8.8 - common Win10 fallback'
     }
 )
 
@@ -216,7 +216,7 @@ function Get-HpsaVersionFromFiles {
         if (-not (Test-Path -LiteralPath $path)) { continue }
         try {
             $fv = [version](Get-Item -LiteralPath $path).VersionInfo.FileVersion
-            # SoftPaq / winget HPSA versions are 9.x (sometimes 8.x). Framework binaries often report 12.x — skip those.
+            # SoftPaq / winget HPSA versions are 9.x (sometimes 8.x). Framework binaries often report 12.x - skip those.
             if ($fv.Major -ge 8 -and $fv.Major -le 11) {
                 return [pscustomobject]@{
                     DisplayName     = 'HP Support Assistant (file)'
@@ -262,7 +262,7 @@ function Get-HpsaVersionFromAppx {
 }
 
 function Get-InstalledHpSupportAssistant {
-    # ARP: product name only (never Solutions Framework — different version lineage).
+    # ARP: product name only (never Solutions Framework - different version lineage).
     $arpHits = @(
         Get-UninstallEntries | Where-Object {
             $_.DisplayName -and ($_.DisplayName -match $HpsaDisplayNamePattern)
@@ -400,7 +400,7 @@ function Get-LatestHpSupportAssistantPackage {
     )
 
     if (-not $OsInfo.IsWindows11) {
-        Write-HpsaLog 'Windows 10 detected — using Win10 SoftPaq catalog (winget latest SoftPaq often rejects Win10).'
+        Write-HpsaLog 'Windows 10 detected - using Win10 SoftPaq catalog (winget latest SoftPaq often rejects Win10).'
         $pkg = Get-LatestHpSupportAssistantFromWin10Catalog -Index $Win10CatalogIndex
         if ($pkg.Note) { Write-HpsaLog ("SoftPaq note: {0}" -f $pkg.Note) }
         return $pkg
@@ -598,7 +598,7 @@ function Invoke-HpsaUninstall {
         return 1
     }
 
-    Write-HpsaLog 'Uninstall complete — HPSA and Framework not detected.'
+    Write-HpsaLog 'Uninstall complete - HPSA and Framework not detected.'
     if ($code -eq 3010) { return 3010 }
     return 0
 }
@@ -703,7 +703,7 @@ else {
 
 $vuln = Test-HpsaVersionVulnerable -Installed $installed
 if ($vuln.IsVulnerable) {
-    Write-HpsaLog ("Vuln status: VULNERABLE — {0}" -f $vuln.Reason) 'WARN'
+    Write-HpsaLog ("Vuln status: VULNERABLE - {0}" -f $vuln.Reason) 'WARN'
     Write-HpsaLog 'Patched SoftPaq (~9.47) often will not install on Windows 10; prefer -Uninstall for v-scan remediation.' 'WARN'
 }
 else {
