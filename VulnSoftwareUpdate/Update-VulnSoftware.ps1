@@ -51,7 +51,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.2.0'
+$ScriptVersion = '1.2.1'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -190,12 +190,12 @@ function Get-VulnCatalog {
         [pscustomobject]@{
             Id = 'VcRedistX64'; Name = 'Visual C++ Redistributable (x64)'
             Method = 'Winget'; WingetId = 'Microsoft.VCRedist.2015+.x64'
-            Match = @('Visual C\+\+ 2015-2022 Redistributable \(x64\)', 'Visual C\+\+ 2015-2019 Redistributable \(x64\)')
+            Match = @('Visual C\+\+.*Redistributable \(x64\)')
         }
         [pscustomobject]@{
             Id = 'VcRedistX86'; Name = 'Visual C++ Redistributable (x86)'
             Method = 'Winget'; WingetId = 'Microsoft.VCRedist.2015+.x86'
-            Match = @('Visual C\+\+ 2015-2022 Redistributable \(x86\)', 'Visual C\+\+ 2015-2019 Redistributable \(x86\)')
+            Match = @('Visual C\+\+.*Redistributable \(x86\)')
         }
         [pscustomobject]@{
             Id = 'PuTTY'; Name = 'PuTTY'; Method = 'Winget'; WingetId = 'PuTTY.PuTTY'
@@ -315,6 +315,29 @@ function Invoke-Winget {
     return [pscustomobject]@{ ExitCode = $p.ExitCode; StdOut = $stdout; StdErr = $stderr }
 }
 
+function Get-WingetVersionFromLine {
+    param([string]$Line, [string]$WingetId)
+    # winget columns are often single-spaced; find Id token then Version [Available] Source
+    $escaped = [regex]::Escape($WingetId)
+    if ($Line -notmatch $escaped) { return $null }
+    if ($Line -match ("{0}\s+(\S+)(?:\s+(\S+))?(?:\s+(\S+))?\s*$" -f $escaped)) {
+        $v1 = $Matches[1]
+        $v2 = $Matches[2]
+        $v3 = $Matches[3]
+        # Patterns: Id Version Source  OR  Id Version Available Source
+        if ($v3 -and $v3 -match '^(winget|msstore)$' -and $v2 -notmatch '^(winget|msstore)$') {
+            return [pscustomobject]@{ Installed = $v1; Available = $v2; HasUpgradeColumn = $true }
+        }
+        if ($v2 -match '^(winget|msstore)$') {
+            return [pscustomobject]@{ Installed = $v1; Available = $null; HasUpgradeColumn = $false }
+        }
+        if ($v1 -notmatch '^(winget|msstore)$') {
+            return [pscustomobject]@{ Installed = $v1; Available = $null; HasUpgradeColumn = $false }
+        }
+    }
+    return $null
+}
+
 function Get-WingetPackageState {
     param([string]$WingetPath, [string]$WingetId)
     # Installed version (list only - never upgrades)
@@ -323,18 +346,15 @@ function Get-WingetPackageState {
     ) -TimeoutSec 180
     $installed = $null
     foreach ($line in ($list.StdOut -split "`r?`n")) {
-        if ($line -match [regex]::Escape($WingetId)) {
-            $cols = @($line -split '\s{2,}' | Where-Object { $_ })
-            # Name | Id | Version | Available | Source  OR  Name | Id | Version | Source
-            if ($cols.Count -ge 3) { $installed = $cols[2].Trim() }
-            if ($cols.Count -ge 5 -and $cols[3] -notmatch '^(winget|msstore)$') {
-                # Available column present
-                return [pscustomobject]@{
-                    Present     = $true
-                    Installed   = $installed
-                    Available   = $cols[3].Trim()
-                    NeedsUpdate = $true
-                }
+        $parsed = Get-WingetVersionFromLine -Line $line -WingetId $WingetId
+        if (-not $parsed) { continue }
+        $installed = $parsed.Installed
+        if ($parsed.HasUpgradeColumn -and $parsed.Available) {
+            return [pscustomobject]@{
+                Present     = $true
+                Installed   = $installed
+                Available   = $parsed.Available
+                NeedsUpdate = $true
             }
         }
     }
@@ -346,15 +366,13 @@ function Get-WingetPackageState {
     $available = $null
     $needsUpdate = $false
     foreach ($line in ($upgrade.StdOut -split "`r?`n")) {
-        if ($line -match [regex]::Escape($WingetId)) {
-            $needsUpdate = $true
-            $cols = @($line -split '\s{2,}' | Where-Object { $_ })
-            if ($cols.Count -ge 4) {
-                $available = $cols[3].Trim()
-                if (-not $installed -and $cols.Count -ge 3) { $installed = $cols[2].Trim() }
-            }
-            break
-        }
+        $parsed = Get-WingetVersionFromLine -Line $line -WingetId $WingetId
+        if (-not $parsed) { continue }
+        $needsUpdate = $true
+        if (-not $installed) { $installed = $parsed.Installed }
+        if ($parsed.HasUpgradeColumn -and $parsed.Available) { $available = $parsed.Available }
+        elseif ($parsed.Available) { $available = $parsed.Available }
+        break
     }
 
     if ($installed -or $needsUpdate) {
@@ -468,7 +486,13 @@ if ($List) {
 
 $selected = $catalog
 if ($Product -and $Product.Count -gt 0) {
-    $wanted = @($Product | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    # Support -Product A,B,C (single string) and -Product A -Product B
+    $wanted = @(
+        $Product |
+            ForEach-Object { $_ -split ',' } |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ }
+    )
     $selected = @($catalog | Where-Object { $wanted -contains $_.Id })
     $missing = @($wanted | Where-Object { $id = $_; -not ($catalog | Where-Object { $_.Id -eq $id }) })
     foreach ($m in $missing) {
