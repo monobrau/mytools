@@ -51,7 +51,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.1'
+$ScriptVersion = '1.1.0'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -118,8 +118,19 @@ function Get-VulnCatalog {
         }
         [pscustomobject]@{
             Id = 'HpSupportAssistant'; Name = 'HP Support Assistant'
-            Method = 'Delegate'; DelegatePath = 'HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1'
+            Method = 'Delegate'
+            DelegatePath = 'HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1'
+            ResultVariable = 'HpsaResultCode'
+            Match = @('HP Support Assistant')
             Notes = 'Win11 update / Win10 uninstall via existing tool'
+        }
+        [pscustomobject]@{
+            Id = 'DotNet'; Name = '.NET 6+ Runtime / Desktop / ASP.NET / SDK'
+            Method = 'Delegate'
+            DelegatePath = 'DotNetUpdate/Update-DotNetRuntimes.ps1'
+            ResultVariable = 'DotNetUpdateResultCode'
+            AlwaysRun = $true
+            Notes = 'Same-major security patches only; never jumps majors'
         }
         [pscustomobject]@{
             Id = 'ShareX'; Name = 'ShareX'; Method = 'Winget'; WingetId = 'ShareX.ShareX'
@@ -474,28 +485,38 @@ foreach ($item in $selected) {
         }
 
         'Delegate' {
-            # Only run HPSA if HP-ish uninstall entry exists (or Force)
-            $hpsaHit = @($installedApps | Where-Object { $_.DisplayName -match 'HP Support Assistant' })
-            if ($hpsaHit.Count -eq 0 -and -not $Force) {
-                Add-Result -Id $item.Id -Name $item.Name -Status 'SKIPPED_NOT_INSTALLED' `
-                    -Detail 'HP Support Assistant not detected.'
-                break
+            if (-not $item.AlwaysRun -and $item.Match -and -not $Force) {
+                $hits = Find-InstalledMatches -CatalogItem $item -InstalledApps $installedApps
+                if ($hits.Count -eq 0) {
+                    Add-Result -Id $item.Id -Name $item.Name -Status 'SKIPPED_NOT_INSTALLED' `
+                        -Detail ("{0} not detected." -f $item.Name)
+                    break
+                }
             }
             try {
                 $args = @{ }
                 if ($CheckOnly) { $args['CheckOnly'] = $true }
                 if ($Force) { $args['Force'] = $true }
+                # Clear prior nested result so we don't reuse a stale code
+                $rv = if ($item.ResultVariable) { [string]$item.ResultVariable } else { 'DelegateResultCode' }
+                try { Remove-Variable -Name $rv -Scope Global -ErrorAction SilentlyContinue } catch { }
+                try { Set-Variable -Name $rv -Scope Global -Value $null } catch { }
                 Invoke-MyToolsScriptBlock -RelativePath $item.DelegatePath -Arguments $args
                 $code = 0
-                try { $code = [int]$global:HpsaResultCode } catch { }
+                try {
+                    $raw = Get-Variable -Name $rv -Scope Global -ValueOnly -ErrorAction SilentlyContinue
+                    if ($null -ne $raw) { $code = [int]$raw }
+                }
+                catch { }
                 $status = switch ($code) {
                     0 { 'UP_TO_DATE' }
                     2 { 'UPDATE_AVAILABLE' }
                     3 { 'ERROR' }
+                    1 { 'ERROR' }
                     default { 'UNKNOWN' }
                 }
                 Add-Result -Id $item.Id -Name $item.Name -Status $status `
-                    -Detail ("Delegated to HpSupportAssistantUpdate (result {0})." -f $code)
+                    -Detail ("Delegated to {0} (result {1}). See log above." -f $item.DelegatePath, $code)
             }
             catch {
                 Add-Result -Id $item.Id -Name $item.Name -Status 'ERROR' -Detail $_.Exception.Message
