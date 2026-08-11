@@ -21,8 +21,20 @@ Checks what’s installed, prints a clear per-product verdict, and can silently 
 | Microsoft Teams Network Assessment Tool | `TeamsNetworkAssessment` | **Manual** (no reliable winget package) |
 | WinRAR | `WinRAR` | winget `RARLab.WinRAR` |
 | Foxit PDF Reader | `FoxitReader` | winget `Foxit.FoxitReader` |
+| 7-Zip | `SevenZip` | winget `7zip.7zip` |
+| Notepad++ | `NotepadPlusPlus` | winget `Notepad++.Notepad++` |
+| Visual C++ 2015+ Redistributable (x64) | `VcRedistX64` | winget `Microsoft.VCRedist.2015+.x64` |
+| Visual C++ 2015+ Redistributable (x86) | `VcRedistX86` | winget `Microsoft.VCRedist.2015+.x86` |
+| PuTTY | `PuTTY` | winget `PuTTY.PuTTY` |
+| WinSCP | `WinSCP` | winget `WinSCP.WinSCP` |
+| VLC | `VLC` | winget `VideoLAN.VLC` |
+| Edge WebView2 Runtime | `WebView2` | winget `Microsoft.EdgeWebView2Runtime` |
+| PowerShell 7 | `PowerShell7` | winget `Microsoft.PowerShell` |
+| FileZilla | `FileZilla` | winget `FileZilla.FileZilla` |
 
 Not installed on the host → `SKIPPED_NOT_INSTALLED` (not a failure).
+
+Browsers, Zoom/Slack/Teams, VPN, Java, EDR, Duo Proxy, and GPU drivers stay out of scope (session/service risk).
 
 ## Modes
 
@@ -46,7 +58,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.1.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.2.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes
