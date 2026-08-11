@@ -20,10 +20,11 @@ $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
 $wc = New-Object System.Net.WebClient
 $wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
 $script = $wc.DownloadString($url)
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-& ([scriptblock]::Create($script))
+# -Exit so ScreenConnect gets a process exit code (2 = update needed).
+& ([scriptblock]::Create($script)) -Exit
 
 # =============================================================================
 # SILENT UPDATE  (#!ps = Windows PowerShell 5.1)
@@ -43,10 +44,10 @@ $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
 $wc = New-Object System.Net.WebClient
 $wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
 $script = $wc.DownloadString($url)
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-& ([scriptblock]::Create($script)) -Update
+& ([scriptblock]::Create($script)) -Update -Exit
 
 # =============================================================================
 # CHECK ONLY  (#!pwsh = PowerShell 7+)
@@ -59,10 +60,10 @@ $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
 $wc = New-Object System.Net.WebClient
 $wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
 $script = $wc.DownloadString($url)
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-& ([scriptblock]::Create($script))
+& ([scriptblock]::Create($script)) -Exit
 
 # =============================================================================
 # SILENT UPDATE  (#!pwsh = PowerShell 7+)
@@ -75,7 +76,7 @@ $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
 $wc = New-Object System.Net.WebClient
 $wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
 $script = $wc.DownloadString($url)
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-& ([scriptblock]::Create($script)) -Update
+& ([scriptblock]::Create($script)) -Update -Exit

@@ -9,6 +9,8 @@ Built for **ConnectWise ScreenConnect**:
 
 Compatible with **Windows PowerShell 5.1** and **PowerShell 7+ (pwsh)**. Check-only by default; pass `-Update` to install.
 
+**Backstage note:** older builds called `exit`, which closed the Backstage PowerShell window (often with result code `2` = update needed). v1.0.2+ keeps the host open for interactive ScriptBlock runs and prints `Done. ResultCode=...`.
+
 ## Behavior
 
 1. Read installed version from Programs and Features (uninstall registry)
@@ -28,6 +30,8 @@ GitHub is preferred because `winget` is often unavailable or flaky as SYSTEM in 
 | `-SoftPaqUrl` | Override SoftPaq URL |
 | `-LatestVersion` | Override version string used for comparison |
 | `-WorkingDirectory` | Download folder (default `%ProgramData%\HpSupportAssistantUpdate`) |
+| `-NoExit` | Keep the PowerShell host open (Backstage) |
+| `-Exit` | Always `exit` with the result code (Commands / automation) |
 
 ## Backstage (SYSTEM)
 
@@ -48,10 +52,12 @@ $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
 $wc = New-Object System.Net.WebClient
 $wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
 $script = $wc.DownloadString($url)
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
 & ([scriptblock]::Create($script))
+# Console stays open. ResultCode 0=current, 2=update needed, 1=error. Then:
+# & ([scriptblock]::Create($script)) -Update
 ```
 
 **Update** — same bootstrap, last line:
@@ -82,10 +88,10 @@ $repo = 'monobrau/mytools'
 $url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
 $wc = New-Object System.Net.WebClient
 $wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.1'
+$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
 $script = $wc.DownloadString($url)
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-& ([scriptblock]::Create($script))
+& ([scriptblock]::Create($script)) -Exit
 ```
 
 ### Silent update (`#!ps`)
@@ -93,7 +99,7 @@ if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $scr
 Same as check, but `#timeout=600000` and:
 
 ```powershell
-& ([scriptblock]::Create($script)) -Update
+& ([scriptblock]::Create($script)) -Update -Exit
 ```
 
 ### PowerShell 7+ (`#!pwsh`)
