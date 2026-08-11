@@ -21,7 +21,7 @@ The SoftPaq that carries those fixes (**9.47 / sp171501**) often **will not inst
 1. Detect HPSA (ARP name starting with `HP Support Assistant`; Framework is companion-only for version compare)
 2. Flag **VULNERABLE** if installed version &lt; `9.47.41.0`
 3. **`-Uninstall`**: stop related services, run `UninstallHPSA.exe` when present, ARP/msiexec fallbacks, AppX + residual cleanup
-4. **`-Update`**: OS-aware SoftPaq install; **refused** when the OS-appropriate SoftPaq is still below the patched minimum (typical Win10 path) — use `-Uninstall` instead
+4. **`-Update`**: OS-aware SoftPaq install; **refused** when the OS-appropriate SoftPaq is still below the patched minimum (typical Win10 path) - use `-Uninstall` instead. Install path is extract (`/s /e /f`) then `InstallHPSA.exe /S /v"/qn ..."` with `CreateNoWindow` (SoftPaq `/s` alone often shows progress UI).
 
 ## Parameters
 
