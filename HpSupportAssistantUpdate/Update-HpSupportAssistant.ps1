@@ -55,7 +55,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.1.1'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 # Do NOT match "HP Support Solutions Framework" - that is a companion with a different version scheme (12.x vs HPSA 9.x).
@@ -496,28 +496,32 @@ function Uninstall-ArpProductByPattern {
         Write-HpsaLog ("ARP uninstall: {0}" -f $name)
 
         if ($quietUninstall) {
-            # QuietUninstallString is often a full command line.
             Write-HpsaLog ("Running QuietUninstallString for {0}" -f $name)
-            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $quietUninstall) -Wait -PassThru -WindowStyle Hidden
-            Write-HpsaLog ("QuietUninstall exit: {0}" -f $p.ExitCode)
-            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+            $exit = Start-HpsaHiddenProcess -FilePath 'cmd.exe' -Arguments ('/c ' + $quietUninstall) -TimeoutSec 1800
+            Write-HpsaLog ("QuietUninstall exit: {0}" -f $exit)
+            if ($exit -ne 0 -and $exit -ne 3010) { $code = $exit }
             continue
         }
 
         if ($uninstall -match 'MsiExec\.exe.*?(\{[0-9A-Fa-f-]{36}\})') {
             $guid = $Matches[1]
             Write-HpsaLog ("msiexec /x {0} /qn /norestart" -f $guid)
-            $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/x', $guid, '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
-            Write-HpsaLog ("msiexec exit: {0}" -f $p.ExitCode)
-            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+            $exit = Start-HpsaHiddenProcess -FilePath 'msiexec.exe' -Arguments ("/x {0} /qn /norestart" -f $guid) -TimeoutSec 1800
+            Write-HpsaLog ("msiexec exit: {0}" -f $exit)
+            if ($exit -ne 0 -and $exit -ne 3010) { $code = $exit }
             continue
         }
 
         if ($uninstall) {
-            Write-HpsaLog ("Running UninstallString via cmd for {0}" -f $name)
-            $p = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $uninstall, '/S', '/qn') -Wait -PassThru -WindowStyle Hidden
-            Write-HpsaLog ("UninstallString exit: {0}" -f $p.ExitCode)
-            if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+            Write-HpsaLog ("Running UninstallString (forced quiet) for {0}" -f $name)
+            # Append quiet switches when the ARP string is a bare EXE path.
+            $cmd = $uninstall
+            if ($cmd -notmatch '/[Ss]\b|/qn|/quiet') {
+                $cmd = $cmd.Trim() + ' /S /v"/qn /norestart REBOOT=ReallySuppress"'
+            }
+            $exit = Start-HpsaHiddenProcess -FilePath 'cmd.exe' -Arguments ('/c ' + $cmd) -TimeoutSec 1800
+            Write-HpsaLog ("UninstallString exit: {0}" -f $exit)
+            if ($exit -ne 0 -and $exit -ne 3010) { $code = $exit }
         }
     }
     return $code
@@ -559,6 +563,39 @@ function Remove-HpsaResiduals {
     }
 }
 
+function Start-HpsaHiddenProcess {
+    <#
+      Launch with CreateNoWindow when possible. SoftPaq/InstallShield may still draw UI
+      in the interactive Backstage session; this is best-effort silent.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string]$Arguments,
+        [int]$TimeoutSec = 1800
+    )
+
+    Write-HpsaLog ("Exec (hidden): `"{0}`" {1}" -f $FilePath, $Arguments)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $FilePath
+    $psi.Arguments = $Arguments
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+    $psi.RedirectStandardOutput = $false
+    $psi.RedirectStandardError = $false
+    $psi.WorkingDirectory = [string](Split-Path -Parent $FilePath)
+
+    $proc = New-Object System.Diagnostics.Process
+    $proc.StartInfo = $psi
+    [void]$proc.Start()
+    if (-not $proc.WaitForExit($TimeoutSec * 1000)) {
+        try { $proc.Kill() } catch { }
+        Write-HpsaLog ("Process timed out after {0}s: {1}" -f $TimeoutSec, $FilePath) 'ERROR'
+        return 124
+    }
+    return [int]$proc.ExitCode
+}
+
 function Invoke-HpsaUninstall {
     Write-HpsaLog 'Starting silent uninstall (HPSA + Support Solutions Framework)...'
     Stop-HpsaServices
@@ -567,11 +604,11 @@ function Invoke-HpsaUninstall {
     $code = 0
     if ($vendor) {
         Write-HpsaLog ("Running vendor uninstaller: {0}" -f $vendor)
-        # Prefer /v"..." form; also accepted: /s /v/qn UninstallKeepPreferences=FALSE
-        $args = @('/s', '/v/qn', 'UninstallKeepPreferences=FALSE')
-        $p = Start-Process -FilePath $vendor -ArgumentList $args -Wait -PassThru -WindowStyle Hidden
-        Write-HpsaLog ("UninstallHPSA exit: {0}" -f $p.ExitCode)
-        if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { $code = $p.ExitCode }
+        # InstallShield: /S quiet wrapper, /v"..." passes msiexec-style props to nested MSI.
+        $args = '/S /v"/qn /norestart UninstallKeepPreferences=FALSE REBOOT=ReallySuppress"'
+        $exit = Start-HpsaHiddenProcess -FilePath $vendor -Arguments $args -TimeoutSec 1800
+        Write-HpsaLog ("UninstallHPSA exit: {0}" -f $exit)
+        if ($exit -ne 0 -and $exit -ne 3010) { $code = $exit }
     }
     else {
         Write-HpsaLog 'UninstallHPSA.exe not found; using ARP / msiexec fallbacks.' 'WARN'
@@ -611,38 +648,39 @@ function Invoke-SoftPaqSilentInstall {
         [string]$ExtractDir
     )
 
-    # Prefer SoftPaq silent install (/s). Fallback: extract then InstallHPSA.exe /S /v/qn.
-    Write-HpsaLog "Running SoftPaq silent install: `"$SoftPaqPath`" /s"
-    $p = Start-Process -FilePath $SoftPaqPath -ArgumentList '/s' -Wait -PassThru -WindowStyle Hidden
-    Write-HpsaLog "SoftPaq /s exit code: $($p.ExitCode)"
-    if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
-        return $p.ExitCode
-    }
-
-    Write-HpsaLog "SoftPaq /s returned $($p.ExitCode); trying extract + InstallHPSA.exe" 'WARN'
+    # SoftPaq.exe /s alone often shows a progress UI. Prefer silent extract + InstallHPSA /S /v"/qn".
     if (Test-Path -LiteralPath $ExtractDir) {
         Remove-Item -LiteralPath $ExtractDir -Recurse -Force -ErrorAction SilentlyContinue
     }
     New-Item -ItemType Directory -Path $ExtractDir -Force | Out-Null
 
-    $extractArgs = @('/s', '/e', '/f', "`"$ExtractDir`"")
-    $p2 = Start-Process -FilePath $SoftPaqPath -ArgumentList $extractArgs -Wait -PassThru -WindowStyle Hidden
-    Write-HpsaLog "SoftPaq extract exit code: $($p2.ExitCode)"
-    if ($p2.ExitCode -ne 0) {
-        return $p2.ExitCode
+    $extractArgs = '/s /e /f "' + $ExtractDir + '"'
+    Write-HpsaLog 'Extracting SoftPaq silently (/s /e /f)...'
+    $extractCode = Start-HpsaHiddenProcess -FilePath $SoftPaqPath -Arguments $extractArgs -TimeoutSec 1800
+    Write-HpsaLog ("SoftPaq extract exit code: {0}" -f $extractCode)
+    if ($extractCode -ne 0) {
+        Write-HpsaLog 'Extract failed; trying SoftPaq /s as last resort (may show UI).' 'WARN'
+        $fallback = Start-HpsaHiddenProcess -FilePath $SoftPaqPath -Arguments '/s' -TimeoutSec 1800
+        Write-HpsaLog ("SoftPaq /s exit code: {0}" -f $fallback)
+        return $fallback
     }
 
     $installer = Get-ChildItem -LiteralPath $ExtractDir -Recurse -Filter 'InstallHPSA.exe' -ErrorAction SilentlyContinue |
         Select-Object -First 1
     if (-not $installer) {
+        $installer = Get-ChildItem -LiteralPath $ExtractDir -Recurse -Filter 'setup.exe' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    }
+    if (-not $installer) {
         Write-HpsaLog 'InstallHPSA.exe not found after SoftPaq extract.' 'ERROR'
         return 2
     }
 
-    Write-HpsaLog "Running `"$($installer.FullName)`" /S /v/qn"
-    $p3 = Start-Process -FilePath $installer.FullName -ArgumentList '/S', '/v/qn' -Wait -PassThru -WindowStyle Hidden
-    Write-HpsaLog "InstallHPSA exit code: $($p3.ExitCode)"
-    return $p3.ExitCode
+    $installArgs = '/S /v"/qn /norestart REBOOT=ReallySuppress"'
+    Write-HpsaLog ("Running silent InstallHPSA: {0}" -f $installer.FullName)
+    $installCode = Start-HpsaHiddenProcess -FilePath $installer.FullName -Arguments $installArgs -TimeoutSec 1800
+    Write-HpsaLog ("InstallHPSA exit code: {0}" -f $installCode)
+    return $installCode
 }
 
 function Test-HpsaShouldExitProcess {
