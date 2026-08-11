@@ -30,9 +30,6 @@
 .PARAMETER ForceAppShutdown
     Passed through to M365 Apps C2R update (closes Office apps). Default off.
 
-.PARAMETER WorkingDirectory
-    Download / temp folder. Default: %ProgramData%\VulnSoftwareUpdate
-
 .PARAMETER NoExit
     Keep the PowerShell host open (Backstage).
 
@@ -46,7 +43,6 @@ param(
     [switch]$List,
     [switch]$Force,
     [switch]$ForceAppShutdown,
-    [string]$WorkingDirectory = (Join-Path $env:ProgramData 'VulnSoftwareUpdate'),
     [switch]$NoExit,
     [switch]$Exit
 )
@@ -55,7 +51,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -133,11 +129,6 @@ function Get-VulnCatalog {
             Id = 'AdobeAcrobat'; Name = 'Adobe Acrobat / Reader (64-bit)'
             Method = 'Adobe'; Notes = 'Reader -> Adobe.Acrobat.Reader.64-bit; Pro -> Adobe.Acrobat.Pro'
             Match = @('Adobe Acrobat', 'Adobe Acrobat Reader', 'Adobe Acrobat DC')
-        }
-        [pscustomobject]@{
-            Id = 'DuoAuthProxy'; Name = 'Duo Security Authentication Proxy'
-            Method = 'DuoProxy'; Match = @('Duo Authentication Proxy', 'Duo Security Authentication Proxy')
-            Notes = 'Vendor silent /S from dl.duosecurity.com (may briefly interrupt 2FA proxy)'
         }
         [pscustomobject]@{
             Id = 'VSCode'; Name = 'Microsoft Visual Studio Code'
@@ -369,55 +360,6 @@ function Test-M365Present {
         $cfg = Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Office\ClickToRun\Configuration' -ErrorAction SilentlyContinue
     }
     return [bool]$cfg
-}
-
-function Get-DuoProxyInfo {
-    param($InstalledApps)
-    $hit = @($InstalledApps | Where-Object {
-            $_.DisplayName -match 'Duo.*Authentication Proxy|Authentication Proxy'
-        }) | Select-Object -First 1
-    if (-not $hit) { return $null }
-    $latestName = $null
-    $latestVer = $null
-    try {
-        $head = Invoke-WebRequest -Uri 'https://dl.duosecurity.com/duoauthproxy-latest.exe' -Method Head -UseBasicParsing -TimeoutSec 30
-        $cd = $head.Headers['Content-Disposition']
-        if ($cd -match 'duoauthproxy-([0-9][0-9\.\-]+)\.exe') {
-            $latestVer = $Matches[1] -replace '-', '.'
-            $latestName = $Matches[0]
-        }
-        elseif ($cd -match 'filename="?([^";]+)') {
-            $latestName = $Matches[1]
-            if ($latestName -match 'duoauthproxy-([0-9][0-9\.\-]+)\.exe') {
-                $latestVer = $Matches[1] -replace '-', '.'
-            }
-        }
-    }
-    catch {
-        Write-VulnLog ("Duo latest version probe failed: {0}" -f $_.Exception.Message) 'WARN'
-    }
-    return [pscustomobject]@{
-        DisplayName    = $hit.DisplayName
-        DisplayVersion = $hit.DisplayVersion
-        LatestVersion  = $latestVer
-        LatestFileName = $latestName
-    }
-}
-
-function Update-DuoProxy {
-    param([string]$WorkDir)
-    if (-not (Test-Path -LiteralPath $WorkDir)) {
-        New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null
-    }
-    $dest = Join-Path $WorkDir 'duoauthproxy-latest.exe'
-    Write-VulnLog 'Downloading Duo Authentication Proxy (duoauthproxy-latest.exe)...'
-    $wc = New-Object Net.WebClient
-    $wc.Headers.Add('User-Agent', "VulnSoftwareUpdate/$ScriptVersion")
-    $wc.DownloadFile('https://dl.duosecurity.com/duoauthproxy-latest.exe', $dest)
-    Write-VulnLog ("Downloaded {0} bytes -> {1}" -f (Get-Item $dest).Length, $dest)
-    Write-VulnLog 'Starting silent Duo Proxy install (/S). Auth proxy service may restart.'
-    $p = Start-Process -FilePath $dest -ArgumentList '/S' -PassThru -Wait -WindowStyle Hidden
-    return $p.ExitCode
 }
 
 function Resolve-AdobeWingetId {
@@ -653,69 +595,6 @@ foreach ($item in $selected) {
             }
             catch {
                 Add-Result -Id $item.Id -Name $item.Name -Status 'ERROR' -Detail $_.Exception.Message
-            }
-        }
-
-        'DuoProxy' {
-            $info = Get-DuoProxyInfo -InstalledApps $installedApps
-            if (-not $info) {
-                Add-Result -Id $item.Id -Name $item.Name -Status 'SKIPPED_NOT_INSTALLED' `
-                    -Detail 'Duo Authentication Proxy not detected.'
-                break
-            }
-            $localV = ConvertTo-VulnVersion $info.DisplayVersion
-            $latestV = ConvertTo-VulnVersion $info.LatestVersion
-            $needs = $false
-            if ($Force) { $needs = $true }
-            elseif ($localV -and $latestV -and ($localV -lt $latestV)) { $needs = $true }
-            elseif (-not $latestV) {
-                Add-Result -Id $item.Id -Name $item.Name -Status 'UNKNOWN' `
-                    -Detail ("Installed {0}; could not determine latest from Duo CDN." -f $info.DisplayVersion) `
-                    -InstalledVersion $info.DisplayVersion
-                break
-            }
-            elseif ($localV -and $latestV -and ($localV -ge $latestV)) {
-                Add-Result -Id $item.Id -Name $item.Name -Status 'UP_TO_DATE' `
-                    -Detail ("Local {0} >= latest {1}." -f $info.DisplayVersion, $info.LatestVersion) `
-                    -InstalledVersion $info.DisplayVersion -TargetVersion $info.LatestVersion
-                break
-            }
-            else { $needs = $true }
-
-            if ($needs) {
-                if ($CheckOnly) {
-                    Add-Result -Id $item.Id -Name $item.Name -Status 'UPDATE_AVAILABLE' `
-                        -Detail ("Local {0} < latest {1}. Update will restart Duo Auth Proxy service." -f `
-                            $info.DisplayVersion, $info.LatestVersion) `
-                        -InstalledVersion $info.DisplayVersion -TargetVersion $info.LatestVersion
-                }
-                else {
-                    try {
-                        $code = Update-DuoProxy -WorkDir $WorkingDirectory
-                        $afterApps = @(Get-InstalledApps)
-                        $after = Get-DuoProxyInfo -InstalledApps $afterApps
-                        $ok = $false
-                        if ($after -and $after.DisplayVersion -and $info.LatestVersion) {
-                            $av = ConvertTo-VulnVersion $after.DisplayVersion
-                            $lv = ConvertTo-VulnVersion $info.LatestVersion
-                            if ($av -and $lv -and ($av -ge $lv)) { $ok = $true }
-                        }
-                        if ($ok) {
-                            Add-Result -Id $item.Id -Name $item.Name -Status 'UPDATED' `
-                                -Detail ("Silent install exit {0}; now {1}." -f $code, $after.DisplayVersion) `
-                                -InstalledVersion $after.DisplayVersion -TargetVersion $info.LatestVersion
-                        }
-                        else {
-                            Add-Result -Id $item.Id -Name $item.Name -Status 'UNKNOWN' `
-                                -Detail ("Silent install exit {0}; verify service and version manually." -f $code) `
-                                -InstalledVersion $(if ($after) { $after.DisplayVersion } else { $info.DisplayVersion }) `
-                                -TargetVersion $info.LatestVersion
-                        }
-                    }
-                    catch {
-                        Add-Result -Id $item.Id -Name $item.Name -Status 'ERROR' -Detail $_.Exception.Message
-                    }
-                }
             }
         }
 
