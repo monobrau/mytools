@@ -1,82 +1,86 @@
-# ScreenConnect Commands — paste ONE block into the Commands tab.
-# Each block downloads Update-HpSupportAssistant.ps1 from GitHub and runs it.
-# Works on Windows PowerShell 5.1 (#!ps) and PowerShell 7+ (#!pwsh).
+# ScreenConnect — paste ONE complete block (top to bottom). Do not paste line-by-line out of order.
+# Downloads Update-HpSupportAssistant.ps1 from GitHub and runs it.
 
 # =============================================================================
-# CHECK ONLY  (#!ps = Windows PowerShell 5.1)
+# BACKSTAGE PowerShell — CHECK ONLY (keeps console open)
+# =============================================================================
+$ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
+$wc = New-Object System.Net.WebClient
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
+if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
+Write-Host ("Downloaded {0} chars from GitHub" -f $script.Length)
+& ([scriptblock]::Create($script))
+
+# =============================================================================
+# BACKSTAGE PowerShell — SILENT UPDATE (keeps console open)
+# =============================================================================
+$ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
+$wc = New-Object System.Net.WebClient
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
+if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
+Write-Host ("Downloaded {0} chars from GitHub" -f $script.Length)
+& ([scriptblock]::Create($script)) -Update
+
+# =============================================================================
+# COMMANDS tab — CHECK ONLY (#!ps)
 # =============================================================================
 #!ps
 #timeout=300000
 #maxlength=100000
 $ProgressPreference = 'SilentlyContinue'
-try {
-    [Net.ServicePointManager]::SecurityProtocol = (
-        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    )
-} catch {
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
-}
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
 $wc = New-Object System.Net.WebClient
-$wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
-$script = $wc.DownloadString($url)
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-# -Exit so ScreenConnect gets a process exit code (2 = update needed).
 & ([scriptblock]::Create($script)) -Exit
 
 # =============================================================================
-# SILENT UPDATE  (#!ps = Windows PowerShell 5.1)
+# COMMANDS tab — SILENT UPDATE (#!ps)
 # =============================================================================
 #!ps
 #timeout=600000
 #maxlength=100000
 $ProgressPreference = 'SilentlyContinue'
-try {
-    [Net.ServicePointManager]::SecurityProtocol = (
-        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    )
-} catch {
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
-}
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
 $wc = New-Object System.Net.WebClient
-$wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
-$script = $wc.DownloadString($url)
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
 & ([scriptblock]::Create($script)) -Update -Exit
 
 # =============================================================================
-# CHECK ONLY  (#!pwsh = PowerShell 7+)
+# COMMANDS tab — CHECK ONLY (#!pwsh)
 # =============================================================================
 #!pwsh
 #timeout=300000
 #maxlength=100000
 $ProgressPreference = 'SilentlyContinue'
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
 $wc = New-Object System.Net.WebClient
-$wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
-$script = $wc.DownloadString($url)
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
 & ([scriptblock]::Create($script)) -Exit
 
 # =============================================================================
-# SILENT UPDATE  (#!pwsh = PowerShell 7+)
+# COMMANDS tab — SILENT UPDATE (#!pwsh)
 # =============================================================================
 #!pwsh
 #timeout=600000
 #maxlength=100000
 $ProgressPreference = 'SilentlyContinue'
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
 $wc = New-Object System.Net.WebClient
-$wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
-$script = $wc.DownloadString($url)
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
 & ([scriptblock]::Create($script)) -Update -Exit

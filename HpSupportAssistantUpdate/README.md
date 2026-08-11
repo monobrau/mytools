@@ -9,22 +9,20 @@ Built for **ConnectWise ScreenConnect**:
 
 Compatible with **Windows PowerShell 5.1** and **PowerShell 7+ (pwsh)**. Check-only by default; pass `-Update` to install.
 
-**Backstage note:** older builds called `exit`, which closed the Backstage PowerShell window (often with result code `2` = update needed). v1.0.2+ keeps the host open for interactive ScriptBlock runs and prints `Done. ResultCode=...`.
+**Backstage note:** v1.0.2+ keeps the host open for interactive ScriptBlock runs (older builds called `exit` and closed the console). Result code `2` means update needed, not a crash.
 
 ## Behavior
 
 1. Read installed version from Programs and Features (uninstall registry)
-2. Resolve latest SoftPaq URL + version from the public winget-pkgs GitHub manifest (`HPInc.HPSupportAssistant`), with `winget show` as fallback
+2. Resolve latest SoftPaq URL + version from winget-pkgs (GitHub), with `winget show` as fallback
 3. Compare versions
 4. With `-Update`: download SoftPaq to `%ProgramData%\HpSupportAssistantUpdate`, verify SHA256 when published, silent install (`/s`, with extract + `InstallHPSA.exe /S /v/qn` fallback)
-
-GitHub is preferred because `winget` is often unavailable or flaky as SYSTEM in ScreenConnect Backstage.
 
 ## Parameters
 
 | Parameter | Meaning |
 | --- | --- |
-| _(none)_ | Check only; exit `2` if update needed, `0` if current |
+| _(none)_ | Check only; result `2` if update needed, `0` if current |
 | `-Update` | Install when older or missing |
 | `-Force` | Reinstall even if current (implies `-Update`) |
 | `-SoftPaqUrl` | Override SoftPaq URL |
@@ -35,68 +33,53 @@ GitHub is preferred because `winget` is often unavailable or flaky as SYSTEM in 
 
 ## Backstage (SYSTEM)
 
-Works in either host. Paste into Backstage PowerShell:
+Paste the **entire** block at once (top → bottom). Do not paste lines in reverse.
 
 **Check only**
 
 ```powershell
 $ProgressPreference = 'SilentlyContinue'
-try {
-    [Net.ServicePointManager]::SecurityProtocol = (
-        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    )
-} catch {
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
-}
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
 $wc = New-Object System.Net.WebClient
-$wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
-$script = $wc.DownloadString($url)
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
+Write-Host ("Downloaded {0} chars from GitHub" -f $script.Length)
 & ([scriptblock]::Create($script))
-# Console stays open. ResultCode 0=current, 2=update needed, 1=error. Then:
-# & ([scriptblock]::Create($script)) -Update
 ```
 
-**Update** — same bootstrap, last line:
+**Update** — same block, last line:
 
 ```powershell
 & ([scriptblock]::Create($script)) -Update
 ```
 
+You should see `Downloaded #### chars from GitHub`, then `HpSupportAssistantUpdate 1.0.2`, then `Done. ResultCode=...` with the console still open.
+
 ## ScreenConnect Commands
 
-Paste **one** block into the **Commands** tab. Full copies also live in [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1).
+Paste **one** block into the **Commands** tab. Full copies: [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1).
 
-### Check only (`#!ps` — Windows PowerShell 5.1)
+### Check only (`#!ps`)
 
 ```powershell
 #!ps
 #timeout=300000
 #maxlength=100000
 $ProgressPreference = 'SilentlyContinue'
-try {
-    [Net.ServicePointManager]::SecurityProtocol = (
-        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    )
-} catch {
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
-}
-$repo = 'monobrau/mytools'
-$url = "https://raw.githubusercontent.com/$repo/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?$(Get-Date -Format yyyyMMddHHmmss)"
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
 $wc = New-Object System.Net.WebClient
-$wc.Encoding = [System.Text.Encoding]::UTF8
-$wc.Headers['User-Agent'] = 'HpSupportAssistantUpdate-bootstrap/1.0.2'
-$script = $wc.DownloadString($url)
+$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
+$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
 if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
 & ([scriptblock]::Create($script)) -Exit
 ```
 
 ### Silent update (`#!ps`)
 
-Same as check, but `#timeout=600000` and:
+Same as check, `#timeout=600000`, last line:
 
 ```powershell
 & ([scriptblock]::Create($script)) -Update -Exit
@@ -104,9 +87,7 @@ Same as check, but `#timeout=600000` and:
 
 ### PowerShell 7+ (`#!pwsh`)
 
-Same body as above; change the shebang to `#!pwsh` (TLS lines are optional on pwsh). Use when the endpoint has PowerShell 7 installed and ScreenConnect should run that host.
-
-Use a long timeout — SoftPaq download + install often exceeds two minutes.
+Same body; change shebang to `#!pwsh`.
 
 ## Requirements
 
@@ -116,7 +97,6 @@ Use a long timeout — SoftPaq download + install often exceeds two minutes.
 
 ## Notes
 
-- Bootstrap uses `WebClient.DownloadString` so the downloaded script is always a .NET string on both 5.1 and pwsh (avoids `Invoke-WebRequest` content-type differences).
-- Latest resolution tracks the winget-pkgs repo, not a hardcoded SoftPaq number.
-- Exit `3010` means success with reboot required.
+- Bootstrap uses `WebClient.DownloadData` + UTF-8 decode (avoids `WebClient.Encoding`, which fails in some Backstage hosts).
+- Result codes: `0` current, `2` update needed, `1` error, `3010` success + reboot required.
 - This updates Support Assistant only; it does not remove HP Touchpoint Analytics.
