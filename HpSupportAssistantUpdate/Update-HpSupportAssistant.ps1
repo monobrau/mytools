@@ -1,27 +1,32 @@
 ﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    Checks / updates / uninstalls HP Support Assistant for ScreenConnect and vuln-scan remediation.
+    Updates (Win11) or uninstalls (Win10) HP Support Assistant for ScreenConnect / vuln-scan remediation.
 
 .DESCRIPTION
     Designed for ConnectWise ScreenConnect Backstage (SYSTEM) and the Commands tab (#!ps).
 
     Recent HP advisories (e.g. CVE-2025-10578, CVE-2025-43019, CVE-2025-43026) are fixed only in
     HPSA builds around 9.44-9.47. The SoftPaq that carries those fixes often will not install on
-    Windows 10 (incompatible-OS dialog). Win10 SoftPaqs such as 9.39 / 8.8 remain below the fixed
-    versions, so vuln-scan remediation on Windows 10 should uninstall HPSA (+ Framework).
+    Windows 10. Win10 SoftPaqs remain below the fixed versions, so Windows 10 defaults to uninstall.
 
-    Check-only by default. -Uninstall for remediation. -Update only when a patched SoftPaq can be
-    installed (typically Windows 11).
+    Default action (no switches):
+      - Windows 11: -Update (patched SoftPaq via winget-pkgs)
+      - Windows 10: -Uninstall (v-scan remediation)
+    Use -CheckOnly to inspect without changing the system. -Uninstall is always available on Win11.
+
+.PARAMETER CheckOnly
+    Detect / vuln-status only; do not update or uninstall.
 
 .PARAMETER Uninstall
     Silently remove HP Support Assistant and HP Support Solutions Framework (v-scan remediation).
 
 .PARAMETER Update
     Download and silently install when installed version is older than the OS-appropriate target.
+    Refused on Windows 10 (use default uninstall or -Uninstall).
 
 .PARAMETER Force
-    With -Update: reinstall even if current. With -Uninstall: continue cleanup even if not detected.
+    With update: reinstall even if current. With uninstall: continue cleanup even if not detected.
 
 .PARAMETER SoftPaqUrl
     Optional override SoftPaq URL (skips catalog/winget lookup). Still uses -LatestVersion if provided.
@@ -41,6 +46,7 @@
 #>
 [CmdletBinding()]
 param(
+    [switch]$CheckOnly,
     [switch]$Uninstall,
     [switch]$Update,
     [switch]$Force,
@@ -55,7 +61,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.3'
+$ScriptVersion = '1.2.0'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 # Do NOT match "HP Support Solutions Framework" - that is a companion with a different version scheme (12.x vs HPSA 9.x).
@@ -64,8 +70,7 @@ $FrameworkDisplayNamePattern = '^HP Support Solutions Framework(\s|$)'
 # Minimum build that covers recent HP bulletins (CVE-2025-10578 requires < 9.47.41.0 fixed).
 $PatchedMinimumVersion = [version]'9.47.41.0'
 
-# Current winget SoftPaq (9.47 / sp171501) rejects many Windows 10 hosts with an "incompatible OS" dialog.
-# Win10 path uses SoftPaqs that still declare Windows 10 support on ftp.hp.com.
+# Kept for SoftPaqUrl / legacy override paths only. Windows 10 default action is uninstall, not these SoftPaqs.
 $Win10SoftPaqCandidates = @(
     [pscustomobject]@{
         Version      = '9.39.17.0'
@@ -81,9 +86,12 @@ $Win10SoftPaqCandidates = @(
     }
 )
 
-if ($Force -and -not $Uninstall) { $Update = $true }
-if ($Uninstall -and $Update) {
-    throw 'Specify only one of -Uninstall or -Update.'
+$explicitCheckOnly = $CheckOnly.IsPresent
+$explicitUninstall = $Uninstall.IsPresent
+$explicitUpdate = $Update.IsPresent
+$actionFlags = @($explicitCheckOnly, $explicitUninstall, $explicitUpdate) | Where-Object { $_ }
+if (@($actionFlags).Count -gt 1) {
+    throw 'Specify only one of -CheckOnly, -Uninstall, or -Update.'
 }
 
 # TLS 1.2 for Windows PowerShell 5.1 / older .NET; harmless on pwsh (.NET Core).
@@ -713,9 +721,6 @@ function Complete-Hpsa {
 $hostEdition = if ($PSVersionTable.PSEdition) { [string]$PSVersionTable.PSEdition } else { 'Desktop' }
 Write-HpsaLog ("HpSupportAssistantUpdate {0}" -f $ScriptVersion)
 Write-HpsaLog ("Host: PowerShell {0} ({1})" -f $PSVersionTable.PSVersion, $hostEdition)
-Write-HpsaLog ("User: {0} | Elevated: {1} | Force={2} Update={3} Uninstall={4}" -f `
-        [Security.Principal.WindowsIdentity]::GetCurrent().Name, (Test-IsElevated), $Force, $Update, $Uninstall)
-
 if (-not (Test-IsWindowsHost)) {
     Write-HpsaLog 'Windows only.' 'ERROR'
     Complete-Hpsa -Code 1
@@ -724,6 +729,21 @@ if (-not (Test-IsWindowsHost)) {
 
 $osInfo = Get-HpsaOsInfo
 Write-HpsaLog ("OS: {0} [{1}]" -f $osInfo.Summary, $osInfo.Channel)
+
+# OS defaults when no action switch was passed.
+if (-not $explicitCheckOnly -and -not $explicitUninstall -and -not $explicitUpdate) {
+    if ($osInfo.IsWindows11) {
+        $Update = $true
+        Write-HpsaLog 'Default action (Windows 11): Update'
+    }
+    else {
+        $Uninstall = $true
+        Write-HpsaLog 'Default action (Windows 10): Uninstall'
+    }
+}
+
+Write-HpsaLog ("User: {0} | Elevated: {1} | Force={2} Update={3} Uninstall={4} CheckOnly={5}" -f `
+        [Security.Principal.WindowsIdentity]::GetCurrent().Name, (Test-IsElevated), $Force, $Update, $Uninstall, $CheckOnly)
 
 $framework = Get-HpSupportFrameworkCompanion
 if ($framework) {
@@ -744,7 +764,9 @@ else {
 $vuln = Test-HpsaVersionVulnerable -Installed $installed
 if ($vuln.IsVulnerable) {
     Write-HpsaLog ("Vuln status: VULNERABLE - {0}" -f $vuln.Reason) 'WARN'
-    Write-HpsaLog 'Patched SoftPaq (~9.47) often will not install on Windows 10; prefer -Uninstall for v-scan remediation.' 'WARN'
+    if (-not $osInfo.IsWindows11) {
+        Write-HpsaLog 'Windows 10: uninstall is the remediation path (patched SoftPaq often will not install).' 'WARN'
+    }
 }
 else {
     Write-HpsaLog ("Vuln status: {0}" -f $vuln.Reason)
@@ -822,8 +844,8 @@ else {
     Write-HpsaLog 'Decision: cannot compare versions cleanly; treat as update candidate.' 'WARN'
 }
 
-if (-not $Update) {
-    Write-HpsaLog 'Check-only complete (pass -Uninstall for remediation, or -Update on Win11).'
+if ($CheckOnly -or -not $Update) {
+    Write-HpsaLog 'Check-only complete.'
     if ($vuln.IsVulnerable) { Complete-Hpsa -Code 2 }
     elseif ($needUpdate) { Complete-Hpsa -Code 2 }
     else { Complete-Hpsa -Code 0 }
