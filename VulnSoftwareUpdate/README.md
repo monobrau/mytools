@@ -31,6 +31,16 @@ Checks what’s installed, prints a clear per-product verdict, and can silently 
 | Edge WebView2 Runtime | `WebView2` | winget `Microsoft.EdgeWebView2Runtime` |
 | PowerShell 7 | `PowerShell7` | winget `Microsoft.PowerShell` |
 | FileZilla | `FileZilla` | winget `FileZilla.FileZilla` |
+| KeePass | `KeePass` | winget `DominikReichl.KeePass` |
+| KeePassXC | `KeePassXC` | winget `KeePassXCTeam.KeePassXC` |
+| SumatraPDF | `SumatraPDF` | winget `SumatraPDF.SumatraPDF` |
+| Azure CLI | `AzureCLI` | winget `Microsoft.AzureCLI` |
+| GitHub CLI | `GitHubCli` | winget `GitHub.cli` |
+| TreeSize Free | `TreeSizeFree` | winget `JAMSoftware.TreeSize.Free` |
+| PowerToys | `PowerToys` | winget `Microsoft.PowerToys` |
+| Windows Terminal | `WindowsTerminal` | winget `Microsoft.WindowsTerminal` |
+| AWS CLI | `AwsCli` | winget `Amazon.AWSCLI` |
+| Sysinternals Suite | `SysinternalsSuite` | winget `Microsoft.Sysinternals.Suite` |
 
 Not installed on the host → `SKIPPED_NOT_INSTALLED` (not a failure).
 
@@ -58,7 +68,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.2.1'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.3.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes
