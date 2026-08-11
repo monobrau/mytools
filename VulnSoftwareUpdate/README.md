@@ -2,7 +2,7 @@
 
 Orchestrator for ConnectSecure-style **Vulnerability Remediation** software updates (ScreenConnect Commands `#!ps`).
 
-Checks what’s installed, prints a clear per-product verdict, and can silently update common findings. Reuses existing mytools handlers where they already exist.
+Built for endpoints that may **not** have RMM patch management or Intune — ScreenConnect + winget/C2R is the remediation path. Checks what’s installed, prints a clear per-product verdict, and can silently update common findings. Reuses existing mytools handlers where they already exist.
 
 ## Ticket products covered
 
@@ -77,9 +77,11 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 
 ## Notes
 
+- Designed for **ad-hoc vuln tickets** when the client has no (or incomplete) RMM/Intune patching. Windows Update alone will not cover most third-party apps or C2R Office.
 - Requires **winget** on the endpoint for most third-party apps (SYSTEM context can be flaky; machine-scope installs work best).
 - **M365 Apps** stays on Click-to-Run (same non-disruptive defaults as M365AppsUpdate).
 - **.NET** stays on the installed major (e.g. 8.0.x → latest 8.0.y); it will not jump to a newer major.
+- **Browsers** are opt-in (`-IncludeBrowsers`) because upgrades can close open sessions — still a primary remediation path when there is no browser policy ring.
 - Duo Authentication Proxy is intentionally out of scope (use the dedicated Duo tooling if needed).
 - Add new products by extending the catalog in `Update-VulnSoftware.ps1`.
 
@@ -89,4 +91,5 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 .\Update-VulnSoftware.ps1 -List
 .\Update-VulnSoftware.ps1 -CheckOnly
 .\Update-VulnSoftware.ps1 -Product Git,ShareX
+.\Update-VulnSoftware.ps1 -IncludeBrowsers -CheckOnly
 ```
