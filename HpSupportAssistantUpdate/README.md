@@ -13,9 +13,9 @@ Compatible with **Windows PowerShell 5.1** and **PowerShell 7+ (pwsh)**. Check-o
 
 ## Behavior
 
-1. Read installed version from Programs and Features (uninstall registry)
+1. Detect **HP Support Assistant** version from ARP (`DisplayName` starting with that product), then file version (8.x–11.x), then AppX. **HP Support Solutions Framework** is logged as a companion only — its 12.x version is never compared to SoftPaq 9.x.
 2. Resolve latest SoftPaq URL + version from winget-pkgs (GitHub), with `winget show` as fallback
-3. Compare versions
+3. Compare HPSA vs latest SoftPaq
 4. With `-Update`: download SoftPaq to `%ProgramData%\HpSupportAssistantUpdate`, verify SHA256 when published, silent install (`/s`, with extract + `InstallHPSA.exe /S /v/qn` fallback)
 
 ## Parameters
