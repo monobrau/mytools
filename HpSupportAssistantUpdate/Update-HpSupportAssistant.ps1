@@ -49,10 +49,12 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.2'
+$ScriptVersion = '1.0.3'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
-$DisplayNamePattern = 'HP Support Assistant|HP Support Solutions Framework'
+# Do NOT match "HP Support Solutions Framework" — that is a companion with a different version scheme (12.x vs HPSA 9.x).
+$HpsaDisplayNamePattern = '^HP Support Assistant(\s|$)'
+$FrameworkDisplayNamePattern = '^HP Support Solutions Framework(\s|$)'
 
 if ($Force) { $Update = $true }
 
@@ -132,18 +134,97 @@ function Invoke-HpsaWebRequest {
     return Invoke-WebRequest @params
 }
 
-function Get-InstalledHpSupportAssistant {
+function Get-UninstallEntries {
     $paths = @(
         'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
         'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
     )
-    $hits = foreach ($path in $paths) {
-        Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | Where-Object {
-            $_.DisplayName -and ($_.DisplayName -match $DisplayNamePattern)
+    foreach ($path in $paths) {
+        Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-HpSupportFrameworkCompanion {
+    $hit = Get-UninstallEntries | Where-Object {
+        $_.DisplayName -and ($_.DisplayName -match $FrameworkDisplayNamePattern)
+    } | Select-Object -First 1
+
+    if (-not $hit) { return $null }
+    return [pscustomobject]@{
+        DisplayName    = [string]$hit.DisplayName
+        DisplayVersion = [string]$hit.DisplayVersion
+        Version        = ConvertTo-HpsaVersion -Text ([string]$hit.DisplayVersion)
+    }
+}
+
+function Get-HpsaVersionFromFiles {
+    $candidates = @(
+        "${env:ProgramFiles(x86)}\HP\HP Support Framework\HPSF.exe"
+        "${env:ProgramFiles(x86)}\Hewlett-Packard\HP Support Framework\HPSF.exe"
+        "${env:ProgramFiles(x86)}\HP\HP Support Framework\HPSupportAssistant.exe"
+        "${env:ProgramFiles(x86)}\Hewlett-Packard\HP Support Framework\HPSupportAssistant.exe"
+        "${env:ProgramFiles}\HP\HP Support Framework\HPSF.exe"
+        "${env:ProgramFiles}\Hewlett-Packard\HP Support Framework\HPSF.exe"
+    )
+
+    foreach ($path in $candidates) {
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        try {
+            $fv = [version](Get-Item -LiteralPath $path).VersionInfo.FileVersion
+            # SoftPaq / winget HPSA versions are 9.x (sometimes 8.x). Framework binaries often report 12.x — skip those.
+            if ($fv.Major -ge 8 -and $fv.Major -le 11) {
+                return [pscustomobject]@{
+                    DisplayName     = 'HP Support Assistant (file)'
+                    DisplayVersion  = $fv.ToString()
+                    Publisher       = 'HP'
+                    UninstallString = ''
+                    InstallLocation = [string](Split-Path -Parent $path)
+                    Version         = $fv
+                    Source          = "file:$path"
+                }
+            }
+        }
+        catch { }
+    }
+    return $null
+}
+
+function Get-HpsaVersionFromAppx {
+    try {
+        $pkg = Get-AppxPackage -Name '*HPSupportAssistant*' -ErrorAction SilentlyContinue |
+            Sort-Object Version -Descending |
+            Select-Object -First 1
+        if (-not $pkg) {
+            $pkg = Get-AppxPackage -AllUsers -Name '*HPSupportAssistant*' -ErrorAction SilentlyContinue |
+                Sort-Object Version -Descending |
+                Select-Object -First 1
+        }
+        if (-not $pkg) { return $null }
+
+        $ver = ConvertTo-HpsaVersion -Text ([string]$pkg.Version)
+        if (-not $ver) { return $null }
+        return [pscustomobject]@{
+            DisplayName     = [string]$pkg.Name
+            DisplayVersion  = [string]$pkg.Version
+            Publisher       = [string]$pkg.Publisher
+            UninstallString = ''
+            InstallLocation = [string]$pkg.InstallLocation
+            Version         = $ver
+            Source          = 'appx'
         }
     }
+    catch { return $null }
+}
 
-    $best = $hits |
+function Get-InstalledHpSupportAssistant {
+    # ARP: product name only (never Solutions Framework — different version lineage).
+    $arpHits = @(
+        Get-UninstallEntries | Where-Object {
+            $_.DisplayName -and ($_.DisplayName -match $HpsaDisplayNamePattern)
+        }
+    )
+
+    $bestArp = $arpHits |
         ForEach-Object {
             [pscustomobject]@{
                 DisplayName     = [string]$_.DisplayName
@@ -152,12 +233,22 @@ function Get-InstalledHpSupportAssistant {
                 UninstallString = [string]$_.UninstallString
                 InstallLocation = [string]$_.InstallLocation
                 Version         = ConvertTo-HpsaVersion -Text ([string]$_.DisplayVersion)
+                Source          = 'arp'
             }
         } |
+        Where-Object { $_.Version } |
         Sort-Object Version -Descending |
         Select-Object -First 1
 
-    return $best
+    if ($bestArp) { return $bestArp }
+
+    $fromFile = Get-HpsaVersionFromFiles
+    if ($fromFile) { return $fromFile }
+
+    $fromAppx = Get-HpsaVersionFromAppx
+    if ($fromAppx) { return $fromAppx }
+
+    return $null
 }
 
 function Invoke-GitHubJson {
@@ -340,12 +431,20 @@ if (-not (Test-IsWindowsHost)) {
     return
 }
 
+$framework = Get-HpSupportFrameworkCompanion
+if ($framework) {
+    Write-HpsaLog ("Companion present (not used for version compare): {0} {1}" -f `
+            $framework.DisplayName, $framework.DisplayVersion)
+}
+
 $installed = Get-InstalledHpSupportAssistant
 if ($installed) {
-    Write-HpsaLog ("Installed: {0} {1}" -f $installed.DisplayName, $installed.DisplayVersion)
+    $src = if ($installed.Source) { $installed.Source } else { 'arp' }
+    Write-HpsaLog ("Installed HPSA: {0} {1} (source={2})" -f `
+            $installed.DisplayName, $installed.DisplayVersion, $src)
 }
 else {
-    Write-HpsaLog 'Installed: not found'
+    Write-HpsaLog 'Installed HPSA: not found (Programs and Features / file / AppX)'
 }
 
 try {
