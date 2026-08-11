@@ -12,7 +12,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Gitleaks runs on pushes and pull request
 
 | Tool | Description |
 | --- | --- |
-| [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / silently update HP Support Assistant (ScreenConnect Backstage SYSTEM + `#!ps` Commands) |
+| [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
 
 ## Layout
 
