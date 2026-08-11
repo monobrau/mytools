@@ -1,0 +1,65 @@
+# VulnSoftwareUpdate
+
+Orchestrator for ConnectSecure-style **Vulnerability Remediation** software updates (ScreenConnect Commands `#!ps`).
+
+Checks what’s installed, prints a clear per-product verdict, and can silently update common findings. Reuses existing mytools handlers where they already exist.
+
+## Ticket products covered
+
+| Finding (approx.) | Catalog Id | Method |
+| --- | --- | --- |
+| Microsoft 365 Apps for business / enterprise | `M365Apps` | Delegates to [M365AppsUpdate](../M365AppsUpdate/) (Click-to-Run, not winget) |
+| HP Support Assistant (extra) | `HpSupportAssistant` | Delegates to [HpSupportAssistantUpdate](../HpSupportAssistantUpdate/) |
+| ShareX | `ShareX` | winget `ShareX.ShareX` |
+| Adobe Acrobat (64-bit) / Reader | `AdobeAcrobat` | winget Reader 64-bit or Acrobat Pro (auto-picked) |
+| Duo Security Authentication Proxy | `DuoAuthProxy` | Vendor `duoauthproxy-latest.exe /S` |
+| Visual Studio Code (User) | `VSCode` | winget `Microsoft.VisualStudioCode` (user-scope may need a logged-on user) |
+| Git | `Git` | winget `Git.Git` |
+| GIMP | `GIMP` | winget `GIMP.GIMP` |
+| Winamp | `Winamp` | winget `Winamp.Winamp` |
+| Greenshot | `Greenshot` | winget `Greenshot.Greenshot` |
+| Microsoft Teams Network Assessment Tool | `TeamsNetworkAssessment` | **Manual** (no reliable winget package) |
+| WinRAR | `WinRAR` | winget `RARLab.WinRAR` |
+| Foxit PDF Reader | `FoxitReader` | winget `Foxit.FoxitReader` |
+
+Not installed on the host → `SKIPPED_NOT_INSTALLED` (not a failure).
+
+## Modes
+
+| Mode | Behavior |
+| --- | --- |
+| `-CheckOnly` | Verdicts only |
+| Default | Update installed products that look behind |
+| `-Product Id1,Id2` | Limit scope (e.g. `-Product ShareX,Git`) |
+| `-List` | Print catalog IDs |
+| `-ForceAppShutdown` | Passed to M365 C2R (closes Office apps; opt-in) |
+
+Exit codes: `0` clean / all current or skipped, `2` updates still needed / manual / unknown, `1` hard error.
+
+## ScreenConnect
+
+Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1).
+
+**Check only (start here):**
+
+```
+#!ps
+#timeout=900000
+#maxlength=200000
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+```
+
+## Notes
+
+- Requires **winget** on the endpoint for most third-party apps (SYSTEM context can be flaky; machine-scope installs work best).
+- **Duo Auth Proxy** silent upgrade can briefly interrupt 2FA authentication — coordinate for servers.
+- **M365 Apps** stays on Click-to-Run (same non-disruptive defaults as M365AppsUpdate).
+- Add new products by extending the catalog in `Update-VulnSoftware.ps1`.
+
+## Local
+
+```powershell
+.\Update-VulnSoftware.ps1 -List
+.\Update-VulnSoftware.ps1 -CheckOnly
+.\Update-VulnSoftware.ps1 -Product Git,ShareX
+```
