@@ -55,7 +55,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.1.1'
 $OfficeReleasesUri = 'https://clients.config.office.net/releases/v1.0/OfficeReleases'
 
 try {
@@ -359,13 +359,13 @@ function Write-M365Assessment {
 
     switch ($Assessment.Status) {
         'UP_TO_DATE' {
-            Write-M365Verdict -Status 'UP TO DATE — NO UPDATES NEEDED' -Detail $Assessment.Summary
+            Write-M365Verdict -Status 'UP TO DATE - NO UPDATES NEEDED' -Detail $Assessment.Summary
         }
         'UPDATE_AVAILABLE' {
-            Write-M365Verdict -Status 'UPDATE AVAILABLE — UPDATES NEEDED' -Detail $Assessment.Summary
+            Write-M365Verdict -Status 'UPDATE AVAILABLE - UPDATES NEEDED' -Detail $Assessment.Summary
         }
         default {
-            Write-M365Verdict -Status 'UNKNOWN — COULD NOT VERIFY' -Detail $Assessment.Summary
+            Write-M365Verdict -Status 'UNKNOWN - COULD NOT VERIFY' -Detail $Assessment.Summary
         }
     }
 }
@@ -432,7 +432,7 @@ Write-M365Info -Info $before
 
 if (-not $before.Present -or -not $before.C2RClientPath) {
     Write-M365Log 'Cannot continue: Click-to-Run client not found (is M365 Apps / Office C2R installed?).' 'ERROR'
-    Write-M365Verdict -Status 'ERROR — M365 APPS / C2R NOT FOUND' -Detail 'Install or repair Microsoft 365 Apps first.'
+    Write-M365Verdict -Status 'ERROR - M365 APPS / C2R NOT FOUND' -Detail 'Install or repair Microsoft 365 Apps first.'
     Complete-M365 -Code 1
     return
 }
@@ -454,7 +454,7 @@ if ($CheckOnly) {
 
 # Default / update path: skip C2R when already current (unless -Force)
 if ($assessment.Status -eq 'UP_TO_DATE' -and -not $Force -and [string]::IsNullOrWhiteSpace($UpdateToVersion)) {
-    Write-M365Log 'Skipping update start — host is already on/above channel latest. Nothing for the user to notice.'
+    Write-M365Log 'Skipping update start - host is already on/above channel latest. Nothing for the user to notice.'
     Complete-M365 -Code 0
     return
 }
