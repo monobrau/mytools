@@ -33,29 +33,21 @@ Compatible with **Windows PowerShell 5.1** and **PowerShell 7+ (pwsh)**. Check-o
 
 ## Backstage (SYSTEM)
 
-Paste the **entire** block at once (top → bottom). Do not paste lines in reverse.
+Backstage PowerShell often pastes multi-line clipboard **bottom-to-top**, which breaks downloads. Use these **one-liners** (copy the whole line).
 
 **Check only**
 
 ```powershell
-$ProgressPreference = 'SilentlyContinue'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
-$wc = New-Object System.Net.WebClient
-$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
-$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
-if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-Write-Host ("Downloaded {0} chars from GitHub" -f $script.Length)
-& ([scriptblock]::Create($script))
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script))
 ```
 
-**Update** — same block, last line:
+**Silent update**
 
 ```powershell
-& ([scriptblock]::Create($script)) -Update
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script)) -Update
 ```
 
-You should see `Downloaded #### chars from GitHub`, then `HpSupportAssistantUpdate 1.0.2`, then `Done. ResultCode=...` with the console still open.
+You should see `Downloaded #### chars` (thousands, not 0), then `HpSupportAssistantUpdate 1.0.2`, then `Done. ResultCode=...` with the console still open.
 
 ## ScreenConnect Commands
 
@@ -67,22 +59,16 @@ Paste **one** block into the **Commands** tab. Full copies: [`ScreenConnect-Comm
 #!ps
 #timeout=300000
 #maxlength=100000
-$ProgressPreference = 'SilentlyContinue'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$url = 'https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?' + (Get-Date -Format 'yyyyMMddHHmmss')
-$wc = New-Object System.Net.WebClient
-$wc.Headers.Add('User-Agent', 'HpSupportAssistantUpdate-bootstrap/1.0.3')
-$script = [System.Text.Encoding]::UTF8.GetString($wc.DownloadData($url))
-if ($script.Length -gt 0 -and [int][char]$script[0] -eq 0xFEFF) { $script = $script.Substring(1) }
-& ([scriptblock]::Create($script)) -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); & ([scriptblock]::Create($script)) -Exit
 ```
 
 ### Silent update (`#!ps`)
 
-Same as check, `#timeout=600000`, last line:
-
 ```powershell
-& ([scriptblock]::Create($script)) -Update -Exit
+#!ps
+#timeout=600000
+#maxlength=100000
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); & ([scriptblock]::Create($script)) -Update -Exit
 ```
 
 ### PowerShell 7+ (`#!pwsh`)
