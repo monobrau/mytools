@@ -35,19 +35,21 @@ Compatible with **Windows PowerShell 5.1** and **PowerShell 7+ (pwsh)**. Check-o
 
 Backstage PowerShell often pastes multi-line clipboard **bottom-to-top**, which breaks downloads. Use these **one-liners** (copy the whole line).
 
+Bootstrap uses the **GitHub Contents API** (`Accept: application/vnd.github.raw`) because `raw.githubusercontent.com/main` can stay stale for a long time even with a query-string cache buster.
+
 **Check only**
 
 ```powershell
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script))
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?ref=main'); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script))
 ```
 
 **Silent update**
 
 ```powershell
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script)) -Update
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?ref=main'); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script)) -Update
 ```
 
-You should see `Downloaded #### chars` (thousands, not 0), then `HpSupportAssistantUpdate 1.0.2`, then `Done. ResultCode=...` with the console still open.
+You should see `Downloaded ~20700 chars` (not ~16847), then **`HpSupportAssistantUpdate 1.0.3`**, companion Framework line (if present), then HPSA not found / update needed.
 
 ## ScreenConnect Commands
 
@@ -59,7 +61,7 @@ Paste **one** block into the **Commands** tab. Full copies: [`ScreenConnect-Comm
 #!ps
 #timeout=300000
 #maxlength=100000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); & ([scriptblock]::Create($script)) -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?ref=main'); & ([scriptblock]::Create($script)) -Exit
 ```
 
 ### Silent update (`#!ps`)
@@ -68,7 +70,7 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 #!ps
 #timeout=600000
 #maxlength=100000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $u='https://raw.githubusercontent.com/monobrau/mytools/main/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?'+[DateTime]::UtcNow.ToString('yyyyMMddHHmmss'); $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $script=[Text.Encoding]::UTF8.GetString($wc.DownloadData($u)); & ([scriptblock]::Create($script)) -Update -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.0.3'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?ref=main'); & ([scriptblock]::Create($script)) -Update -Exit
 ```
 
 ### PowerShell 7+ (`#!pwsh`)
@@ -79,10 +81,10 @@ Same body; change shebang to `#!pwsh`.
 
 - Windows PowerShell **5.1+** or PowerShell **7+** (`pwsh`)
 - Elevation / SYSTEM for `-Update`
-- Outbound HTTPS to `raw.githubusercontent.com`, `api.github.com`, and `ftp.hp.com`
+- Outbound HTTPS to `api.github.com` and `ftp.hp.com` (bootstrap); SoftPaq download uses `ftp.hp.com`
 
 ## Notes
 
-- Bootstrap uses `WebClient.DownloadData` + UTF-8 decode (avoids `WebClient.Encoding`, which fails in some Backstage hosts).
+- Bootstrap uses GitHub Contents API raw download so endpoints do not keep a stale `raw.githubusercontent.com` copy of `main`.
 - Result codes: `0` current, `2` update needed, `1` error, `3010` success + reboot required.
 - This updates Support Assistant only; it does not remove HP Touchpoint Analytics.
