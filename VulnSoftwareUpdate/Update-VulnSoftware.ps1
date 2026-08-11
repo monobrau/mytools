@@ -51,7 +51,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.2.1'
+$ScriptVersion = '1.3.0'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -222,6 +222,49 @@ function Get-VulnCatalog {
         [pscustomobject]@{
             Id = 'FileZilla'; Name = 'FileZilla'; Method = 'Winget'; WingetId = 'FileZilla.FileZilla'
             Match = @('^FileZilla')
+        }
+        # Phase 2 — safe mid-volume (password managers / PDF / admin CLIs)
+        [pscustomobject]@{
+            Id = 'KeePass'; Name = 'KeePass'; Method = 'Winget'; WingetId = 'DominikReichl.KeePass'
+            Match = @('^KeePass$', '^KeePass 2')
+        }
+        [pscustomobject]@{
+            Id = 'KeePassXC'; Name = 'KeePassXC'; Method = 'Winget'; WingetId = 'KeePassXCTeam.KeePassXC'
+            Match = @('^KeePassXC')
+        }
+        [pscustomobject]@{
+            Id = 'SumatraPDF'; Name = 'SumatraPDF'; Method = 'Winget'; WingetId = 'SumatraPDF.SumatraPDF'
+            Match = @('^SumatraPDF')
+        }
+        [pscustomobject]@{
+            Id = 'AzureCLI'; Name = 'Microsoft Azure CLI'; Method = 'Winget'; WingetId = 'Microsoft.AzureCLI'
+            Match = @('Microsoft Azure CLI', '^Azure CLI')
+        }
+        [pscustomobject]@{
+            Id = 'GitHubCli'; Name = 'GitHub CLI'; Method = 'Winget'; WingetId = 'GitHub.cli'
+            Match = @('^GitHub CLI', '^gh$')
+        }
+        # Phase 3 — more safe workstation / IT tooling
+        [pscustomobject]@{
+            Id = 'TreeSizeFree'; Name = 'TreeSize Free'; Method = 'Winget'; WingetId = 'JAMSoftware.TreeSize.Free'
+            Match = @('TreeSize Free')
+        }
+        [pscustomobject]@{
+            Id = 'PowerToys'; Name = 'PowerToys'; Method = 'Winget'; WingetId = 'Microsoft.PowerToys'
+            Match = @('^PowerToys', 'Microsoft PowerToys')
+        }
+        [pscustomobject]@{
+            Id = 'WindowsTerminal'; Name = 'Windows Terminal'; Method = 'Winget'; WingetId = 'Microsoft.WindowsTerminal'
+            Match = @('^Windows Terminal$', 'Windows Terminal ')
+            Notes = 'Stable channel only (not Preview)'
+        }
+        [pscustomobject]@{
+            Id = 'AwsCli'; Name = 'AWS Command Line Interface'; Method = 'Winget'; WingetId = 'Amazon.AWSCLI'
+            Match = @('AWS Command Line Interface', '^AWS CLI')
+        }
+        [pscustomobject]@{
+            Id = 'SysinternalsSuite'; Name = 'Sysinternals Suite'; Method = 'Winget'; WingetId = 'Microsoft.Sysinternals.Suite'
+            Match = @('Sysinternals Suite')
         }
     )
 }
