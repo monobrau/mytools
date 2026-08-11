@@ -2,7 +2,12 @@
 
 Post-cleanup **verification** that Classic Microsoft Teams / per-user Teams leftovers are gone (vuln-scan remediation evidence).
 
-Default is **check only**. Pass **`-Remediate`** to remove Classic MWI / per-user Classic / Run keys / installer folder, then re-scan.
+Default is **check only**. Pass **`-Remediate`** to remove **Classic only** (MWI / classic per-user / classic Run keys / Teams Installer folder), then re-scan.
+
+**Safety for real Teams users**
+- Never uninstalls **New Teams** (`MSTeams` / `MicrosoftTeams` Appx) or kills `ms-teams`
+- Removes classic per-user `%LocalAppData%\Microsoft\Teams` only when New Teams is already on the device (or with `-ForceClassicUserRemoval`)
+- Shortcuts are deleted only if they target Classic paths (not WindowsApps / ms-teams)
 
 ## What it flags (fail)
 
@@ -32,7 +37,8 @@ Default is **check only**. Pass **`-Remediate`** to remove Classic MWI / per-use
 | Parameter | Meaning |
 | --- | --- |
 | _(none)_ | Run check |
-| `-Remediate` | Remove Classic remnants, then re-scan |
+| `-Remediate` | Remove Classic remnants only, then re-scan |
+| `-ForceClassicUserRemoval` | With remediate: wipe classic per-user even if New Teams is missing |
 | `-Detailed` | Treat warn items (e.g. shortcuts) as failing; include empty-folder noise |
 | `-Json` | Emit JSON summary after logs |
 | `-NoExit` / `-Exit` | Host lifecycle for Backstage vs Commands |
