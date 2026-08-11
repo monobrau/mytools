@@ -9,13 +9,13 @@ Built for endpoints that may **not** have RMM patch management or Intune — Scr
 | Finding (approx.) | Catalog Id | Method |
 | --- | --- | --- |
 | Microsoft 365 Apps for business / enterprise | `M365Apps` | Delegates to [M365AppsUpdate](../M365AppsUpdate/) (Click-to-Run, not winget) |
-| HP Support Assistant (extra) | `HpSupportAssistant` | Delegates to [HpSupportAssistantUpdate](../HpSupportAssistantUpdate/) |
+| HP Support Assistant (extra) | `HpSupportAssistant` | **Check-only** in orchestrator (Win10 uninstall is too destructive for bulk runs) |
 | .NET 6+ Runtime / Desktop / ASP.NET / SDK | `DotNet` | Delegates to [DotNetUpdate](../DotNetUpdate/) (same-major security patches only) |
 | ShareX | `ShareX` | winget `ShareX.ShareX` |
 | Adobe Acrobat (64-bit) / Reader | `AdobeAcrobat` | winget Reader 64-bit or Acrobat Pro (auto-picked) |
 | Visual Studio Code (User) | `VSCode` | winget `Microsoft.VisualStudioCode` (user-scope may need a logged-on user) |
 | Git | `Git` | winget `Git.Git` |
-| GIMP | `GIMP` | winget `GIMP.GIMP` |
+| GIMP | `GIMP` | winget `GIMP.GIMP.2` (pinned; avoids 2→3 major jump) |
 | Winamp | `Winamp` | winget `Winamp.Winamp` |
 | Greenshot | `Greenshot` | winget `Greenshot.Greenshot` |
 | Microsoft Teams Network Assessment Tool | `TeamsNetworkAssessment` | **Manual** (no reliable winget package) |
@@ -72,7 +72,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.1'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes
@@ -82,6 +82,8 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 - **M365 Apps** stays on Click-to-Run (same non-disruptive defaults as M365AppsUpdate).
 - **.NET** stays on the installed major (e.g. 8.0.x → latest 8.0.y); it will not jump to a newer major.
 - **Browsers** are opt-in (`-IncludeBrowsers`) because upgrades can close open sessions — still a primary remediation path when there is no browser policy ring.
+- **HPSA** is check-only here; remediate with [HpSupportAssistantUpdate](../HpSupportAssistantUpdate/) (Win10 default there is uninstall).
+- Winget upgrades use `--silent --disable-interactivity` (and `--scope machine` when possible).
 - Duo Authentication Proxy is intentionally out of scope (use the dedicated Duo tooling if needed).
 - Add new products by extending the catalog in `Update-VulnSoftware.ps1`.
 

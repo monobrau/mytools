@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.1'
+$ScriptVersion = '1.4.2'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -129,7 +129,9 @@ function Get-VulnCatalog {
             DelegatePath = 'HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1'
             ResultVariable = 'HpsaResultCode'
             Match = @('HP Support Assistant')
-            Notes = 'Win11 update / Win10 uninstall via existing tool'
+            # Standalone HPSA tool defaults to Win10 uninstall - orchestrator must never trigger that.
+            CheckOnlyDelegate = $true
+            Notes = 'Orchestrator always check-only; use HpSupportAssistantUpdate directly to remediate'
         }
         [pscustomobject]@{
             Id = 'DotNet'; Name = '.NET 6+ Runtime / Desktop / ASP.NET / SDK'
@@ -159,9 +161,9 @@ function Get-VulnCatalog {
             Match = @('^Git$', 'Git version')
         }
         [pscustomobject]@{
-            Id = 'GIMP'; Name = 'GIMP'; Method = 'Winget'; WingetId = 'GIMP.GIMP'
+            Id = 'GIMP'; Name = 'GIMP'; Method = 'Winget'; WingetId = 'GIMP.GIMP.2'
             Match = @('^GIMP', 'GIMP ')
-            Notes = 'May resolve to GIMP 2.x or 3.x channel depending on install'
+            Notes = 'Pinned to GIMP.GIMP.2 (avoids silent 2.x -> 3.x major jump via GIMP.GIMP)'
         }
         [pscustomobject]@{
             Id = 'Winamp'; Name = 'Winamp'; Method = 'Winget'; WingetId = 'Winamp.Winamp'
@@ -288,9 +290,9 @@ function Get-VulnCatalog {
         }
         [pscustomobject]@{
             Id = 'Firefox'; Name = 'Mozilla Firefox'; Method = 'Winget'; WingetId = 'Mozilla.Firefox'
-            Match = @('^Mozilla Firefox', '^Firefox$')
+            Match = @('^Mozilla Firefox$', '^Mozilla Firefox \(', '^Firefox$')
             OptionalGroup = 'Browsers'
-            Notes = 'Opt-in (-IncludeBrowsers). Stable only; may close Firefox sessions'
+            Notes = 'Opt-in (-IncludeBrowsers). Stable only (skips ESR/Beta/Dev by name); may close sessions'
         }
     )
 }
@@ -359,9 +361,16 @@ function Invoke-Winget {
     param(
         [Parameter(Mandatory)][string]$WingetPath,
         [Parameter(Mandatory)][string[]]$ArgumentList,
-        [int]$TimeoutSec = 900
+        [int]$TimeoutSec = 900,
+        [switch]$QuietOutput
     )
-    $argLine = ($ArgumentList -join ' ')
+    try { $env:WINGET_DISABLE_INTERACTIVITY = '1' } catch { }
+    # Quote args that need it (e.g. Notepad++.Notepad++)
+    $argLine = (
+        $ArgumentList | ForEach-Object {
+            if ($_ -match '[\s\+]') { '"{0}"' -f $_ } else { $_ }
+        }
+    ) -join ' '
     Write-VulnLog ("winget {0}" -f $argLine)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $WingetPath
@@ -379,8 +388,11 @@ function Invoke-Winget {
     }
     $stdout = $p.StandardOutput.ReadToEnd()
     $stderr = $p.StandardError.ReadToEnd()
-    if ($stdout) { Write-Host $stdout }
-    if ($stderr) { Write-Host $stderr }
+    # Keep ScreenConnect logs readable: only echo upgrade noise when not QuietOutput
+    if (-not $QuietOutput) {
+        if ($stdout) { Write-Host $stdout }
+        if ($stderr) { Write-Host $stderr }
+    }
     return [pscustomobject]@{ ExitCode = $p.ExitCode; StdOut = $stdout; StdErr = $stderr }
 }
 
@@ -409,39 +421,48 @@ function Get-WingetVersionFromLine {
 
 function Get-WingetPackageState {
     param([string]$WingetPath, [string]$WingetId)
-    # Installed version (list only - never upgrades)
+    # IMPORTANT: never call `winget upgrade --id ...` here - that APPLIES updates.
+    # Use `winget list` only (with --upgrade-available when supported).
     $list = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
-        'list', '--id', $WingetId, '--exact', '--accept-source-agreements', '--disable-interactivity'
-    ) -TimeoutSec 180
+        'list', '--id', $WingetId, '--exact',
+        '--upgrade-available',
+        '--accept-source-agreements', '--disable-interactivity'
+    ) -TimeoutSec 180 -QuietOutput
+
+    # Older winget may not support --upgrade-available; fall back to plain list
+    if ($list.ExitCode -ne 0 -or ($list.StdErr -match 'upgrade-available|unrecognized')) {
+        $list = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
+            'list', '--id', $WingetId, '--exact',
+            '--accept-source-agreements', '--disable-interactivity'
+        ) -TimeoutSec 180 -QuietOutput
+    }
+
     $installed = $null
+    $available = $null
+    $needsUpdate = $false
     foreach ($line in ($list.StdOut -split "`r?`n")) {
         $parsed = Get-WingetVersionFromLine -Line $line -WingetId $WingetId
         if (-not $parsed) { continue }
         $installed = $parsed.Installed
         if ($parsed.HasUpgradeColumn -and $parsed.Available) {
-            return [pscustomobject]@{
-                Present     = $true
-                Installed   = $installed
-                Available   = $parsed.Available
-                NeedsUpdate = $true
-            }
+            $available = $parsed.Available
+            $needsUpdate = $true
         }
     }
 
-    # Available upgrades table (no package id => list only, does not apply updates)
-    $upgrade = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
-        'upgrade', '--accept-source-agreements', '--disable-interactivity', '--include-unknown'
-    ) -TimeoutSec 180
-    $available = $null
-    $needsUpdate = $false
-    foreach ($line in ($upgrade.StdOut -split "`r?`n")) {
-        $parsed = Get-WingetVersionFromLine -Line $line -WingetId $WingetId
-        if (-not $parsed) { continue }
-        $needsUpdate = $true
-        if (-not $installed) { $installed = $parsed.Installed }
-        if ($parsed.HasUpgradeColumn -and $parsed.Available) { $available = $parsed.Available }
-        elseif ($parsed.Available) { $available = $parsed.Available }
-        break
+    # Fallback: full upgrade *listing* (no package id => does not apply updates)
+    if ($installed -and -not $needsUpdate) {
+        $upgradeList = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
+            'upgrade', '--accept-source-agreements', '--disable-interactivity', '--include-unknown'
+        ) -TimeoutSec 180 -QuietOutput
+        foreach ($line in ($upgradeList.StdOut -split "`r?`n")) {
+            $parsed = Get-WingetVersionFromLine -Line $line -WingetId $WingetId
+            if (-not $parsed) { continue }
+            $needsUpdate = $true
+            if ($parsed.HasUpgradeColumn -and $parsed.Available) { $available = $parsed.Available }
+            elseif ($parsed.Available) { $available = $parsed.Available }
+            break
+        }
     }
 
     if ($installed -or $needsUpdate) {
@@ -458,13 +479,26 @@ function Get-WingetPackageState {
 function Update-WingetPackage {
     param([string]$WingetPath, [string]$WingetId)
     $r = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
-        'upgrade', '--id', $WingetId,
+        'upgrade', '--id', $WingetId, '--exact',
         '--silent',
+        '--disable-interactivity',
         '--accept-package-agreements',
         '--accept-source-agreements',
-        '--disable-interactivity',
-        '--include-unknown'
+        '--include-unknown',
+        '--scope', 'machine'
     ) -TimeoutSec 1200
+    # Retry without --scope machine if package is user-scoped only
+    if ($r.ExitCode -ne 0 -and ($r.StdOut + $r.StdErr) -match 'scope|installed in a different|different installer technology') {
+        Write-VulnLog 'Retrying winget upgrade without --scope machine (likely user-scope install).' 'WARN'
+        $r = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
+            'upgrade', '--id', $WingetId, '--exact',
+            '--silent',
+            '--disable-interactivity',
+            '--accept-package-agreements',
+            '--accept-source-agreements',
+            '--include-unknown'
+        ) -TimeoutSec 1200
+    }
     return $r
 }
 
@@ -642,8 +676,12 @@ foreach ($item in $selected) {
             }
             try {
                 $args = @{ }
-                if ($CheckOnly) { $args['CheckOnly'] = $true }
-                if ($Force) { $args['Force'] = $true }
+                # Safety: some delegates (HPSA) remediating by default is destructive - force check-only.
+                if ($CheckOnly -or $item.CheckOnlyDelegate) { $args['CheckOnly'] = $true }
+                if ($Force -and -not $item.CheckOnlyDelegate) { $args['Force'] = $true }
+                if ($item.CheckOnlyDelegate -and -not $CheckOnly) {
+                    Write-VulnLog ("{0}: orchestrator will not remediate this product (check-only). Use the dedicated tool to change the system." -f $item.Id) 'WARN'
+                }
                 # Clear prior nested result so we don't reuse a stale code
                 $rv = if ($item.ResultVariable) { [string]$item.ResultVariable } else { 'DelegateResultCode' }
                 try { Remove-Variable -Name $rv -Scope Global -ErrorAction SilentlyContinue } catch { }
@@ -743,6 +781,12 @@ foreach ($item in $selected) {
             try {
                 $item2 = [pscustomobject]@{ WingetId = $wingetId; Match = $item.Match; Id = $item.Id; Name = "$($item.Name) [$wingetId]" }
                 $state = Get-WingetPackageState -WingetPath $winget -WingetId $wingetId
+                if (-not $state.Present) {
+                    Add-Result -Id $item.Id -Name $item2.Name -Status 'MANUAL' `
+                        -Detail ("Installed locally ({0}) but not tracked by winget id {1}." -f $localVer, $wingetId) `
+                        -InstalledVersion $localVer
+                    break
+                }
                 if ($state.NeedsUpdate -or $Force) {
                     if ($CheckOnly) {
                         Add-Result -Id $item.Id -Name $item2.Name -Status 'UPDATE_AVAILABLE' `
@@ -751,8 +795,17 @@ foreach ($item in $selected) {
                     }
                     else {
                         $up = Update-WingetPackage -WingetPath $winget -WingetId $wingetId
-                        Add-Result -Id $item.Id -Name $item2.Name -Status 'UPDATED' `
-                            -Detail ("winget upgrade exit {0}." -f $up.ExitCode) -InstalledVersion $localVer
+                        $after = Get-WingetPackageState -WingetPath $winget -WingetId $wingetId
+                        if (-not $after.NeedsUpdate) {
+                            Add-Result -Id $item.Id -Name $item2.Name -Status 'UPDATED' `
+                                -Detail ("winget upgrade exit {0}; now current." -f $up.ExitCode) `
+                                -InstalledVersion $after.Installed
+                        }
+                        else {
+                            Add-Result -Id $item.Id -Name $item2.Name -Status 'UPDATE_AVAILABLE' `
+                                -Detail ("winget upgrade exit {0}; update may still be pending." -f $up.ExitCode) `
+                                -InstalledVersion $localVer -TargetVersion $state.Available
+                        }
                     }
                 }
                 else {
