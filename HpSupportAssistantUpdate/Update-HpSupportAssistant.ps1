@@ -49,12 +49,29 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.3'
+$ScriptVersion = '1.0.4'
 $WingetPackageId = 'HPInc.HPSupportAssistant'
 $WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
 # Do NOT match "HP Support Solutions Framework" — that is a companion with a different version scheme (12.x vs HPSA 9.x).
 $HpsaDisplayNamePattern = '^HP Support Assistant(\s|$)'
 $FrameworkDisplayNamePattern = '^HP Support Solutions Framework(\s|$)'
+
+# Current winget SoftPaq (9.47 / sp171501) rejects many Windows 10 hosts with an "incompatible OS" dialog.
+# Win10 path uses SoftPaqs that still declare Windows 10 support on ftp.hp.com.
+$Win10SoftPaqCandidates = @(
+    [pscustomobject]@{
+        Version      = '9.39.17.0'
+        InstallerUrl = 'https://ftp.hp.com/pub/softpaq/sp155001-155500/sp155262.exe'
+        SoftPaq      = 'sp155262'
+        Note         = 'HPSA 9.39 — CVA lists Windows 10 + 11'
+    }
+    [pscustomobject]@{
+        Version      = '8.8.34.31'
+        InstallerUrl = 'https://ftp.hp.com/pub/softpaq/sp114001-114500/sp114036.exe'
+        SoftPaq      = 'sp114036'
+        Note         = 'Legacy HPSA 8.8 — common Win10 fallback'
+    }
+)
 
 if ($Force) { $Update = $true }
 
@@ -80,6 +97,23 @@ function Test-IsWindowsHost {
         return [bool]$IsWindows
     }
     return ($env:OS -like 'Windows*')
+}
+
+function Get-HpsaOsInfo {
+    $nt = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction SilentlyContinue
+    $build = 0
+    if ($nt -and $nt.CurrentBuildNumber) { [void][int]::TryParse([string]$nt.CurrentBuildNumber, [ref]$build) }
+    $display = if ($nt -and $nt.DisplayVersion) { [string]$nt.DisplayVersion } else { '' }
+    $product = if ($nt -and $nt.ProductName) { [string]$nt.ProductName } else { 'Windows' }
+    $isWin11 = ($build -ge 22000)
+    return [pscustomobject]@{
+        ProductName  = $product
+        DisplayVersion = $display
+        Build        = $build
+        IsWindows11  = $isWin11
+        Channel      = if ($isWin11) { 'Windows11' } else { 'Windows10' }
+        Summary      = ("{0} {1} (build {2})" -f $product, $display, $build).Trim()
+    }
 }
 
 function Test-IsElevated {
@@ -328,8 +362,40 @@ function Get-LatestHpSupportAssistantFromWingetPkgs {
     }
 }
 
+function Get-LatestHpSupportAssistantFromWin10Catalog {
+    param([int]$Index = 0)
+    if ($Index -lt 0 -or $Index -ge $Win10SoftPaqCandidates.Count) {
+        throw "Win10 SoftPaq catalog index $Index out of range."
+    }
+    $c = $Win10SoftPaqCandidates[$Index]
+    return [pscustomobject]@{
+        Version      = [string]$c.Version
+        VersionObj   = ConvertTo-HpsaVersion -Text ([string]$c.Version)
+        InstallerUrl = [string]$c.InstallerUrl
+        Sha256       = $null
+        Source       = ("win10-catalog:{0}" -f $c.SoftPaq)
+        PackageId    = $WingetPackageId
+        SoftPaq      = [string]$c.SoftPaq
+        Note         = [string]$c.Note
+        CatalogIndex = $Index
+    }
+}
+
 function Get-LatestHpSupportAssistantPackage {
-    # Prefer GitHub winget-pkgs under ScreenConnect SYSTEM (winget is often missing/flaky as SYSTEM).
+    param(
+        [Parameter(Mandatory)]
+        $OsInfo,
+        [int]$Win10CatalogIndex = 0
+    )
+
+    if (-not $OsInfo.IsWindows11) {
+        Write-HpsaLog 'Windows 10 detected — using Win10 SoftPaq catalog (winget latest SoftPaq often rejects Win10).'
+        $pkg = Get-LatestHpSupportAssistantFromWin10Catalog -Index $Win10CatalogIndex
+        if ($pkg.Note) { Write-HpsaLog ("SoftPaq note: {0}" -f $pkg.Note) }
+        return $pkg
+    }
+
+    # Windows 11: prefer GitHub winget-pkgs (winget CLI is often missing/flaky as SYSTEM).
     $errors = New-Object System.Collections.Generic.List[string]
 
     try {
@@ -343,6 +409,12 @@ function Get-LatestHpSupportAssistantPackage {
         [void]$errors.Add('winget-cli: no Version/Installer Url from winget show')
     }
     catch { [void]$errors.Add("winget-cli: $($_.Exception.Message)") }
+
+    Write-HpsaLog 'Win11 winget resolve failed; falling back to Win10 SoftPaq catalog.' 'WARN'
+    try {
+        return (Get-LatestHpSupportAssistantFromWin10Catalog -Index 0)
+    }
+    catch { [void]$errors.Add("win10-catalog: $($_.Exception.Message)") }
 
     throw ("Unable to resolve latest HP Support Assistant package. " + ($errors -join ' | '))
 }
@@ -431,6 +503,9 @@ if (-not (Test-IsWindowsHost)) {
     return
 }
 
+$osInfo = Get-HpsaOsInfo
+Write-HpsaLog ("OS: {0} [{1}]" -f $osInfo.Summary, $osInfo.Channel)
+
 $framework = Get-HpSupportFrameworkCompanion
 if ($framework) {
     Write-HpsaLog ("Companion present (not used for version compare): {0} {1}" -f `
@@ -456,11 +531,12 @@ try {
             Sha256       = $null
             Source       = 'override'
             PackageId    = $WingetPackageId
+            CatalogIndex = $null
         }
     }
     else {
-        Write-HpsaLog 'Resolving latest SoftPaq (winget-pkgs, then winget CLI)...'
-        $latest = Get-LatestHpSupportAssistantPackage
+        Write-HpsaLog 'Resolving SoftPaq for this OS...'
+        $latest = Get-LatestHpSupportAssistantPackage -OsInfo $osInfo
     }
 }
 catch {
@@ -469,7 +545,7 @@ catch {
     return
 }
 
-Write-HpsaLog ("Latest:  {0} ({1})" -f $latest.Version, $latest.Source)
+Write-HpsaLog ("Target:  {0} ({1})" -f $latest.Version, $latest.Source)
 Write-HpsaLog ("SoftPaq: {0}" -f $latest.InstallerUrl)
 
 $needUpdate = $false
@@ -513,39 +589,62 @@ if (-not (Test-IsElevated)) {
 }
 
 New-Item -ItemType Directory -Path $WorkingDirectory -Force | Out-Null
-$stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$softpaqPath = Join-Path $WorkingDirectory ("sp_hpsa_$stamp.exe")
-$extractDir = Join-Path $WorkingDirectory ("extract_$stamp")
 
+$attemptCount = 1
+if (-not $SoftPaqUrl -and -not $osInfo.IsWindows11) {
+    $attemptCount = $Win10SoftPaqCandidates.Count
+}
+
+$exitCode = 1
+$extractDir = $null
 try {
-    Write-HpsaLog "Downloading SoftPaq to $softpaqPath"
-    Invoke-HpsaWebRequest -Uri $latest.InstallerUrl -OutFile $softpaqPath -TimeoutSec 600 | Out-Null
-
-    if ($latest.Sha256) {
-        $actual = Get-FileSha256 -Path $softpaqPath
-        if ($actual -ne $latest.Sha256) {
-            throw "SHA256 mismatch. Expected $($latest.Sha256), got $actual"
+    for ($attempt = 0; $attempt -lt $attemptCount; $attempt++) {
+        if ($attempt -gt 0) {
+            Write-HpsaLog ("Previous SoftPaq failed (exit {0}); trying next Win10 catalog entry..." -f $exitCode) 'WARN'
+            $latest = Get-LatestHpSupportAssistantFromWin10Catalog -Index $attempt
+            Write-HpsaLog ("Target:  {0} ({1})" -f $latest.Version, $latest.Source)
+            Write-HpsaLog ("SoftPaq: {0}" -f $latest.InstallerUrl)
+            if ($latest.Note) { Write-HpsaLog ("SoftPaq note: {0}" -f $latest.Note) }
         }
-        Write-HpsaLog 'SHA256 verified.'
-    }
 
-    $exitCode = Invoke-SoftPaqSilentInstall -SoftPaqPath $softpaqPath -ExtractDir $extractDir
-    Start-Sleep -Seconds 3
-    $after = Get-InstalledHpSupportAssistant
-    if ($after) {
-        Write-HpsaLog ("Post-install: {0} {1}" -f $after.DisplayName, $after.DisplayVersion)
-    }
-    else {
-        Write-HpsaLog 'Post-install: HP Support Assistant still not detected in uninstall registry.' 'WARN'
-    }
+        $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+        $softpaqPath = Join-Path $WorkingDirectory ("sp_hpsa_$stamp.exe")
+        $extractDir = Join-Path $WorkingDirectory ("extract_$stamp")
 
-    if ($exitCode -eq 0 -or $exitCode -eq 3010) {
-        Write-HpsaLog 'Update completed successfully.'
-        if ($exitCode -eq 3010) {
-            Write-HpsaLog 'Exit 3010: reboot required to finish install.' 'WARN'
+        Write-HpsaLog "Downloading SoftPaq to $softpaqPath"
+        Invoke-HpsaWebRequest -Uri $latest.InstallerUrl -OutFile $softpaqPath -TimeoutSec 600 | Out-Null
+
+        if ($latest.Sha256) {
+            $actual = Get-FileSha256 -Path $softpaqPath
+            if ($actual -ne $latest.Sha256) {
+                throw "SHA256 mismatch. Expected $($latest.Sha256), got $actual"
+            }
+            Write-HpsaLog 'SHA256 verified.'
         }
-        Complete-Hpsa -Code $exitCode
-        return
+
+        $exitCode = Invoke-SoftPaqSilentInstall -SoftPaqPath $softpaqPath -ExtractDir $extractDir
+        Start-Sleep -Seconds 3
+        $after = Get-InstalledHpSupportAssistant
+        if ($after) {
+            Write-HpsaLog ("Post-install: {0} {1}" -f $after.DisplayName, $after.DisplayVersion)
+        }
+        else {
+            Write-HpsaLog 'Post-install: HP Support Assistant still not detected in uninstall registry.' 'WARN'
+        }
+
+        if ($exitCode -eq 0 -or $exitCode -eq 3010) {
+            Write-HpsaLog 'Update completed successfully.'
+            if ($exitCode -eq 3010) {
+                Write-HpsaLog 'Exit 3010: reboot required to finish install.' 'WARN'
+            }
+            Complete-Hpsa -Code $exitCode
+            return
+        }
+
+        if ($extractDir -and (Test-Path -LiteralPath $extractDir)) {
+            Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        $extractDir = $null
     }
 
     Write-HpsaLog "Update finished with exit code $exitCode." 'ERROR'
