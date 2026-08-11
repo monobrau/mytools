@@ -108,8 +108,11 @@ function Get-UserProfileRoots {
         if (-not $profilePath) { return }
         $name = Split-Path -Leaf $profilePath
         if ($skip -contains $name) { return }
-        if ($profilePath -match '\\(ServiceProfiles|systemprofile)\\') { return }
-        if (-not (Test-Path -LiteralPath $profilePath)) { return }
+        if ($profilePath -match '(?i)\\(ServiceProfiles|systemprofile|config\\systemprofile)\\') { return }
+        if ($profilePath -match '(?i)\\Windows\\System32\\') { return }
+        $exists = $false
+        try { $exists = Test-Path -LiteralPath $profilePath -ErrorAction SilentlyContinue } catch { $exists = $false }
+        if (-not $exists) { return }
         $key = $profilePath.ToLowerInvariant()
         if ($seen.ContainsKey($key)) { return }
         $seen[$key] = $true
