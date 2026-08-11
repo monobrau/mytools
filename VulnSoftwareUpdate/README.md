@@ -41,10 +41,13 @@ Checks what’s installed, prints a clear per-product verdict, and can silently 
 | Windows Terminal | `WindowsTerminal` | winget `Microsoft.WindowsTerminal` |
 | AWS CLI | `AwsCli` | winget `Amazon.AWSCLI` |
 | Sysinternals Suite | `SysinternalsSuite` | winget `Microsoft.Sysinternals.Suite` |
+| Google Chrome | `Chrome` | winget `Google.Chrome` — **may close open Chrome sessions** |
+| Microsoft Edge | `Edge` | winget `Microsoft.Edge` — **may close open Edge sessions** |
+| Mozilla Firefox | `Firefox` | winget `Mozilla.Firefox` — **may close open Firefox sessions** |
 
 Not installed on the host → `SKIPPED_NOT_INSTALLED` (not a failure).
 
-Browsers, Zoom/Slack/Teams, VPN, Java, EDR, Duo Proxy, and GPU drivers stay out of scope (session/service risk).
+Still out of scope: Zoom/Slack/Teams, VPN, Java, EDR, Duo Proxy, GPU drivers. Browser updates are included for scan volume but are **session-disruptive** — check first, then update (or `-Product Chrome,Edge,Firefox`).
 
 ## Modes
 
@@ -68,7 +71,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.3.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes

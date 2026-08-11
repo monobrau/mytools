@@ -51,7 +51,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.3.0'
+$ScriptVersion = '1.4.0'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -265,6 +265,22 @@ function Get-VulnCatalog {
         [pscustomobject]@{
             Id = 'SysinternalsSuite'; Name = 'Sysinternals Suite'; Method = 'Winget'; WingetId = 'Microsoft.Sysinternals.Suite'
             Match = @('Sysinternals Suite')
+        }
+        # Browsers — high ticket volume; upgrades may close open browser sessions
+        [pscustomobject]@{
+            Id = 'Chrome'; Name = 'Google Chrome'; Method = 'Winget'; WingetId = 'Google.Chrome'
+            Match = @('^Google Chrome$')
+            Notes = 'May close Chrome tabs/windows during upgrade; prefer off-hours or warn the user'
+        }
+        [pscustomobject]@{
+            Id = 'Edge'; Name = 'Microsoft Edge'; Method = 'Winget'; WingetId = 'Microsoft.Edge'
+            Match = @('^Microsoft Edge$')
+            Notes = 'Stable channel only. May close Edge sessions; WU/Intune is preferred when healthy'
+        }
+        [pscustomobject]@{
+            Id = 'Firefox'; Name = 'Mozilla Firefox'; Method = 'Winget'; WingetId = 'Mozilla.Firefox'
+            Match = @('^Mozilla Firefox', '^Firefox$')
+            Notes = 'Stable channel only (not Beta/Dev). May close Firefox sessions during upgrade'
         }
     )
 }
