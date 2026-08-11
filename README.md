@@ -13,6 +13,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Gitleaks runs on pushes and pull request
 | Tool | Description |
 | --- | --- |
 | [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
+| [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 
 ## Layout
 
