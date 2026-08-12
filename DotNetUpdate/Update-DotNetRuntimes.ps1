@@ -43,7 +43,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $MinMajor = 6
 $ReleaseMetaBase = 'https://builds.dotnet.microsoft.com/dotnet/release-metadata'
 
@@ -112,8 +112,10 @@ function Get-InstalledDotNetComponents {
     $roots = @(Get-DotNetInstallRoots)
     if ($roots.Count -eq 0) { return @() }
 
+    # Aka slugs must match aka.ms/dotnet/{major}.0/{slug}-{arch}.exe
+    # Wrong: runtime-win-x64.exe (tiny non-EXE). Correct: dotnet-runtime-win-x64.exe
     $map = @(
-        [pscustomobject]@{ Kind = 'Runtime'; Rel = 'shared\Microsoft.NETCore.App'; Aka = 'runtime' }
+        [pscustomobject]@{ Kind = 'Runtime'; Rel = 'shared\Microsoft.NETCore.App'; Aka = 'dotnet-runtime' }
         [pscustomobject]@{ Kind = 'Desktop'; Rel = 'shared\Microsoft.WindowsDesktop.App'; Aka = 'windowsdesktop-runtime' }
         [pscustomobject]@{ Kind = 'AspNetCore'; Rel = 'shared\Microsoft.AspNetCore.App'; Aka = 'aspnetcore-runtime' }
         [pscustomobject]@{ Kind = 'SDK'; Rel = 'sdk'; Aka = 'dotnet-sdk' }
@@ -160,8 +162,45 @@ function Get-AkaMsDownloadUrl {
         [Parameter(Mandatory)][string]$AkaSlug,
         [Parameter(Mandatory)][string]$Architecture
     )
-    # https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe
+    # https://aka.ms/dotnet/8.0/dotnet-runtime-win-x64.exe
     return ("https://aka.ms/dotnet/{0}.0/{1}-{2}.exe" -f $Major, $AkaSlug, $Architecture)
+}
+
+function Resolve-DotNetInstallerUrl {
+    param(
+        [Parameter(Mandatory)]$Meta,
+        [Parameter(Mandatory)][string]$Kind,
+        [Parameter(Mandatory)][string]$TargetVersion,
+        [Parameter(Mandatory)][string]$Architecture,
+        [Parameter(Mandatory)][int]$Major,
+        [Parameter(Mandatory)][string]$AkaSlug
+    )
+    # Prefer version-pinned builds.dotnet.microsoft.com URLs from release-metadata.
+    try {
+        $files = @()
+        if ($Kind -eq 'SDK') {
+            $rel = @($Meta.releases) | Where-Object { $_.sdk -and $_.sdk.version -eq $TargetVersion } | Select-Object -First 1
+            if ($rel) { $files = @($rel.sdk.files) }
+        }
+        else {
+            $rel = @($Meta.releases) | Where-Object { $_.'release-version' -eq $TargetVersion } | Select-Object -First 1
+            if ($rel) {
+                switch ($Kind) {
+                    'Runtime' { $files = @($rel.runtime.files) }
+                    'Desktop' { $files = @($rel.windowsdesktop.files) }
+                    'AspNetCore' { $files = @($rel.'aspnetcore-runtime'.files) }
+                }
+            }
+        }
+        $exe = @($files) | Where-Object {
+                $_.rid -eq $Architecture -and
+                $_.url -and
+                ($_.name -like '*.exe')
+            } | Select-Object -First 1
+        if ($exe -and $exe.url) { return [string]$exe.url }
+    }
+    catch { }
+    return (Get-AkaMsDownloadUrl -Major $Major -AkaSlug $AkaSlug -Architecture $Architecture)
 }
 
 function Install-DotNetPackage {
@@ -174,8 +213,10 @@ function Install-DotNetPackage {
     $wc.Headers.Add('User-Agent', "DotNetUpdate/$ScriptVersion")
     $wc.DownloadFile($Url, $DestPath)
     $len = (Get-Item -LiteralPath $DestPath).Length
-    if ($len -lt 1MB) {
-        throw "Download too small ($len bytes) - aka.ms URL may be invalid: $Url"
+    $hdr = [System.IO.File]::ReadAllBytes($DestPath)
+    $isMz = ($hdr.Length -ge 2 -and $hdr[0] -eq 0x4D -and $hdr[1] -eq 0x5A)
+    if ($len -lt 1MB -or -not $isMz) {
+        throw ("Download invalid (bytes={0} MZ={1}) - URL may be wrong: {2}" -f $len, $isMz, $Url)
     }
     Write-DnLog ("Downloaded {0:N0} bytes -> {1}" -f $len, $DestPath)
     Write-DnLog 'Installing silently (/install /quiet /norestart)...'
@@ -235,6 +276,8 @@ foreach ($c in $installed) {
     elseif ($local -and $target -and ($local -lt $target)) { $needs = $true }
     elseif (-not $target) { $unknown++; continue }
 
+    $url = Resolve-DotNetInstallerUrl -Meta $meta -Kind $c.Kind -TargetVersion $targetText `
+        -Architecture $c.Architecture -Major $c.Major -AkaSlug $c.AkaSlug
     $plan.Add([pscustomobject]@{
             Kind         = $c.Kind
             Major        = $c.Major
@@ -243,7 +286,7 @@ foreach ($c in $installed) {
             Target       = $targetText
             NeedsUpdate  = $needs
             AkaSlug      = $c.AkaSlug
-            Url          = (Get-AkaMsDownloadUrl -Major $c.Major -AkaSlug $c.AkaSlug -Architecture $c.Architecture)
+            Url          = $url
         }) | Out-Null
 }
 
@@ -321,19 +364,23 @@ foreach ($p in $toUpdate) {
     }
 }
 
-if ($failures -gt 0) {
-    Write-DnVerdict -Status 'ERROR - ONE OR MORE INSTALLS FAILED' `
-        -Detail ("updated={0} failures={1} stillBehind={2}" -f $updated, $failures, $stillBehind)
-    Complete-Dn -Code 1
-    return
-}
 if ($stillBehind -gt 0) {
+    if ($failures -gt 0) {
+        Write-DnVerdict -Status 'ERROR - ONE OR MORE INSTALLS FAILED' `
+            -Detail ("updated={0} failures={1} stillBehind={2}" -f $updated, $failures, $stillBehind)
+        Complete-Dn -Code 1
+        return
+    }
     Write-DnVerdict -Status 'UPDATE AVAILABLE - STILL BEHIND AFTER ATTEMPT' `
         -Detail ("updated={0} stillBehind={1}. Reboot or re-run -CheckOnly." -f $updated, $stillBehind)
     Complete-Dn -Code 2
     return
 }
 
+# Host is current: do not ERROR on download attempts that Desktop (or another package) already covered.
+if ($failures -gt 0) {
+    Write-DnLog ("Note: {0} install attempt(s) failed, but all targets are current after re-scan." -f $failures) 'WARN'
+}
 Write-DnVerdict -Status 'UPDATED - ON LATEST SAME-MAJOR PATCHES' `
     -Detail ("Successfully patched {0} component(s)." -f $updated)
 Complete-Dn -Code 0

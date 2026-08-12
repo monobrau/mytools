@@ -7,7 +7,7 @@ Silently patch installed **.NET 6+** components to the latest **same-major** sec
 - **Does not** install majors that are not already present
 - **Does not** manage .NET Framework (Windows Update / other tooling)
 
-Uses Microsoft release-metadata + `aka.ms/dotnet/{major}.0/...` installers (`/install /quiet /norestart`).
+Uses Microsoft release-metadata installer URLs (fallback `aka.ms/dotnet/{major}.0/dotnet-runtime-...` etc.) with `/install /quiet /norestart`.
 
 Also wired into [VulnSoftwareUpdate](../VulnSoftwareUpdate/) as catalog id `DotNet`.
 
@@ -17,7 +17,7 @@ Also wired into [VulnSoftwareUpdate](../VulnSoftwareUpdate/) as catalog id `DotN
 #!ps
 #timeout=1800000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','DotNetUpdate-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/DotNetUpdate/Update-DotNetRuntimes.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','DotNetUpdate-bootstrap/1.0.1'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/DotNetUpdate/Update-DotNetRuntimes.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 Update (no `-CheckOnly`):
@@ -26,7 +26,7 @@ Update (no `-CheckOnly`):
 #!ps
 #timeout=1800000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','DotNetUpdate-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/DotNetUpdate/Update-DotNetRuntimes.ps1?ref=main'); & ([scriptblock]::Create($script)) -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','DotNetUpdate-bootstrap/1.0.1'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/DotNetUpdate/Update-DotNetRuntimes.ps1?ref=main'); & ([scriptblock]::Create($script)) -Exit
 ```
 
 Exit: `0` up to date / nothing installed, `2` updates needed or still behind, `1` error.
