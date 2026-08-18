@@ -336,6 +336,7 @@ A_IconTip := TrayLabel
 TraySetIcon("shell32.dll", 14)
 A_TrayMenu.Delete()
 A_TrayMenu.Add(TrayLabel, (*) => ShowGui())
+A_TrayMenu.Add("Reload script (pick up catalog changes)", (*) => Reload())
 A_TrayMenu.Add("Exit " AppName, (*) => ExitApp())
 A_TrayMenu.Default := TrayLabel
 A_TrayMenu.ClickCount := 1
@@ -365,10 +366,13 @@ PopulateToolTree(tv) {
     global Tools, CategoryOrder, gToolByNode, gLastToolIndex
     gToolByNode := Map()
     catNodes := Map()
-    ; Bold only — no Expand so groups start collapsed
+    ; Bold category headers. Expand Agents so install tools are visible without hunting.
+    expandCats := Map()
+    expandCats["Agents — SentinelOne + ConnectSecure"] := true
     for cat in CategoryOrder
         catNodes[cat] := tv.Add(cat, 0, "Bold")
 
+    agentsNode := 0
     firstCatNode := 0
     for i, t in Tools {
         cat := ToolGet(t, "Category", "Other")
@@ -378,11 +382,20 @@ PopulateToolTree(tv) {
         gToolByNode[node] := i
         if !firstCatNode && catNodes.Has(cat)
             firstCatNode := catNodes[cat]
+        if (cat = "Agents — SentinelOne + ConnectSecure" && !agentsNode)
+            agentsNode := catNodes[cat]
+    }
+    for cat, node in catNodes {
+        if expandCats.Has(cat)
+            tv.Modify(node, "Expand")
     }
     gLastToolIndex := 1
-    ; Select first category header only (does not expand children)
-    if firstCatNode
+    ; Prefer Agents category selected/expanded so new install tools are obvious
+    if agentsNode {
+        tv.Modify(agentsNode, "Expand Select Vis")
+    } else if firstCatNode {
         tv.Modify(firstCatNode, "Select")
+    }
 }
 
 ; Only refresh when a tool leaf is selected. Category collapse moves selection to the
