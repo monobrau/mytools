@@ -329,18 +329,13 @@ gLastToolIndex := 1     ; last real tool selection (survives category collapse)
 gFlowKeys := []         ; control stack order for ReflowGui
 
 ; --- tray / identity ---
-; Rename the hidden AutoHotkey main window so Task Manager / tray hosts do not
-; show a generic "main" (same as other AHK scripts). Also set tray tip + menu.
+; Keep the default AHK v2 tray icon + menu (includes Reload Script / Edit / Exit).
+; Only add an Open item; do not Delete() the stock menu or override the icon.
 DetectHiddenWindows(true)
 try WinSetTitle(TrayLabel, "ahk_class AutoHotkey ahk_pid " ProcessExist())
 A_IconTip := TrayLabel
-; Distinct from other AHK scripts that often use shell32 index 166 / default AHK icon.
-TraySetIcon("shell32.dll", 14)
-A_TrayMenu.Delete()
-A_TrayMenu.Add(TrayLabel, (*) => ShowGui())
-A_TrayMenu.Add("Reload script (pick up catalog changes)", (*) => Reload())
-A_TrayMenu.Add("Exit " AppName, (*) => ExitApp())
-A_TrayMenu.Default := TrayLabel
+A_TrayMenu.Insert("1&", "Open " AppName, (*) => ShowGui())
+A_TrayMenu.Default := "Open " AppName
 A_TrayMenu.ClickCount := 1
 
 Hotkey(HotkeySpec, (*) => ToggleGui())
@@ -349,6 +344,12 @@ gGui := 0
 gCtrls := Map()
 
 ShowGui()
+
+; Restart this script in-place (avoids a second tray icon from a naive Reload + leftover instance).
+ReloadScToolLauncher(*) {
+    Run(Format('"{1}" /restart "{2}"', A_AhkPath, A_ScriptFullPath))
+    ExitApp
+}
 
 ToggleGui(*) {
     global gGui
@@ -499,7 +500,7 @@ ShowGui(*) {
     gCtrls["BtnCopy"] := gGui.Add("Button", "w220 Default", "Copy to clipboard")
     gCtrls["BtnCopy"].OnEvent("Click", (*) => DoCopy())
     gCtrls["BtnReload"] := gGui.Add("Button", "w100", "Reload")
-    gCtrls["BtnReload"].OnEvent("Click", (*) => Reload())
+    gCtrls["BtnReload"].OnEvent("Click", (*) => ReloadScToolLauncher())
     gCtrls["BtnCancel"] := gGui.Add("Button", "w100", "Cancel")
     gCtrls["BtnCancel"].OnEvent("Click", (*) => gGui.Hide())
 
