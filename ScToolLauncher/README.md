@@ -6,6 +6,7 @@ Copies a ready-to-paste Commands `#!ps` (or Backstage one-liner) bootstrap onto 
 
 - Hotkey: **Ctrl+Shift+Alt+S** (edit `HotkeySpec` / `HotkeyLabel` at the top of the script; Win+Alt combos are often reserved by Windows/OEM)
 - Tray icon tip / menu / GUI title: **SC Tool Launcher (Ctrl+Shift+Alt+S)** — renames the AHK main window so it is not a generic **main** next to other scripts
+- After editing `ScToolLauncher.ahk`, use tray **Reload script** (or exit and re-run). The hotkey alone does **not** reload the catalog from disk.
 - Formats: Commands tab `#!ps` (default) or Backstage one-liner
 - Modes/options depend on the tool (Scan, Update/Remediate/Delete, Force, etc.)
 - Tool list is a **TreeView** grouped by category
