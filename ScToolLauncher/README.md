@@ -5,8 +5,8 @@ AutoHotkey v2 hotkey picker for **any** ScreenConnect-ready tool shortcut — re
 Copies a ready-to-paste Commands `#!ps` (or Backstage one-liner) bootstrap onto the clipboard. The remote host downloads/runs the script from GitHub.
 
 - Hotkey: **Ctrl+Shift+Alt+S** (edit `HotkeySpec` / `HotkeyLabel` at the top of the script; Win+Alt combos are often reserved by Windows/OEM)
-- Tray icon tip / menu / GUI title: **SC Tool Launcher (Ctrl+Shift+Alt+S)** — renames the AHK main window so it is not a generic **main** next to other scripts
-- After editing `ScToolLauncher.ahk`, use the GUI **Reload** button or tray **Reload script** (or exit and re-run). The hotkey alone does **not** reload the catalog from disk.
+- Tray: default AutoHotkey v2 icon and menu (includes **Reload Script**); plus **Open SC Tool Launcher**
+- After editing `ScToolLauncher.ahk`, use GUI **Reload**, tray **Reload Script**, or exit and re-run. The hotkey alone does **not** reload the catalog from disk.
 - Layout: **two columns** — tool tree on the left, mode/options/actions on the right (fits shorter screens)
 - Formats: Commands tab `#!ps` (default) or Backstage one-liner
 - Modes/options depend on the tool (Scan, Update/Remediate/Delete, Force, etc.)
