@@ -498,6 +498,8 @@ ShowGui(*) {
 
     gCtrls["BtnCopy"] := gGui.Add("Button", "w220 Default", "Copy to clipboard")
     gCtrls["BtnCopy"].OnEvent("Click", (*) => DoCopy())
+    gCtrls["BtnReload"] := gGui.Add("Button", "w100", "Reload")
+    gCtrls["BtnReload"].OnEvent("Click", (*) => Reload())
     gCtrls["BtnCancel"] := gGui.Add("Button", "w100", "Cancel")
     gCtrls["BtnCancel"].OnEvent("Click", (*) => gGui.Hide())
 
@@ -587,8 +589,9 @@ ReflowGui() {
     }
 
     btnH := 28
-    gCtrls["BtnCopy"].Move(rightX, y, 220, btnH)
-    gCtrls["BtnCancel"].Move(rightX + 228, y, 100, btnH)
+    gCtrls["BtnCopy"].Move(rightX, y, 180, btnH)
+    gCtrls["BtnReload"].Move(rightX + 188, y, 90, btnH)
+    gCtrls["BtnCancel"].Move(rightX + 286, y, 90, btnH)
     y += btnH + marginBottom
     rightBottom := y
 
