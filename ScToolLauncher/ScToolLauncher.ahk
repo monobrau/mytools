@@ -18,7 +18,6 @@ MaxLength := "200000"
 ; Fetch: Contents (api.github.com + Accept raw) | Raw (raw.githubusercontent.com?v=)
 ;        IrmOutFile (Process Bypass + irm -OutFile + & run — for unsigned remote .ps1)
 ;        DownloadExe (IWR vendor EXE + Start-Process -Wait)
-;        Inline (GUI fields → silent-install body; no GitHub fetch; secrets never saved)
 ; Category: groups tools in the TreeView (order = CategoryOrder below)
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
@@ -206,8 +205,12 @@ Tools := [
         "Category", "Agents — SentinelOne + ConnectSecure",
         "Name", "SentinelOne silent install",
         "Summary", "Paste site/group token → silent install for SC Commands or Backstage. Optional download URL; else installer must already be on disk.",
-        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScToolLauncher",
-        "Fetch", "Inline",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/SentinelOneInstall",
+        "Fetch", "Contents",
+        "Path", "SentinelOneInstall",
+        "Script", "Install-SentinelOneAgent.ps1",
+        "UaPrefix", "SentinelOneInstall-bootstrap",
+        "UaVer", "1.0.0",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "RunOnly SentinelOneInstall AlwaysNote",
@@ -218,8 +221,12 @@ Tools := [
         "Category", "Agents — SentinelOne + ConnectSecure",
         "Name", "ConnectSecure silent install",
         "Summary", "Download Windows agent from ConnectSecure agentlink API, then silent install with -c/-e/-j/-i. Paste IDs/token at copy time — never stored.",
-        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureAgentRepair",
-        "Fetch", "Inline",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureInstall",
+        "Fetch", "Contents",
+        "Path", "ConnectSecureInstall",
+        "Script", "Install-ConnectSecureAgent.ps1",
+        "UaPrefix", "ConnectSecureInstall-bootstrap",
+        "UaVer", "1.0.0",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly ConnectSecure AlwaysNote",
@@ -634,7 +641,7 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["DomainController"], showDomain)
     SetCtrlShown(gCtrls["LblDomain"], showDomain)
     SetCtrlShown(gCtrls["Domain"], showDomain)
-    ; ConnectSecure IDs/token: always for Inline install (RunOnly); repair only in Apply mode
+    ; ConnectSecure IDs/token: always for silent install (RunOnly); repair only in Apply mode
     showCsFields := showConnectSecure && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     SetCtrlShown(gCtrls["LblCsCompany"], showCsFields)
     SetCtrlShown(gCtrls["CsCompanyId"], showCsFields)
@@ -843,6 +850,20 @@ BuildSwitches(tool, isScan, isCommands) {
             sw.Push("-InstallToken '" StrReplace(token, "'", "''") "'")
     }
 
+    if ToolHasFlag(tool, "SentinelOneInstall") {
+        token := Trim(gCtrls["S1Token"].Value)
+        path := Trim(gCtrls["S1InstallerPath"].Value)
+        url := Trim(gCtrls["S1InstallerUrl"].Value)
+        if (token != "")
+            sw.Push("-SiteToken '" StrReplace(token, "'", "''") "'")
+        if (path != "")
+            sw.Push("-InstallerPath '" StrReplace(path, "'", "''") "'")
+        if (url != "")
+            sw.Push("-InstallerUrl '" StrReplace(url, "'", "''") "'")
+        if CtrlActive(gCtrls["S1Quiet"]) && gCtrls["S1Quiet"].Value
+            sw.Push("-Quiet")
+    }
+
     fetch := ToolGet(tool, "Fetch", "Contents")
     if (fetch = "Contents") {
         if isCommands
@@ -862,9 +883,7 @@ BuildSnippet(tool, isScan, isCommands) {
     timeout := isScan ? tool["TimeoutScan"] : tool["TimeoutUpdate"]
     fetch := ToolGet(tool, "Fetch", "Contents")
 
-    if (fetch = "Inline") {
-        body := BuildInlineBody(tool)
-    } else if (fetch = "DownloadExe") {
+    if (fetch = "DownloadExe") {
         url := ToolGet(tool, "Url", "")
         outFile := ToolGet(tool, "OutFile", "C:\Windows\Temp\tool.exe")
         argList := ToolGet(tool, "ExeArgList", "")
@@ -916,42 +935,6 @@ BuildSnippet(tool, isScan, isCommands) {
     if isCommands
         return "#!ps`n#timeout=" timeout "`n#maxlength=" MaxLength "`n" body noteLine
     return body noteLine
-}
-
-PsSingleQuote(s) {
-    return "'" StrReplace(s, "'", "''") "'"
-}
-
-BuildInlineBody(tool) {
-    global gCtrls
-    if ToolHasFlag(tool, "SentinelOneInstall") {
-        token := Trim(gCtrls["S1Token"].Value)
-        path := Trim(gCtrls["S1InstallerPath"].Value)
-        url := Trim(gCtrls["S1InstallerUrl"].Value)
-        quiet := gCtrls["S1Quiet"].Value
-        qTok := PsSingleQuote(token)
-        qPath := PsSingleQuote(path)
-        body := "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $token=" qTok "; $exe=" qPath
-        if (url != "") {
-            qUrl := PsSingleQuote(url)
-            body .= "; $url=" qUrl "; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $exe) | Out-Null; Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing"
-        }
-        body .= "; if (-not (Test-Path -LiteralPath $exe)) { throw ('Installer not found: ' + $exe) }"
-        ; MSI vs EXE
-        body .= "; if ($exe -like '*.msi') { $p=Start-Process -FilePath msiexec.exe -ArgumentList @('/i',$exe,'/qn','/norestart',('SITE_TOKEN=' + $token)) -Wait -PassThru -NoNewWindow; exit $p.ExitCode }"
-        if quiet
-            body .= " else { $p=Start-Process -FilePath $exe -ArgumentList @('-t',$token,'-q') -Wait -PassThru -NoNewWindow; exit $p.ExitCode }"
-        else
-            body .= " else { $p=Start-Process -FilePath $exe -ArgumentList @('-t',$token) -Wait -PassThru -NoNewWindow; exit $p.ExitCode }"
-        return body
-    }
-    if ToolHasFlag(tool, "ConnectSecure") {
-        company := Trim(gCtrls["CsCompanyId"].Value)
-        envId := Trim(gCtrls["CsEnvironmentId"].Value)
-        token := Trim(gCtrls["CsInstallToken"].Value)
-        return "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $destination='C:\cybercnsagent.exe'; $source=Invoke-RestMethod -Method Get -Uri 'https://configuration.myconnectsecure.com/api/v4/configuration/agentlink?ostype=windows'; Invoke-WebRequest -Uri $source -OutFile $destination -UseBasicParsing; & $destination -c " PsSingleQuote(company) " -e " PsSingleQuote(envId) " -j " PsSingleQuote(token) " -i"
-    }
-    return "throw 'Inline tool has no body builder'"
 }
 
 DescribeSelection(tool, isScan) {

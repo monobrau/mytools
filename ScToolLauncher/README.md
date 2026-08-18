@@ -53,8 +53,8 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 | Tool | Source |
 | --- | --- |
-| SentinelOne silent install | GUI — paste site/group token; optional download URL or path already on disk (`EXE -t` / `MSI SITE_TOKEN=`) |
-| ConnectSecure silent install | GUI — company/env/install token; downloads agentlink Windows EXE then `-c/-e/-j/-i` |
+| SentinelOne silent install | mytools `SentinelOneInstall` — paste site/group token in GUI; optional URL or on-disk EXE/MSI |
+| ConnectSecure silent install | mytools `ConnectSecureInstall` — company/env/install token in GUI; agentlink download then `-c/-e/-j/-i` |
 | ConnectSecure (CyberCNS) agent repair | mytools — wipe stuck agent then reinstall (same GUI secrets) |
 
 Tokens/IDs are only embedded in the clipboard snippet when you copy — nothing is stored in the AHK file. Do not paste them into tickets or git.
