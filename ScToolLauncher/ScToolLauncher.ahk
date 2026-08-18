@@ -10,6 +10,9 @@ Persistent
 ; --- config ---
 ; Ctrl+Shift+Alt+S — Win+Alt+* is often eaten by Windows / GPU overlays.
 HotkeySpec := "^+!s"
+HotkeyLabel := "Ctrl+Shift+Alt+S"
+AppName := "SC Tool Launcher"
+TrayLabel := AppName " (" HotkeyLabel ")"
 DefaultOwner := "monobrau"
 DefaultRepo := "mytools"
 DefaultRef := "main"
@@ -323,13 +326,19 @@ gToolByNode := Map()   ; TreeView item id -> Tools index (1-based)
 gLastToolIndex := 1     ; last real tool selection (survives category collapse)
 gFlowKeys := []         ; control stack order for ReflowGui
 
-; --- tray ---
-A_IconTip := "SC Tool Launcher (Ctrl+Shift+Alt+S)"
-TraySetIcon("shell32.dll", 166)
+; --- tray / identity ---
+; Rename the hidden AutoHotkey main window so Task Manager / tray hosts do not
+; show a generic "main" (same as other AHK scripts). Also set tray tip + menu.
+DetectHiddenWindows(true)
+try WinSetTitle(TrayLabel, "ahk_class AutoHotkey ahk_pid " ProcessExist())
+A_IconTip := TrayLabel
+; Distinct from other AHK scripts that often use shell32 index 166 / default AHK icon.
+TraySetIcon("shell32.dll", 14)
 A_TrayMenu.Delete()
-A_TrayMenu.Add("Open picker", (*) => ShowGui())
-A_TrayMenu.Add("Exit", (*) => ExitApp())
-A_TrayMenu.Default := "Open picker"
+A_TrayMenu.Add(TrayLabel, (*) => ShowGui())
+A_TrayMenu.Add("Exit " AppName, (*) => ExitApp())
+A_TrayMenu.Default := TrayLabel
+A_TrayMenu.ClickCount := 1
 
 Hotkey(HotkeySpec, (*) => ToggleGui())
 
@@ -391,14 +400,14 @@ OnToolTreeSelect(*) {
 }
 
 ShowGui(*) {
-    global gGui, gCtrls, Tools, gFlowKeys, UiContentW, UiTreeRows
+    global gGui, gCtrls, Tools, gFlowKeys, UiContentW, UiTreeRows, TrayLabel, HotkeyLabel
 
     if gGui {
         try gGui.Destroy()
         gGui := 0
     }
 
-    gGui := Gui("+AlwaysOnTop -MinimizeBox", "SC Tool Launcher")
+    gGui := Gui("+AlwaysOnTop -MinimizeBox", TrayLabel)
     gGui.OnEvent("Close", (*) => gGui.Hide())
     gGui.OnEvent("Escape", (*) => gGui.Hide())
     gGui.SetFont("s9", "Segoe UI")
@@ -469,7 +478,7 @@ ShowGui(*) {
     gCtrls["FmtBackstage"] := gGui.Add("Radio", "xs vFmtBackstage", "ScreenConnect Backstage (one line)")
 
     gCtrls["Note"] := gGui.Add("Text", "xm w" UiContentW " h48 cBlue vToolNote", "")
-    gCtrls["Status"] := gGui.Add("Text", "xm w" UiContentW " h36 vStatus", "Ctrl+Shift+Alt+S toggles this window. Expand a category, select a tool, then Copy.")
+    gCtrls["Status"] := gGui.Add("Text", "xm w" UiContentW " h36 vStatus", HotkeyLabel " toggles this window. Expand a category, select a tool, then Copy.")
 
     gCtrls["BtnCopy"] := gGui.Add("Button", "xm w220 Default", "Copy to clipboard")
     gCtrls["BtnCopy"].OnEvent("Click", (*) => DoCopy())
@@ -738,9 +747,10 @@ ToolDocsUrl(tool) {
 }
 
 OpenSelectedToolDocs(*) {
+    global AppName
     url := ToolDocsUrl(SelectedTool())
     if (url = "") {
-        MsgBox("No documentation URL for this tool.", "SC Tool Launcher", "Icon!")
+        MsgBox("No documentation URL for this tool.", AppName, "Icon!")
         return
     }
     Run(url)
@@ -1001,7 +1011,7 @@ DescribeSelection(tool, isScan) {
 }
 
 DoCopy(*) {
-    global gCtrls
+    global gCtrls, AppName
     tool := SelectedTool()
     if ToolHasFlag(tool, "ScanOnly")
         gCtrls["ModeScan"].Value := 1
@@ -1012,17 +1022,17 @@ DoCopy(*) {
 
     if ToolHasFlag(tool, "ConnectSecure") && !isScan {
         if (Trim(gCtrls["CsCompanyId"].Value) = "" || Trim(gCtrls["CsEnvironmentId"].Value) = "" || Trim(gCtrls["CsInstallToken"].Value) = "") {
-            MsgBox("Needs Company ID, Environment ID, and Install Token.`nFill the fields (nothing is saved in the launcher), then copy again.", "SC Tool Launcher", "Icon!")
+            MsgBox("Needs Company ID, Environment ID, and Install Token.`nFill the fields (nothing is saved in the launcher), then copy again.", AppName, "Icon!")
             return
         }
     }
     if ToolHasFlag(tool, "SentinelOneInstall") {
         if (Trim(gCtrls["S1Token"].Value) = "") {
-            MsgBox("Paste the SentinelOne site/group token (nothing is saved), then copy again.", "SC Tool Launcher", "Icon!")
+            MsgBox("Paste the SentinelOne site/group token (nothing is saved), then copy again.", AppName, "Icon!")
             return
         }
         if (Trim(gCtrls["S1InstallerPath"].Value) = "") {
-            MsgBox("Set the installer path on the endpoint (EXE or MSI).", "SC Tool Launcher", "Icon!")
+            MsgBox("Set the installer path on the endpoint (EXE or MSI).", AppName, "Icon!")
             return
         }
     }
