@@ -16,6 +16,10 @@ site or group token.
 EXE: `SentinelOneInstaller.exe -t <token> [-q]`  
 MSI: `msiexec /i … /qn /norestart SITE_TOKEN=<token>`
 
+If `-InstallerUrl` contains `fileType=.msi` (common Barracuda/XDR links) or the
+file on disk is an MSI saved as `.exe`, the script corrects the path and uses
+`msiexec` (v1.0.1+).
+
 ## Safety
 
 - **Never commit** real site tokens. Use ScToolLauncher fields or placeholders.

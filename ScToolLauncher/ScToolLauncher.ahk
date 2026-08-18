@@ -213,12 +213,12 @@ Tools := [
         "Path", "SentinelOneInstall",
         "Script", "Install-SentinelOneAgent.ps1",
         "UaPrefix", "SentinelOneInstall-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.0.1",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "RunOnly SentinelOneInstall AlwaysNote",
-        "Note", "Token + path (and optional URL) below are not saved. EXE: -t TOKEN -q. MSI: msiexec /qn SITE_TOKEN=. Prefer elevated / Backstage. Do not paste tokens into tickets/git.",
-        "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
+        "Note", "Token + path (and optional URL) below are not saved. Barracuda/XDR MSI download URLs (fileType=.msi) auto-use msiexec even if path ends in .exe. Prefer elevated / Backstage.",
+        "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage. v1.0.1 auto-detects MSI downloads."
     ),
     Map(
         "Category", "Agents — SentinelOne + ConnectSecure",
