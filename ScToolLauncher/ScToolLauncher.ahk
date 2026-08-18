@@ -18,17 +18,18 @@ MaxLength := "200000"
 ; Fetch: Contents (api.github.com + Accept raw) | Raw (raw.githubusercontent.com?v=)
 ;        IrmOutFile (Process Bypass + irm -OutFile + & run — for unsigned remote .ps1)
 ;        DownloadExe (IWR vendor EXE + Start-Process -Wait)
+;        Inline (GUI fields → silent-install body; no GitHub fetch; secrets never saved)
 ; Category: groups tools in the TreeView (order = CategoryOrder below)
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
-;        BackupsOnlyDefault ClearAllBackupContent
+;        SentinelOneInstall BackupsOnlyDefault ClearAllBackupContent
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
     "OEM cleanup — HP Touchpoint, Dell SARemediation",
     "AV offboarding — Cylance/Webroot, McAfee remnants",
-    "Agents — ConnectSecure (CyberCNS) repair",
+    "Agents — SentinelOne + ConnectSecure",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — Inky/IPW transport rules (EXO admin)"
 ]
@@ -202,7 +203,31 @@ Tools := [
     ),
     ; --- Agents ---
     Map(
-        "Category", "Agents — ConnectSecure (CyberCNS) repair",
+        "Category", "Agents — SentinelOne + ConnectSecure",
+        "Name", "SentinelOne silent install",
+        "Summary", "Paste site/group token → silent install for SC Commands or Backstage. Optional download URL; else installer must already be on disk.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScToolLauncher",
+        "Fetch", "Inline",
+        "TimeoutScan", 900000,
+        "TimeoutUpdate", 900000,
+        "Flags", "RunOnly SentinelOneInstall AlwaysNote",
+        "Note", "Token + path (and optional URL) below are not saved. EXE: -t TOKEN -q. MSI: msiexec /qn SITE_TOKEN=. Prefer elevated / Backstage. Do not paste tokens into tickets/git.",
+        "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne + ConnectSecure",
+        "Name", "ConnectSecure silent install",
+        "Summary", "Download Windows agent from ConnectSecure agentlink API, then silent install with -c/-e/-j/-i. Paste IDs/token at copy time — never stored.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureAgentRepair",
+        "Fetch", "Inline",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 600000,
+        "Flags", "RunOnly ConnectSecure AlwaysNote",
+        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Fresh install only (no uninstall). Prefer elevated / Backstage.",
+        "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne + ConnectSecure",
         "Name", "ConnectSecure (CyberCNS) agent repair",
         "Summary", "If agent+monitor are not both Running: stop/delete services, kill processes, wipe folder, reinstall. Paste company/env/token at copy time — never stored.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureAgentRepair",
@@ -424,6 +449,14 @@ ShowGui(*) {
     gCtrls["LblCsToken"] := gGui.Add("Text", "xm", "ConnectSecure install token (-j) — not saved; paste each time")
     gCtrls["CsInstallToken"] := gGui.Add("Edit", "xs w" UiContentW " Password vCsInstallToken", "")
 
+    gCtrls["LblS1Token"] := gGui.Add("Text", "xm Section", "SentinelOne site/group token — not saved; paste each time")
+    gCtrls["S1Token"] := gGui.Add("Edit", "xs w" UiContentW " Password vS1Token", "")
+    gCtrls["LblS1Path"] := gGui.Add("Text", "xm", "Installer path on endpoint (EXE or MSI)")
+    gCtrls["S1InstallerPath"] := gGui.Add("Edit", "xs w" UiContentW " vS1InstallerPath", "C:\Windows\Temp\SentinelOneInstaller.exe")
+    gCtrls["LblS1Url"] := gGui.Add("Text", "xm", "Optional download URL (blank = use path already on disk)")
+    gCtrls["S1InstallerUrl"] := gGui.Add("Edit", "xs w" UiContentW " vS1InstallerUrl", "")
+    gCtrls["S1Quiet"] := gGui.Add("Checkbox", "xs Checked vS1Quiet", "Quiet (-q) for EXE installers (older agents)")
+
     gCtrls["LblPaste"] := gGui.Add("Text", "xm Section", "Paste format")
     gCtrls["FmtCommands"] := gGui.Add("Radio", "xs Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
     gCtrls["FmtBackstage"] := gGui.Add("Radio", "xs vFmtBackstage", "ScreenConnect Backstage (one line)")
@@ -446,6 +479,7 @@ ShowGui(*) {
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
         "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
+        "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
         "LblPaste", "FmtCommands", "FmtBackstage",
         "Note", "Status"
     ]
@@ -503,13 +537,15 @@ ReflowGui() {
             ch := 26
             cw := 200
         }
-        else if (key = "Product" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor")
+        else if (key = "Product" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor"
+            || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
+            || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl")
             ch := 22
         else if (InStr(key, "Lbl") = 1)
             ch := 16
         else if (InStr(key, "Mode") = 1 || InStr(key, "Fmt") = 1 || key = "Force" || key = "ForceAppShutdown"
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
-            || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent")
+            || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "S1Quiet")
             ch := 20
 
         ctrl.Move(x, y, cw, ch)
@@ -575,6 +611,7 @@ RefreshOptionEnable(*) {
     showVendor := ToolHasFlag(t, "Vendor")
     showDomain := ToolHasFlag(t, "Domain")
     showConnectSecure := ToolHasFlag(t, "ConnectSecure")
+    showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     scanOnly := ToolHasFlag(t, "ScanOnly")
 
     SetCtrlShown(gCtrls["Force"], showForce)
@@ -597,14 +634,21 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["DomainController"], showDomain)
     SetCtrlShown(gCtrls["LblDomain"], showDomain)
     SetCtrlShown(gCtrls["Domain"], showDomain)
-    ; ConnectSecure IDs/token only needed for Remediate (Apply) mode
-    showCsFields := showConnectSecure && !gCtrls["ModeScan"].Value
+    ; ConnectSecure IDs/token: always for Inline install (RunOnly); repair only in Apply mode
+    showCsFields := showConnectSecure && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     SetCtrlShown(gCtrls["LblCsCompany"], showCsFields)
     SetCtrlShown(gCtrls["CsCompanyId"], showCsFields)
     SetCtrlShown(gCtrls["LblCsEnv"], showCsFields)
     SetCtrlShown(gCtrls["CsEnvironmentId"], showCsFields)
     SetCtrlShown(gCtrls["LblCsToken"], showCsFields)
     SetCtrlShown(gCtrls["CsInstallToken"], showCsFields)
+    SetCtrlShown(gCtrls["LblS1Token"], showSentinelOne)
+    SetCtrlShown(gCtrls["S1Token"], showSentinelOne)
+    SetCtrlShown(gCtrls["LblS1Path"], showSentinelOne)
+    SetCtrlShown(gCtrls["S1InstallerPath"], showSentinelOne)
+    SetCtrlShown(gCtrls["LblS1Url"], showSentinelOne)
+    SetCtrlShown(gCtrls["S1InstallerUrl"], showSentinelOne)
+    SetCtrlShown(gCtrls["S1Quiet"], showSentinelOne)
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup
@@ -634,6 +678,10 @@ RefreshOptionEnable(*) {
     } else if ToolHasFlag(t, "Delete") || ToolHasFlag(t, "PositionalDry") {
         gCtrls["ModeScan"].Text := "Scan only (dry-run)"
         gCtrls["ModeUpdate"].Text := "Remove matched items"
+    } else if runOnly && ToolHasFlag(t, "SentinelOneInstall") {
+        gCtrls["ModeUpdate"].Text := "Silent install (token)"
+    } else if runOnly && showConnectSecure {
+        gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
     } else if runOnly {
         gCtrls["ModeUpdate"].Text := "Download and run"
     } else if scanOnly {
@@ -643,7 +691,7 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Apply updates"
     }
 
-    if ToolHasFlag(t, "ConnectSecure") {
+    if ToolHasFlag(t, "ConnectSecure") && ToolHasFlag(t, "Remediate") {
         gCtrls["ModeScan"].Text := "Check agent health"
         gCtrls["ModeUpdate"].Text := "Remediate + reinstall"
     }
@@ -814,7 +862,9 @@ BuildSnippet(tool, isScan, isCommands) {
     timeout := isScan ? tool["TimeoutScan"] : tool["TimeoutUpdate"]
     fetch := ToolGet(tool, "Fetch", "Contents")
 
-    if (fetch = "DownloadExe") {
+    if (fetch = "Inline") {
+        body := BuildInlineBody(tool)
+    } else if (fetch = "DownloadExe") {
         url := ToolGet(tool, "Url", "")
         outFile := ToolGet(tool, "OutFile", "C:\Windows\Temp\tool.exe")
         argList := ToolGet(tool, "ExeArgList", "")
@@ -868,12 +918,53 @@ BuildSnippet(tool, isScan, isCommands) {
     return body noteLine
 }
 
+PsSingleQuote(s) {
+    return "'" StrReplace(s, "'", "''") "'"
+}
+
+BuildInlineBody(tool) {
+    global gCtrls
+    if ToolHasFlag(tool, "SentinelOneInstall") {
+        token := Trim(gCtrls["S1Token"].Value)
+        path := Trim(gCtrls["S1InstallerPath"].Value)
+        url := Trim(gCtrls["S1InstallerUrl"].Value)
+        quiet := gCtrls["S1Quiet"].Value
+        qTok := PsSingleQuote(token)
+        qPath := PsSingleQuote(path)
+        body := "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $token=" qTok "; $exe=" qPath
+        if (url != "") {
+            qUrl := PsSingleQuote(url)
+            body .= "; $url=" qUrl "; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $exe) | Out-Null; Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing"
+        }
+        body .= "; if (-not (Test-Path -LiteralPath $exe)) { throw ('Installer not found: ' + $exe) }"
+        ; MSI vs EXE
+        body .= "; if ($exe -like '*.msi') { $p=Start-Process -FilePath msiexec.exe -ArgumentList @('/i',$exe,'/qn','/norestart',('SITE_TOKEN=' + $token)) -Wait -PassThru -NoNewWindow; exit $p.ExitCode }"
+        if quiet
+            body .= " else { $p=Start-Process -FilePath $exe -ArgumentList @('-t',$token,'-q') -Wait -PassThru -NoNewWindow; exit $p.ExitCode }"
+        else
+            body .= " else { $p=Start-Process -FilePath $exe -ArgumentList @('-t',$token) -Wait -PassThru -NoNewWindow; exit $p.ExitCode }"
+        return body
+    }
+    if ToolHasFlag(tool, "ConnectSecure") {
+        company := Trim(gCtrls["CsCompanyId"].Value)
+        envId := Trim(gCtrls["CsEnvironmentId"].Value)
+        token := Trim(gCtrls["CsInstallToken"].Value)
+        return "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $destination='C:\cybercnsagent.exe'; $source=Invoke-RestMethod -Method Get -Uri 'https://configuration.myconnectsecure.com/api/v4/configuration/agentlink?ostype=windows'; Invoke-WebRequest -Uri $source -OutFile $destination -UseBasicParsing; & $destination -c " PsSingleQuote(company) " -e " PsSingleQuote(envId) " -j " PsSingleQuote(token) " -i"
+    }
+    return "throw 'Inline tool has no body builder'"
+}
+
 DescribeSelection(tool, isScan) {
     global gCtrls
     mode := "Scan only"
-    if ToolHasFlag(tool, "RunOnly")
-        mode := "Download and run"
-    else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "IrmOutFile")
+    if ToolHasFlag(tool, "RunOnly") {
+        if ToolHasFlag(tool, "SentinelOneInstall")
+            mode := "Silent install"
+        else if ToolHasFlag(tool, "ConnectSecure")
+            mode := "Silent install"
+        else
+            mode := "Download and run"
+    } else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "IrmOutFile")
         mode := "Collect / run"
     if !isScan && !ToolHasFlag(tool, "RunOnly") {
         if ToolHasFlag(tool, "Delete") || ToolHasFlag(tool, "PositionalDry")
@@ -913,6 +1004,10 @@ DescribeSelection(tool, isScan) {
         if prod != ""
             parts.Push("Product=" prod)
     }
+    if ToolHasFlag(tool, "SentinelOneInstall") && CtrlActive(gCtrls["S1InstallerUrl"]) {
+        if (Trim(gCtrls["S1InstallerUrl"].Value) != "")
+            parts.Push("Download+install")
+    }
     text := ""
     for i, p in parts {
         if i > 1
@@ -934,7 +1029,17 @@ DoCopy(*) {
 
     if ToolHasFlag(tool, "ConnectSecure") && !isScan {
         if (Trim(gCtrls["CsCompanyId"].Value) = "" || Trim(gCtrls["CsEnvironmentId"].Value) = "" || Trim(gCtrls["CsInstallToken"].Value) = "") {
-            MsgBox("Remediate needs Company ID, Environment ID, and Install Token.`nFill the fields (nothing is saved in the launcher), then copy again.", "SC Tool Launcher", "Icon!")
+            MsgBox("Needs Company ID, Environment ID, and Install Token.`nFill the fields (nothing is saved in the launcher), then copy again.", "SC Tool Launcher", "Icon!")
+            return
+        }
+    }
+    if ToolHasFlag(tool, "SentinelOneInstall") {
+        if (Trim(gCtrls["S1Token"].Value) = "") {
+            MsgBox("Paste the SentinelOne site/group token (nothing is saved), then copy again.", "SC Tool Launcher", "Icon!")
+            return
+        }
+        if (Trim(gCtrls["S1InstallerPath"].Value) = "") {
+            MsgBox("Set the installer path on the endpoint (EXE or MSI).", "SC Tool Launcher", "Icon!")
             return
         }
     }
