@@ -49,11 +49,15 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
-### Agents — ConnectSecure (CyberCNS) repair
+### Agents — SentinelOne + ConnectSecure
 
 | Tool | Source |
 | --- | --- |
-| ConnectSecure (CyberCNS) agent repair | mytools — company/env/install token entered in the GUI at copy time (never committed) |
+| SentinelOne silent install | GUI — paste site/group token; optional download URL or path already on disk (`EXE -t` / `MSI SITE_TOKEN=`) |
+| ConnectSecure silent install | GUI — company/env/install token; downloads agentlink Windows EXE then `-c/-e/-j/-i` |
+| ConnectSecure (CyberCNS) agent repair | mytools — wipe stuck agent then reinstall (same GUI secrets) |
+
+Tokens/IDs are only embedded in the clipboard snippet when you copy — nothing is stored in the AHK file. Do not paste them into tickets or git.
 
 ### IR / forensics — event logs, Sysinternals, ADWCleaner
 
