@@ -36,9 +36,11 @@ CategoryOrder := [
     "M365 / Exchange — Inky/IPW transport rules (EXO admin)"
 ]
 
-; TreeView / content column width (also used by ReflowGui)
-UiContentW := 480
-UiTreeRows := 22
+; TreeView (left) / options column (right) — side-by-side so short screens fit
+UiTreeW := 360
+UiContentW := 440
+UiColGap := 16
+UiTreeRows := 24
 
 Tools := [
     ; --- Software updates ---
@@ -413,7 +415,7 @@ OnToolTreeSelect(*) {
 }
 
 ShowGui(*) {
-    global gGui, gCtrls, Tools, gFlowKeys, UiContentW, UiTreeRows, TrayLabel, HotkeyLabel
+    global gGui, gCtrls, Tools, gFlowKeys, UiContentW, UiTreeW, UiTreeRows, TrayLabel, HotkeyLabel
 
     if gGui {
         try gGui.Destroy()
@@ -427,78 +429,79 @@ ShowGui(*) {
     gGui.MarginX := 12
     gGui.MarginY := 10
 
-    gGui.Add("Text", , "Tool (expand a category)")
-    tv := gGui.Add("TreeView", "w" UiContentW " r" UiTreeRows " vToolTree")
+    ; Left column: tool tree. Right column: options. Positions set in ReflowGui.
+    gCtrls["LblTools"] := gGui.Add("Text", "w" UiTreeW, "Tool (expand a category)")
+    tv := gGui.Add("TreeView", "w" UiTreeW " r" UiTreeRows " vToolTree")
     tv.OnEvent("ItemSelect", OnToolTreeSelect)
     gCtrls["ToolTree"] := tv
     PopulateToolTree(tv)
 
-    gCtrls["LblAbout"] := gGui.Add("Text", "xm Section", "About this tool")
-    gCtrls["Summary"] := gGui.Add("Text", "xs w" UiContentW " h52 vToolSummary", "")
-    gCtrls["BtnDocs"] := gGui.Add("Button", "xs w200", "Open docs in browser")
+    gCtrls["LblAbout"] := gGui.Add("Text", "Section", "About this tool")
+    gCtrls["Summary"] := gGui.Add("Text", "w" UiContentW " h52 vToolSummary", "")
+    gCtrls["BtnDocs"] := gGui.Add("Button", "w200", "Open docs in browser")
     gCtrls["BtnDocs"].OnEvent("Click", (*) => OpenSelectedToolDocs())
 
-    gCtrls["LblMode"] := gGui.Add("Text", "xm Section", "Mode")
+    gCtrls["LblMode"] := gGui.Add("Text", "Section", "Mode")
     ; Group: first radio in each set — required so Mode and Paste format stay separate
     ; when intervening option checkboxes are hidden (otherwise Win32 merges the radios).
-    gCtrls["ModeScan"] := gGui.Add("Radio", "xs Group Checked vModeScan", "Scan only (no changes)")
-    gCtrls["ModeUpdate"] := gGui.Add("Radio", "xs vModeUpdate", "Apply changes (update / remove)")
+    gCtrls["ModeScan"] := gGui.Add("Radio", "Group Checked vModeScan", "Scan only (no changes)")
+    gCtrls["ModeUpdate"] := gGui.Add("Radio", "vModeUpdate", "Apply changes (update / remove)")
     gCtrls["ModeScan"].OnEvent("Click", (*) => RefreshOptionEnable())
     gCtrls["ModeUpdate"].OnEvent("Click", (*) => RefreshOptionEnable())
 
-    gCtrls["LblOptions"] := gGui.Add("Text", "xm Section", "Options")
-    gCtrls["Force"] := gGui.Add("Checkbox", "xs vOptForce", "Force (skip soft guards / re-run)")
-    gCtrls["ForceAppShutdown"] := gGui.Add("Checkbox", "xs vOptForceAppShutdown", "Close Office apps (Word, Excel, Outlook, …)")
-    gCtrls["IncludeBrowsers"] := gGui.Add("Checkbox", "xs vOptIncludeBrowsers", "Include browsers (Chrome, Edge, Firefox)")
-    gCtrls["Uninstall"] := gGui.Add("Checkbox", "xs vOptUninstall", "Uninstall HP Support Assistant")
-    gCtrls["Detailed"] := gGui.Add("Checkbox", "xs vOptDetailed", "Detailed Teams check (shortcuts count as fail)")
-    gCtrls["BlockReinstall"] := gGui.Add("Checkbox", "xs vOptBlockReinstall", "Block Windows Update reinstall")
-    gCtrls["RemoveSupportAssistant"] := gGui.Add("Checkbox", "xs vOptRemoveSupportAssistant", "Also remove HP Support Assistant")
-    gCtrls["ClearAllBackupContent"] := gGui.Add("Checkbox", "xs vOptClearAllBackupContent", "Clear entire Backup folder contents (not just CW/SC)")
+    gCtrls["LblOptions"] := gGui.Add("Text", "Section", "Options")
+    gCtrls["Force"] := gGui.Add("Checkbox", "vOptForce", "Force (skip soft guards / re-run)")
+    gCtrls["ForceAppShutdown"] := gGui.Add("Checkbox", "vOptForceAppShutdown", "Close Office apps (Word, Excel, Outlook, …)")
+    gCtrls["IncludeBrowsers"] := gGui.Add("Checkbox", "vOptIncludeBrowsers", "Include browsers (Chrome, Edge, Firefox)")
+    gCtrls["Uninstall"] := gGui.Add("Checkbox", "vOptUninstall", "Uninstall HP Support Assistant")
+    gCtrls["Detailed"] := gGui.Add("Checkbox", "vOptDetailed", "Detailed Teams check (shortcuts count as fail)")
+    gCtrls["BlockReinstall"] := gGui.Add("Checkbox", "vOptBlockReinstall", "Block Windows Update reinstall")
+    gCtrls["RemoveSupportAssistant"] := gGui.Add("Checkbox", "vOptRemoveSupportAssistant", "Also remove HP Support Assistant")
+    gCtrls["ClearAllBackupContent"] := gGui.Add("Checkbox", "vOptClearAllBackupContent", "Clear entire Backup folder contents (not just CW/SC)")
     gCtrls["ClearAllBackupContent"].OnEvent("Click", (*) => RefreshOptionEnable())
 
-    gCtrls["LblProduct"] := gGui.Add("Text", "xm Section", "Product filter (e.g. DotNet, ShareX)")
-    gCtrls["Product"] := gGui.Add("Edit", "xs w" UiContentW " vProduct", "")
+    gCtrls["LblProduct"] := gGui.Add("Text", "Section", "Product filter (e.g. DotNet, ShareX)")
+    gCtrls["Product"] := gGui.Add("Edit", "w" UiContentW " vProduct", "")
 
-    gCtrls["LblVendor"] := gGui.Add("Text", "xm Section", "Antivirus vendor")
-    gCtrls["Vendor"] := gGui.Add("DropDownList", "xs w160 vVendor", ["All", "Cylance", "Webroot"])
+    gCtrls["LblVendor"] := gGui.Add("Text", "Section", "Antivirus vendor")
+    gCtrls["Vendor"] := gGui.Add("DropDownList", "w160 vVendor", ["All", "Cylance", "Webroot"])
     gCtrls["Vendor"].Choose(1)
-    gCtrls["LblAvSecret"] := gGui.Add("Text", "xm", "Password/keycode (only if Vendor is Cylance or Webroot — not All)")
-    gCtrls["AvSecret"] := gGui.Add("Edit", "xs w" UiContentW " vAvSecret", "")
+    gCtrls["LblAvSecret"] := gGui.Add("Text", , "Password/keycode (only if Vendor is Cylance or Webroot — not All)")
+    gCtrls["AvSecret"] := gGui.Add("Edit", "w" UiContentW " vAvSecret", "")
 
-    gCtrls["LblDomainController"] := gGui.Add("Text", "xm Section", "Domain controller (optional)")
-    gCtrls["DomainController"] := gGui.Add("Edit", "xs w" UiContentW " vDomainController", "")
-    gCtrls["LblDomain"] := gGui.Add("Text", "xm", "AD domain (optional)")
-    gCtrls["Domain"] := gGui.Add("Edit", "xs w" UiContentW " vDomain", "")
+    gCtrls["LblDomainController"] := gGui.Add("Text", "Section", "Domain controller (optional)")
+    gCtrls["DomainController"] := gGui.Add("Edit", "w" UiContentW " vDomainController", "")
+    gCtrls["LblDomain"] := gGui.Add("Text", , "AD domain (optional)")
+    gCtrls["Domain"] := gGui.Add("Edit", "w" UiContentW " vDomain", "")
 
-    gCtrls["LblCsCompany"] := gGui.Add("Text", "xm Section", "ConnectSecure company ID (-c)")
-    gCtrls["CsCompanyId"] := gGui.Add("Edit", "xs w" UiContentW " vCsCompanyId", "")
-    gCtrls["LblCsEnv"] := gGui.Add("Text", "xm", "ConnectSecure environment ID (-e)")
-    gCtrls["CsEnvironmentId"] := gGui.Add("Edit", "xs w" UiContentW " vCsEnvironmentId", "")
-    gCtrls["LblCsToken"] := gGui.Add("Text", "xm", "ConnectSecure install token (-j) — not saved; paste each time")
-    gCtrls["CsInstallToken"] := gGui.Add("Edit", "xs w" UiContentW " Password vCsInstallToken", "")
+    gCtrls["LblCsCompany"] := gGui.Add("Text", "Section", "ConnectSecure company ID (-c)")
+    gCtrls["CsCompanyId"] := gGui.Add("Edit", "w" UiContentW " vCsCompanyId", "")
+    gCtrls["LblCsEnv"] := gGui.Add("Text", , "ConnectSecure environment ID (-e)")
+    gCtrls["CsEnvironmentId"] := gGui.Add("Edit", "w" UiContentW " vCsEnvironmentId", "")
+    gCtrls["LblCsToken"] := gGui.Add("Text", , "ConnectSecure install token (-j) — not saved; paste each time")
+    gCtrls["CsInstallToken"] := gGui.Add("Edit", "w" UiContentW " Password vCsInstallToken", "")
 
-    gCtrls["LblS1Token"] := gGui.Add("Text", "xm Section", "SentinelOne site/group token — not saved; paste each time")
-    gCtrls["S1Token"] := gGui.Add("Edit", "xs w" UiContentW " Password vS1Token", "")
-    gCtrls["LblS1Path"] := gGui.Add("Text", "xm", "Installer path on endpoint (EXE or MSI)")
-    gCtrls["S1InstallerPath"] := gGui.Add("Edit", "xs w" UiContentW " vS1InstallerPath", "C:\Windows\Temp\SentinelOneInstaller.exe")
-    gCtrls["LblS1Url"] := gGui.Add("Text", "xm", "Optional download URL (blank = use path already on disk)")
-    gCtrls["S1InstallerUrl"] := gGui.Add("Edit", "xs w" UiContentW " vS1InstallerUrl", "")
-    gCtrls["S1Quiet"] := gGui.Add("Checkbox", "xs Checked vS1Quiet", "Quiet (-q) for EXE installers (older agents)")
+    gCtrls["LblS1Token"] := gGui.Add("Text", "Section", "SentinelOne site/group token — not saved; paste each time")
+    gCtrls["S1Token"] := gGui.Add("Edit", "w" UiContentW " Password vS1Token", "")
+    gCtrls["LblS1Path"] := gGui.Add("Text", , "Installer path on endpoint (EXE or MSI)")
+    gCtrls["S1InstallerPath"] := gGui.Add("Edit", "w" UiContentW " vS1InstallerPath", "C:\Windows\Temp\SentinelOneInstaller.exe")
+    gCtrls["LblS1Url"] := gGui.Add("Text", , "Optional download URL (blank = use path already on disk)")
+    gCtrls["S1InstallerUrl"] := gGui.Add("Edit", "w" UiContentW " vS1InstallerUrl", "")
+    gCtrls["S1Quiet"] := gGui.Add("Checkbox", "Checked vS1Quiet", "Quiet (-q) for EXE installers (older agents)")
 
-    gCtrls["LblPaste"] := gGui.Add("Text", "xm Section", "Paste format")
-    gCtrls["FmtCommands"] := gGui.Add("Radio", "xs Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
-    gCtrls["FmtBackstage"] := gGui.Add("Radio", "xs vFmtBackstage", "ScreenConnect Backstage (one line)")
+    gCtrls["LblPaste"] := gGui.Add("Text", "Section", "Paste format")
+    gCtrls["FmtCommands"] := gGui.Add("Radio", "Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
+    gCtrls["FmtBackstage"] := gGui.Add("Radio", "vFmtBackstage", "ScreenConnect Backstage (one line)")
 
-    gCtrls["Note"] := gGui.Add("Text", "xm w" UiContentW " h48 cBlue vToolNote", "")
-    gCtrls["Status"] := gGui.Add("Text", "xm w" UiContentW " h36 vStatus", HotkeyLabel " toggles this window. Expand a category, select a tool, then Copy.")
+    gCtrls["Note"] := gGui.Add("Text", "w" UiContentW " h48 cBlue vToolNote", "")
+    gCtrls["Status"] := gGui.Add("Text", "w" UiContentW " h36 vStatus", HotkeyLabel " toggles this window. Expand a category, select a tool, then Copy.")
 
-    gCtrls["BtnCopy"] := gGui.Add("Button", "xm w220 Default", "Copy to clipboard")
+    gCtrls["BtnCopy"] := gGui.Add("Button", "w220 Default", "Copy to clipboard")
     gCtrls["BtnCopy"].OnEvent("Click", (*) => DoCopy())
-    gCtrls["BtnCancel"] := gGui.Add("Button", "x+8 w100", "Cancel")
+    gCtrls["BtnCancel"] := gGui.Add("Button", "w100", "Cancel")
     gCtrls["BtnCancel"].OnEvent("Click", (*) => gGui.Hide())
 
-    ; Stack order below the TreeView (only Visible controls advance Y).
+    ; Right-column stack order (only Visible controls advance Y). Left = tool tree.
     gFlowKeys := [
         "LblAbout", "Summary", "BtnDocs",
         "LblMode", "ModeScan", "ModeUpdate",
@@ -526,24 +529,26 @@ CtrlActive(ctrl) {
     return ctrl.Visible && ctrl.Enabled
 }
 
-; Collapse gaps: stack visible controls under the TreeView; park others off-layout.
+; Two-column layout: tool tree on the left, options/actions on the right.
 ReflowGui() {
-    global gGui, gCtrls, gFlowKeys, UiContentW
+    global gGui, gCtrls, gFlowKeys, UiContentW, UiTreeW, UiColGap
     marginX := 12
+    marginY := 10
     marginBottom := 12
     gap := 3
     sectionGap := 8
     contentW := UiContentW
+    treeW := UiTreeW
+    colGap := UiColGap
+    leftX := marginX
+    rightX := marginX + treeW + colGap
 
     ; Freeze paint while moving controls (avoids ghosting when the window shrinks).
     try DllCall("SendMessage", "ptr", gGui.Hwnd, "uint", 0x000B, "ptr", 0, "ptr", 0) ; WM_SETREDRAW false
 
-    tv := gCtrls["ToolTree"]
-    tv.GetPos(&tx, &ty, &tw, &th)
-    y := ty + th + sectionGap
-    x := marginX
+    ; --- Right column (measure first so the tree can match height) ---
+    y := marginY
     firstVisible := true
-
     for key in gFlowKeys {
         ctrl := gCtrls[key]
         if !ctrl.Visible {
@@ -577,14 +582,31 @@ ReflowGui() {
             || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "S1Quiet")
             ch := 20
 
-        ctrl.Move(x, y, cw, ch)
+        ctrl.Move(rightX, y, cw, ch)
         y += ch + gap
     }
 
     btnH := 28
-    gCtrls["BtnCopy"].Move(x, y, 220, btnH)
-    gCtrls["BtnCancel"].Move(x + 228, y, 100, btnH)
+    gCtrls["BtnCopy"].Move(rightX, y, 220, btnH)
+    gCtrls["BtnCancel"].Move(rightX + 228, y, 100, btnH)
     y += btnH + marginBottom
+    rightBottom := y
+
+    ; --- Left column: label + tree sized to right column ---
+    lblH := 16
+    gCtrls["LblTools"].Move(leftX, marginY, treeW, lblH)
+    treeTop := marginY + lblH + gap
+    minTreeH := 280
+    treeH := rightBottom - treeTop - marginBottom
+    if (treeH < minTreeH)
+        treeH := minTreeH
+    gCtrls["ToolTree"].Move(leftX, treeTop, treeW, treeH)
+    leftBottom := treeTop + treeH + marginBottom
+    if (leftBottom > rightBottom)
+        rightBottom := leftBottom
+
+    clientW := rightX + contentW + marginX
+    clientH := rightBottom
 
     gGui.GetPos(,, &winW, &winH)
     gGui.GetClientPos(,, &cliW, &cliH)
@@ -594,7 +616,7 @@ ReflowGui() {
         chromeW := 16
     if (chromeH < 0)
         chromeH := 40
-    gGui.Move(,, contentW + marginX * 2 + chromeW, y + chromeH)
+    gGui.Move(,, clientW + chromeW, clientH + chromeH)
 
     try DllCall("SendMessage", "ptr", gGui.Hwnd, "uint", 0x000B, "ptr", 1, "ptr", 0) ; WM_SETREDRAW true
     try DllCall("RedrawWindow", "ptr", gGui.Hwnd, "ptr", 0, "ptr", 0, "uint", 0x0585)
