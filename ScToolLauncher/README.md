@@ -52,13 +52,14 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
-### Agents — SentinelOne + ConnectSecure
+### Agents — SentinelOne, ConnectSecure, Huntress
 
 | Tool | Source |
 | --- | --- |
 | SentinelOne silent install | mytools `SentinelOneInstall` — paste site/group token in GUI; optional URL or on-disk EXE/MSI |
 | ConnectSecure silent install | mytools `ConnectSecureInstall` — company/env/install token in GUI; agentlink download then `-c/-e/-j/-i` |
 | ConnectSecure (CyberCNS) agent repair | mytools — wipe stuck agent then reinstall (same GUI secrets) |
+| Huntress silent install | mytools `HuntressInstall` — account + org key in GUI; uses official `/ACCT_KEY=` (not `/ACCOUNT_KEY=`) |
 
 Tokens/IDs are only embedded in the clipboard snippet when you copy — nothing is stored in the AHK file. Do not paste them into tickets or git.
 

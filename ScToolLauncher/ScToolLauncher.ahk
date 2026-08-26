@@ -25,13 +25,13 @@ MaxLength := "200000"
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
-;        SentinelOneInstall BackupsOnlyDefault ClearAllBackupContent
+;        SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
     "OEM cleanup — HP Touchpoint, Dell SARemediation",
     "AV offboarding — Cylance/Webroot, McAfee remnants",
-    "Agents — SentinelOne + ConnectSecure",
+    "Agents — SentinelOne, ConnectSecure, Huntress",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — Inky/IPW transport rules (EXO admin)"
 ]
@@ -207,7 +207,7 @@ Tools := [
     ),
     ; --- Agents ---
     Map(
-        "Category", "Agents — SentinelOne + ConnectSecure",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
         "Name", "SentinelOne silent install",
         "Summary", "Paste site/group token → silent install for SC Commands or Backstage. Optional download URL; else installer must already be on disk.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/SentinelOneInstall",
@@ -223,7 +223,7 @@ Tools := [
         "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage. v1.0.1 auto-detects MSI downloads."
     ),
     Map(
-        "Category", "Agents — SentinelOne + ConnectSecure",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
         "Name", "ConnectSecure silent install",
         "Summary", "Download Windows agent from ConnectSecure agentlink API, then silent install with -c/-e/-j/-i. Paste IDs/token at copy time — never stored.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureInstall",
@@ -239,7 +239,7 @@ Tools := [
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
     ),
     Map(
-        "Category", "Agents — SentinelOne + ConnectSecure",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
         "Name", "ConnectSecure (CyberCNS) agent repair",
         "Summary", "If agent+monitor are not both Running: stop/delete services, kill processes, wipe folder, reinstall. Paste company/env/token at copy time — never stored.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureAgentRepair",
@@ -253,6 +253,22 @@ Tools := [
         "Flags", "CheckOnly Remediate ConnectSecure AlwaysNote",
         "Note", "Remediate needs Company ID, Environment ID, and Install Token (filled below — not saved in the AHK file). Prefer Backstage. Reboot if services refuse to die.",
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Name", "Huntress silent install",
+        "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Paste keys at copy time — never stored. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/HuntressInstall",
+        "Fetch", "Contents",
+        "Path", "HuntressInstall",
+        "Script", "Install-HuntressAgent.ps1",
+        "UaPrefix", "HuntressInstall-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 600000,
+        "Flags", "RunOnly HuntressInstall AlwaysNote",
+        "Note", "Account key + org key below are not saved. Official flag is /ACCT_KEY= ( /ACCOUNT_KEY= is wrong and often exits 53 ). Prefer elevated / Backstage. Check C:\Windows\Temp\HuntressInstaller.log on failure.",
+        "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=."
     ),
     ; --- IR / forensics ---
     Map(
@@ -371,7 +387,7 @@ PopulateToolTree(tv) {
     catNodes := Map()
     ; Bold category headers. Expand Agents so install tools are visible without hunting.
     expandCats := Map()
-    expandCats["Agents — SentinelOne + ConnectSecure"] := true
+    expandCats["Agents — SentinelOne, ConnectSecure, Huntress"] := true
     for cat in CategoryOrder
         catNodes[cat] := tv.Add(cat, 0, "Bold")
 
@@ -385,7 +401,7 @@ PopulateToolTree(tv) {
         gToolByNode[node] := i
         if !firstCatNode && catNodes.Has(cat)
             firstCatNode := catNodes[cat]
-        if (cat = "Agents — SentinelOne + ConnectSecure" && !agentsNode)
+        if (cat = "Agents — SentinelOne, ConnectSecure, Huntress" && !agentsNode)
             agentsNode := catNodes[cat]
     }
     for cat, node in catNodes {
@@ -490,6 +506,13 @@ ShowGui(*) {
     gCtrls["S1InstallerUrl"] := gGui.Add("Edit", "w" UiContentW " vS1InstallerUrl", "")
     gCtrls["S1Quiet"] := gGui.Add("Checkbox", "Checked vS1Quiet", "Quiet (-q) for EXE installers (older agents)")
 
+    gCtrls["LblHuntressAcct"] := gGui.Add("Text", "Section", "Huntress account key — not saved; paste each time")
+    gCtrls["HuntressAccountKey"] := gGui.Add("Edit", "w" UiContentW " Password vHuntressAccountKey", "")
+    gCtrls["LblHuntressOrg"] := gGui.Add("Text", , "Huntress organization key (client short name)")
+    gCtrls["HuntressOrgKey"] := gGui.Add("Edit", "w" UiContentW " vHuntressOrgKey", "")
+    gCtrls["LblHuntressTags"] := gGui.Add("Text", , "Optional tags (comma-separated)")
+    gCtrls["HuntressTags"] := gGui.Add("Edit", "w" UiContentW " vHuntressTags", "")
+
     gCtrls["LblPaste"] := gGui.Add("Text", "Section", "Paste format")
     gCtrls["FmtCommands"] := gGui.Add("Radio", "Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
     gCtrls["FmtBackstage"] := gGui.Add("Radio", "vFmtBackstage", "ScreenConnect Backstage (one line)")
@@ -515,6 +538,7 @@ ShowGui(*) {
         "LblDomainController", "DomainController", "LblDomain", "Domain",
         "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
         "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
+        "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
         "LblPaste", "FmtCommands", "FmtBackstage",
         "Note", "Status"
     ]
@@ -576,7 +600,8 @@ ReflowGui() {
         }
         else if (key = "Product" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor"
             || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
-            || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl")
+            || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl"
+            || key = "HuntressAccountKey" || key = "HuntressOrgKey" || key = "HuntressTags")
             ch := 22
         else if (InStr(key, "Lbl") = 1)
             ch := 16
@@ -667,6 +692,7 @@ RefreshOptionEnable(*) {
     showDomain := ToolHasFlag(t, "Domain")
     showConnectSecure := ToolHasFlag(t, "ConnectSecure")
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
+    showHuntress := ToolHasFlag(t, "HuntressInstall")
     scanOnly := ToolHasFlag(t, "ScanOnly")
 
     SetCtrlShown(gCtrls["Force"], showForce)
@@ -704,6 +730,12 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["LblS1Url"], showSentinelOne)
     SetCtrlShown(gCtrls["S1InstallerUrl"], showSentinelOne)
     SetCtrlShown(gCtrls["S1Quiet"], showSentinelOne)
+    SetCtrlShown(gCtrls["LblHuntressAcct"], showHuntress)
+    SetCtrlShown(gCtrls["HuntressAccountKey"], showHuntress)
+    SetCtrlShown(gCtrls["LblHuntressOrg"], showHuntress)
+    SetCtrlShown(gCtrls["HuntressOrgKey"], showHuntress)
+    SetCtrlShown(gCtrls["LblHuntressTags"], showHuntress)
+    SetCtrlShown(gCtrls["HuntressTags"], showHuntress)
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup
@@ -735,6 +767,8 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Remove matched items"
     } else if runOnly && ToolHasFlag(t, "SentinelOneInstall") {
         gCtrls["ModeUpdate"].Text := "Silent install (token)"
+    } else if runOnly && ToolHasFlag(t, "HuntressInstall") {
+        gCtrls["ModeUpdate"].Text := "Silent install (/ACCT_KEY)"
     } else if runOnly && showConnectSecure {
         gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
     } else if runOnly {
@@ -913,6 +947,18 @@ BuildSwitches(tool, isScan, isCommands) {
             sw.Push("-Quiet")
     }
 
+    if ToolHasFlag(tool, "HuntressInstall") {
+        acct := Trim(gCtrls["HuntressAccountKey"].Value)
+        org := Trim(gCtrls["HuntressOrgKey"].Value)
+        tags := Trim(gCtrls["HuntressTags"].Value)
+        if (acct != "")
+            sw.Push("-AccountKey '" StrReplace(acct, "'", "''") "'")
+        if (org != "")
+            sw.Push("-OrgKey '" StrReplace(org, "'", "''") "'")
+        if (tags != "")
+            sw.Push("-Tags '" StrReplace(tags, "'", "''") "'")
+    }
+
     fetch := ToolGet(tool, "Fetch", "Contents")
     if (fetch = "Contents") {
         if isCommands
@@ -991,6 +1037,8 @@ DescribeSelection(tool, isScan) {
     mode := "Scan only"
     if ToolHasFlag(tool, "RunOnly") {
         if ToolHasFlag(tool, "SentinelOneInstall")
+            mode := "Silent install"
+        else if ToolHasFlag(tool, "HuntressInstall")
             mode := "Silent install"
         else if ToolHasFlag(tool, "ConnectSecure")
             mode := "Silent install"
@@ -1072,6 +1120,12 @@ DoCopy(*) {
         }
         if (Trim(gCtrls["S1InstallerPath"].Value) = "") {
             MsgBox("Set the installer path on the endpoint (EXE or MSI).", AppName, "Icon!")
+            return
+        }
+    }
+    if ToolHasFlag(tool, "HuntressInstall") {
+        if (Trim(gCtrls["HuntressAccountKey"].Value) = "" || Trim(gCtrls["HuntressOrgKey"].Value) = "") {
+            MsgBox("Needs Huntress Account Key and Organization Key.`nFill the fields (nothing is saved), then copy again.", AppName, "Icon!")
             return
         }
     }
