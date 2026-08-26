@@ -1,7 +1,8 @@
 # Huntress silent install
 
 Downloads `HuntressInstaller.exe` from `update.huntress.io` and runs a silent
-install with the official flags.
+install with the official flags. If `HuntressAgent` (service or
+`HuntressAgent.exe`) is already present, the script reports it and skips.
 
 ## Flags (important)
 
@@ -23,6 +24,9 @@ observed to end with a non-zero exit such as **53**. This script uses `/ACCT_KEY
 | `-OrgKey` | Organization key |
 | `-Tags` | Optional |
 | `-Exit` | ScreenConnect Commands exit code |
+
+Already-installed agents are detected via the `HuntressAgent` service or
+`%ProgramFiles%\Huntress\HuntressAgent.exe` (also x86). No download in that case.
 
 ## Safety
 

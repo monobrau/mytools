@@ -9,7 +9,8 @@
     /ACCOUNT_KEY — the latter is ignored and commonly yields a non-zero exit such
     as 53).
 
-    Never hardcode real account/org keys. Pass them at run time (ScToolLauncher).
+    Skips download and install when HuntressAgent is already present (service
+    or HuntressAgent.exe under Program Files). Never hardcode real keys.
 
 .PARAMETER AccountKey
     Huntress account key (32 chars). Used for download URL and /ACCT_KEY=.
@@ -59,6 +60,19 @@ function Write-Section([string]$Message) {
     Write-Output "=== $Message ==="
 }
 
+function Get-HuntressInstallState {
+    $svc = Get-Service -Name 'HuntressAgent' -ErrorAction SilentlyContinue
+    $exePaths = @(
+        (Join-Path ${env:ProgramFiles} 'Huntress\HuntressAgent.exe')
+        (Join-Path ${env:ProgramFiles(x86)} 'Huntress\HuntressAgent.exe')
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+    [pscustomobject]@{
+        Service     = $svc
+        ExePaths    = @($exePaths)
+        IsPresent   = [bool]($svc -or $exePaths.Count -gt 0)
+    }
+}
+
 $AccountKey = $AccountKey.Trim()
 $OrgKey = $OrgKey.Trim()
 $Tags = if ($null -eq $Tags) { '' } else { $Tags.Trim() }
@@ -76,6 +90,28 @@ if ($AccountKey.Length -ne 32) {
 
 if ([string]::IsNullOrWhiteSpace($InstallerPath)) {
     $InstallerPath = Join-Path $env:TEMP 'HuntressInstaller.exe'
+}
+
+Write-Section 'Checking for existing Huntress agent'
+$existing = Get-HuntressInstallState
+if ($existing.Service) {
+    Write-Output ("Service HuntressAgent: {0} (StartType={1})" -f $existing.Service.Status, $existing.Service.StartType)
+} else {
+    Write-Output 'Service HuntressAgent: not found'
+}
+if ($existing.ExePaths.Count -gt 0) {
+    foreach ($p in $existing.ExePaths) {
+        Write-Output ("Found {0}" -f $p)
+    }
+} else {
+    Write-Output 'HuntressAgent.exe: not found under Program Files'
+}
+
+if ($existing.IsPresent) {
+    Write-Output 'Huntress agent already present. Skipping download and install.'
+    $script:ExitCode = 0
+    if ($Exit) { exit $script:ExitCode }
+    return
 }
 
 $InstallerUrl = "https://update.huntress.io/download/$AccountKey/HuntressInstaller.exe"
