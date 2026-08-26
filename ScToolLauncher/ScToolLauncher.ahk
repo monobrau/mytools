@@ -1020,7 +1020,9 @@ BuildSnippet(tool, isScan, isCommands) {
 
     noteLine := ""
     clipNote := ToolGet(tool, "ClipboardNote", "")
-    if (clipNote != "") {
+    ; Commands #!ps can take a trailing # comment. Backstage is a single PS
+    ; line — a long NOTE wraps in the console and gets mashed into the prompt.
+    if isCommands && (clipNote != "") {
         if ToolHasFlag(tool, "AlwaysNote")
             noteLine := "`n# " clipNote
         else if ToolHasFlag(tool, "RebootAdvisory") && !isScan
@@ -1029,7 +1031,7 @@ BuildSnippet(tool, isScan, isCommands) {
 
     if isCommands
         return "#!ps`n#timeout=" timeout "`n#maxlength=" MaxLength "`n" body noteLine
-    return body noteLine
+    return body
 }
 
 DescribeSelection(tool, isScan) {

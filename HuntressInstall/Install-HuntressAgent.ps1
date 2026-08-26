@@ -147,7 +147,7 @@ if (-not [string]::IsNullOrWhiteSpace($Tags)) {
 $argList += '/S'
 
 Write-Section 'Installing Huntress agent'
-Write-Output 'Flags: /ACCT_KEY=… /ORG_KEY=… /S  (official names; /ACCOUNT_KEY is invalid)'
+Write-Output 'Flags: /ACCT_KEY=... /ORG_KEY=... /S  (official names; /ACCOUNT_KEY is invalid)'
 Write-Output 'Installer log (if present): C:\Windows\Temp\HuntressInstaller.log'
 
 try {
