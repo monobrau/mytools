@@ -5,9 +5,9 @@
 
 .DESCRIPTION
     If CyberCNSAgent and CyberCNSAgentMonitor are both Running, reports and exits.
-    Otherwise stops/deletes services (including leftover Stopped/Disabled entries),
-    kills processes, removes the install folder, downloads a fresh Windows agent,
-    and installs with company/environment/token parameters.
+    Otherwise follows the vendor uninstall.bat sequence (stop/delete CyberCNSAgent,
+    taskkill helpers, cybercnsagent.exe --internalAssetArgument uninstallservice,
+    rmdir folder), then downloads a fresh agent and reinstalls.
 
     Dry-run (default without -Remediate): report service/process/folder state only.
     Reinstall requires -CompanyId, -EnvironmentId, and -InstallToken (do not hardcode secrets).
@@ -16,7 +16,7 @@
     Report state only; make no changes.
 
 .PARAMETER Remediate
-    Stop/delete services, kill processes, remove install folder, download and reinstall.
+    Vendor uninstall.bat steps, then download and reinstall.
 
 .PARAMETER CompanyId
     Installer -c value (company id).
@@ -64,67 +64,53 @@ function Invoke-Sc([string[]]$ScArgs) {
     if ($out) { Write-Output $out }
 }
 
-function Remove-CyberCnsServiceRecord([string]$Name) {
-    Invoke-Sc @('stop', $Name)
-    Start-Sleep -Seconds 1
-    Invoke-Sc @('delete', $Name)
-    $cim = Get-CimInstance Win32_Service -Filter "Name='$Name'" -ErrorAction SilentlyContinue
-    if ($cim) {
+# Mirrors C:\Program Files (x86)\CyberCNSAgent\uninstall.bat (vendor copy):
+#   ping wait, sc stop/delete CyberCNSAgent, taskkill helpers,
+#   cybercnsagent.exe --internalAssetArgument uninstallservice, rmdir folder
+function Invoke-CyberCnsUninstallBat {
+    $pf86 = ${env:ProgramFiles(x86)}
+    if (-not $pf86) { $pf86 = 'C:\Program Files (x86)' }
+    $folder = Join-Path $pf86 'CyberCNSAgent'
+    $exe = Join-Path $folder 'cybercnsagent.exe'
+
+    Write-Section 'Vendor uninstall.bat sequence'
+    Write-Output 'Wait 5 seconds'
+    Start-Sleep -Seconds 5
+
+    Invoke-Sc @('stop', 'CyberCNSAgentMonitor')
+    Start-Sleep -Seconds 5
+    Invoke-Sc @('delete', 'CyberCNSAgentMonitor')
+
+    Start-Sleep -Seconds 5
+    Invoke-Sc @('stop', 'CyberCNSAgent')
+    Start-Sleep -Seconds 5
+    Invoke-Sc @('delete', 'CyberCNSAgent')
+    Start-Sleep -Seconds 5
+
+    foreach ($im in @('osqueryi.exe', 'nmap.exe', 'cyberutilities.exe')) {
+        Write-Output ("taskkill /IM {0} /F" -f $im)
+        $tk = & taskkill.exe /IM $im /F 2>&1 | Out-String
+        if ($tk.Trim()) { Write-Output $tk.Trim() }
+    }
+
+    if (Test-Path -LiteralPath $exe) {
+        Write-Output 'cybercnsagent.exe --internalAssetArgument uninstallservice'
+        Push-Location $pf86
         try {
-            $cim | Invoke-CimMethod -MethodName Delete -ErrorAction Stop | Out-Null
-            Write-Output ("CIM Delete invoked for {0}" -f $Name)
+            & $exe --internalAssetArgument uninstallservice
         }
-        catch {
-            Write-Output ("CIM Delete {0}: {1}" -f $Name, $_.Exception.Message)
+        finally {
+            Pop-Location
         }
     }
-}
-
-function Clear-CyberCnsRemnants {
-    Write-Section 'Stopping/deleting CyberCNS services and killing processes'
-    foreach ($name in @('CyberCNSAgentMonitor', 'CyberCNSAgent')) {
-        Remove-CyberCnsServiceRecord $name
+    else {
+        Write-Output ("Agent exe not found at {0}; skipping uninstallservice" -f $exe)
     }
 
-    foreach ($p in @(Get-CyberCnsProcesses)) {
-        Write-Output ("Killing PID {0} {1}" -f $p.Id, $p.ProcessName)
-        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $folder) {
+        Write-Output ("rmdir {0} /s /q" -f $folder)
+        Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
     }
-    Start-Sleep -Seconds 3
-
-    for ($i = 1; $i -le 3; $i++) {
-        $left = @(Get-CyberCnsServices)
-        $procs = @(Get-CyberCnsProcesses)
-        if ($left.Count -eq 0 -and $procs.Count -eq 0) { return $true }
-
-        Write-Output ("Retry {0}/3: leftover service={1} process={2}" -f $i, $left.Count, $procs.Count)
-        foreach ($p in $procs) {
-            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-        }
-        foreach ($s in $left) {
-            Remove-CyberCnsServiceRecord $s.Name
-        }
-        Start-Sleep -Seconds 3
-    }
-
-    $procs = @(Get-CyberCnsProcesses)
-    if ($procs.Count -gt 0) { return $false }
-
-    $left = @(Get-CyberCnsServices)
-    if ($left | Where-Object { $_.State -eq 'Running' }) { return $false }
-
-    foreach ($s in $left) {
-        $reg = Join-Path 'HKLM:\SYSTEM\CurrentControlSet\Services' $s.Name
-        if (Test-Path -LiteralPath $reg) {
-            Write-Output ("Removing leftover service registry {0}" -f $reg)
-            Remove-Item -LiteralPath $reg -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        Invoke-Sc @('delete', $s.Name)
-    }
-    Start-Sleep -Seconds 3
-
-    $left = @(Get-CyberCnsServices)
-    return ($left.Count -eq 0)
 }
 
 $installFolder = ${env:ProgramFiles(x86)}
@@ -171,12 +157,12 @@ if ([string]::IsNullOrWhiteSpace($CompanyId) -or
 Write-Section 'Services not healthy, proceeding with remediation'
 Set-Location C:\
 
-$cleared = Clear-CyberCnsRemnants
+Invoke-CyberCnsUninstallBat
+
 $svc = @(Get-CyberCnsServices)
 $proc = @(Get-CyberCnsProcesses)
-
-if (-not $cleared -or $svc.Count -gt 0 -or $proc.Count -gt 0) {
-    Write-Section 'CyberCNS remnant still present after delete retries. Reboot, then re-run -Remediate.'
+if ($svc.Count -gt 0 -or $proc.Count -gt 0) {
+    Write-Section 'Remnant still present after uninstall.bat steps. Reboot, then re-run -Remediate.'
     if ($svc.Count -gt 0) {
         Write-Output 'Service state:'
         $svc | Format-Table Name, State, PathName -AutoSize | Out-String | Write-Output
@@ -188,11 +174,6 @@ if (-not $cleared -or $svc.Count -gt 0 -or $proc.Count -gt 0) {
     $script:ExitCode = 3
     if ($Exit) { exit $script:ExitCode }
     return
-}
-
-Write-Section 'Clean. Removing install folder'
-if (Test-Path -LiteralPath $installFolder) {
-    Remove-Item -LiteralPath $installFolder -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Section 'Downloading fresh agent installer'

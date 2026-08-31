@@ -7,9 +7,9 @@
     Downloads the current Windows agent from the ConnectSecure agentlink API and
     installs with -c / -e / -j / -i.
 
-    If a leftover CyberCNSAgent service exists (Stopped/Disabled is common),
-    it is deleted first so the installer does not fail with
-    "service CyberCNSAgent already exists". Running processes still block install.
+    Leftover (not Running) CyberCNS services are removed with the same
+    uninstall.bat sequence the vendor ships, so install does not fail with
+    "service CyberCNSAgent already exists".
 
     Never hardcode real company/env/token values. Pass them at run time.
 
@@ -58,19 +58,49 @@ function Invoke-Sc([string[]]$ScArgs) {
     if ($out) { Write-Output $out }
 }
 
-function Remove-CyberCnsServiceRecord([string]$Name) {
-    Invoke-Sc @('stop', $Name)
-    Start-Sleep -Seconds 1
-    Invoke-Sc @('delete', $Name)
-    $cim = Get-CimInstance Win32_Service -Filter "Name='$Name'" -ErrorAction SilentlyContinue
-    if ($cim) {
+function Invoke-CyberCnsUninstallBat {
+    $pf86 = ${env:ProgramFiles(x86)}
+    if (-not $pf86) { $pf86 = 'C:\Program Files (x86)' }
+    $folder = Join-Path $pf86 'CyberCNSAgent'
+    $exe = Join-Path $folder 'cybercnsagent.exe'
+
+    Write-Section 'Vendor uninstall.bat sequence'
+    Write-Output 'Wait 5 seconds'
+    Start-Sleep -Seconds 5
+
+    Invoke-Sc @('stop', 'CyberCNSAgentMonitor')
+    Start-Sleep -Seconds 5
+    Invoke-Sc @('delete', 'CyberCNSAgentMonitor')
+
+    Start-Sleep -Seconds 5
+    Invoke-Sc @('stop', 'CyberCNSAgent')
+    Start-Sleep -Seconds 5
+    Invoke-Sc @('delete', 'CyberCNSAgent')
+    Start-Sleep -Seconds 5
+
+    foreach ($im in @('osqueryi.exe', 'nmap.exe', 'cyberutilities.exe')) {
+        Write-Output ("taskkill /IM {0} /F" -f $im)
+        $tk = & taskkill.exe /IM $im /F 2>&1 | Out-String
+        if ($tk.Trim()) { Write-Output $tk.Trim() }
+    }
+
+    if (Test-Path -LiteralPath $exe) {
+        Write-Output 'cybercnsagent.exe --internalAssetArgument uninstallservice'
+        Push-Location $pf86
         try {
-            $cim | Invoke-CimMethod -MethodName Delete -ErrorAction Stop | Out-Null
-            Write-Output ("CIM Delete invoked for {0}" -f $Name)
+            & $exe --internalAssetArgument uninstallservice
         }
-        catch {
-            Write-Output ("CIM Delete {0}: {1}" -f $Name, $_.Exception.Message)
+        finally {
+            Pop-Location
         }
+    }
+    else {
+        Write-Output ("Agent exe not found at {0}; skipping uninstallservice" -f $exe)
+    }
+
+    if (Test-Path -LiteralPath $folder) {
+        Write-Output ("rmdir {0} /s /q" -f $folder)
+        Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -93,26 +123,11 @@ if ($running.Count -gt 0) {
     return
 }
 
-if ($existing.Count -gt 0) {
-    Write-Section 'Leftover CyberCNS service found (not running). Removing so install can proceed'
+if ($existing.Count -gt 0 -or (Test-Path -LiteralPath (Join-Path $(if (${env:ProgramFiles(x86)}) { ${env:ProgramFiles(x86)} } else { $env:ProgramFiles }) 'CyberCNSAgent'))) {
+    Write-Section 'Leftover CyberCNS install found (not running). Running uninstall.bat steps first'
     $existing | Format-Table Name, State, StartMode, PathName -AutoSize | Out-String | Write-Output
-    foreach ($s in $existing) {
-        Remove-CyberCnsServiceRecord $s.Name
-    }
-    Start-Sleep -Seconds 3
+    Invoke-CyberCnsUninstallBat
     $left = @(Get-CyberCnsServices)
-    if ($left.Count -gt 0) {
-        foreach ($s in $left) {
-            $reg = Join-Path 'HKLM:\SYSTEM\CurrentControlSet\Services' $s.Name
-            if (Test-Path -LiteralPath $reg) {
-                Write-Output ("Removing leftover service registry {0}" -f $reg)
-                Remove-Item -LiteralPath $reg -Recurse -Force -ErrorAction SilentlyContinue
-            }
-            Invoke-Sc @('delete', $s.Name)
-        }
-        Start-Sleep -Seconds 3
-        $left = @(Get-CyberCnsServices)
-    }
     if ($left.Count -gt 0) {
         Write-Output 'ERROR: leftover CyberCNS service still registered. Reboot, then run ConnectSecure agent repair.'
         $left | Format-Table Name, State, PathName -AutoSize | Out-String | Write-Output

@@ -2,8 +2,8 @@
 
 Downloads the Windows agent from the ConnectSecure agentlink API and runs a
 fresh install with `-c` / `-e` / `-j` / `-i`. Leftover **Stopped/Disabled**
-`CyberCNSAgent` records are removed first so the installer does not fail with
-`service CyberCNSAgent already exists`.
+agents are removed first using the vendor `uninstall.bat` sequence so install
+does not fail with `service CyberCNSAgent already exists`.
 
 For stuck agents (wipe + reinstall), use
 [ConnectSecureAgentRepair](../ConnectSecureAgentRepair/).

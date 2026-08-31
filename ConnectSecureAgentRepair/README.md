@@ -11,8 +11,8 @@ reinstalls.
   Pass them at run time (ScToolLauncher fields or placeholders in
   [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1)).
 - Prefer elevated ScreenConnect **Backstage** / SYSTEM.
-- Leftover **Stopped/Disabled** `CyberCNSAgent` is deleted (sc + CIM + registry retry). Do not treat that as healthy.
-- If a service is still registered after retries (often "marked for deletion"), **reboot** then re-run `-Remediate`.
+- Remediate follows vendor `uninstall.bat`: wait, `sc stop/delete CyberCNSAgent` (and monitor if present), `taskkill` osqueryi/nmap/cyberutilities, `cybercnsagent.exe --internalAssetArgument uninstallservice`, then `rmdir` the folder.
+- If a service is still registered after that (often "marked for deletion"), **reboot** then re-run `-Remediate`.
 
 ## ScreenConnect
 
