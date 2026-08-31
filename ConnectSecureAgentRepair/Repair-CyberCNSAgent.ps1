@@ -49,8 +49,13 @@ function Write-Section([string]$Message) {
 }
 
 function Get-CyberCnsServices {
-    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
-        Where-Object { $_.PathName -like '*cybercns*' -or $_.Name -like 'CyberCNS*' }
+    $byCim = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
+        Where-Object { $_.PathName -like '*cybercns*' -or $_.Name -like 'CyberCNS*' -or $_.Name -like 'ConnectSecure*' })
+    $names = @('CyberCNSAgent', 'CyberCNSAgentMonitor', 'ConnectSecureAgentMonitor')
+    $byName = foreach ($n in $names) {
+        Get-Service -Name $n -ErrorAction SilentlyContinue
+    }
+    @($byCim + $byName) | Sort-Object Name -Unique
 }
 
 function Get-CyberCnsProcesses {
@@ -111,6 +116,31 @@ function Invoke-CyberCnsUninstallBat {
         Write-Output ("rmdir {0} /s /q" -f $folder)
         Remove-Item -LiteralPath $folder -Recurse -Force -ErrorAction SilentlyContinue
     }
+
+    # uninstall.bat often leaves a ghost service: "Failed to Read Description"
+    # because the exe is gone but the SCM/registry key remains.
+    Remove-CyberCnsGhostServices
+}
+
+function Remove-CyberCnsGhostServices {
+    Write-Section 'Removing leftover CyberCNS service records (ghost / Failed to Read Description)'
+    $names = @('CyberCNSAgent', 'CyberCNSAgentMonitor', 'ConnectSecureAgentMonitor')
+    foreach ($n in $names) {
+        Invoke-Sc @('stop', $n)
+        Invoke-Sc @('delete', $n)
+        $cim = Get-CimInstance Win32_Service -Filter "Name='$n'" -ErrorAction SilentlyContinue
+        if ($cim) {
+            try { $cim | Invoke-CimMethod -MethodName Delete -ErrorAction Stop | Out-Null } catch { }
+        }
+        foreach ($set in @('CurrentControlSet', 'ControlSet001', 'ControlSet002')) {
+            $reg = "HKLM:\SYSTEM\$set\Services\$n"
+            if (Test-Path -LiteralPath $reg) {
+                Write-Output ("Removing {0}" -f $reg)
+                Remove-Item -LiteralPath $reg -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    Start-Sleep -Seconds 2
 }
 
 $installFolder = ${env:ProgramFiles(x86)}

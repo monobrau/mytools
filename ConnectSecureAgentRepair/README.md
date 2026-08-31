@@ -12,6 +12,7 @@ reinstalls.
   [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1)).
 - Prefer elevated ScreenConnect **Backstage** / SYSTEM.
 - Remediate follows vendor `uninstall.bat`: wait, `sc stop/delete CyberCNSAgent` (and monitor if present), `taskkill` osqueryi/nmap/cyberutilities, `cybercnsagent.exe --internalAssetArgument uninstallservice`, then `rmdir` the folder.
+- After the folder is gone, leftover SCM keys are deleted (`sc delete` + service registry). That is the usual **Failed to Read Description** ghost service.
 - If a service is still registered after that (often "marked for deletion"), **reboot** then re-run `-Remediate`.
 
 ## ScreenConnect
