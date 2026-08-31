@@ -69,6 +69,65 @@ function Invoke-Sc([string[]]$ScArgs) {
     if ($out) { Write-Output $out }
 }
 
+function Enable-RegDeletePrivilege {
+    if (-not ('CyberCnsTokPriv' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public class CyberCnsTokPriv {
+  [DllImport("advapi32.dll", ExactSpelling=true, SetLastError=true)]
+  static extern bool AdjustTokenPrivileges(IntPtr htok, bool disall, ref TokPriv1Luid ntmp, int len, IntPtr prev, IntPtr relen);
+  [DllImport("kernel32.dll", ExactSpelling=true)]
+  static extern IntPtr GetCurrentProcess();
+  [DllImport("advapi32.dll", ExactSpelling=true, SetLastError=true)]
+  static extern bool OpenProcessToken(IntPtr h, int acc, ref IntPtr phtok);
+  [DllImport("advapi32.dll", SetLastError=true)]
+  static extern bool LookupPrivilegeValue(string host, string name, ref long pluid);
+  [StructLayout(LayoutKind.Sequential, Pack=1)]
+  struct TokPriv1Luid { public int Count; public long Luid; public int Attr; }
+  public static bool Enable(string privilege) {
+    IntPtr htok = IntPtr.Zero;
+    if (!OpenProcessToken(GetCurrentProcess(), 0x28, ref htok)) return false;
+    TokPriv1Luid tp = new TokPriv1Luid();
+    tp.Count = 1; tp.Attr = 2;
+    if (!LookupPrivilegeValue(null, privilege, ref tp.Luid)) return false;
+    return AdjustTokenPrivileges(htok, false, ref tp, 0, IntPtr.Zero, IntPtr.Zero);
+  }
+}
+'@
+    }
+    [void][CyberCnsTokPriv]::Enable('SeTakeOwnershipPrivilege')
+    [void][CyberCnsTokPriv]::Enable('SeRestorePrivilege')
+    [void][CyberCnsTokPriv]::Enable('SeBackupPrivilege')
+}
+
+function Remove-RegistryKeyForced([string]$RegPath) {
+    $winPath = ($RegPath -replace '^HKLM:\\', 'HKLM\')
+    Write-Output ("reg delete /f {0}" -f $winPath)
+    $out = & reg.exe delete $winPath /f 2>&1 | Out-String
+    if ($out.Trim()) { Write-Output $out.Trim() }
+    if (-not (Test-Path -LiteralPath $RegPath)) { return }
+
+    Enable-RegDeletePrivilege
+    try {
+        $acl = Get-Acl -LiteralPath $RegPath
+        $admins = New-Object System.Security.Principal.NTAccount('BUILTIN\Administrators')
+        $acl.SetOwner($admins)
+        $rule = New-Object System.Security.AccessControl.RegistryAccessRule($admins, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+        $acl.SetAccessRule($rule)
+        Set-Acl -LiteralPath $RegPath -AclObject $acl
+    }
+    catch {
+        Write-Output ("ACL/owner {0}: {1}" -f $RegPath, $_.Exception.Message)
+    }
+    Remove-Item -LiteralPath $RegPath -Recurse -Force -ErrorAction SilentlyContinue
+    $out2 = & reg.exe delete $winPath /f 2>&1 | Out-String
+    if ($out2.Trim()) { Write-Output $out2.Trim() }
+    if (Test-Path -LiteralPath $RegPath) {
+        Write-Output ("ERROR: still present {0}" -f $RegPath)
+    }
+}
+
 # Mirrors C:\Program Files (x86)\CyberCNSAgent\uninstall.bat (vendor copy):
 #   ping wait, sc stop/delete CyberCNSAgent, taskkill helpers,
 #   cybercnsagent.exe --internalAssetArgument uninstallservice, rmdir folder
@@ -143,8 +202,7 @@ function Remove-CyberCnsGhostServices {
         foreach ($set in @('CurrentControlSet', 'ControlSet001', 'ControlSet002')) {
             $reg = "HKLM:\SYSTEM\$set\Services\$n"
             if (Test-Path -LiteralPath $reg) {
-                Write-Output ("Removing {0}" -f $reg)
-                Remove-Item -LiteralPath $reg -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-RegistryKeyForced $reg
             }
         }
     }
