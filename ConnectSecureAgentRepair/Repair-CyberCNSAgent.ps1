@@ -299,6 +299,15 @@ Write-Section 'Installing agent'
 & $installerPath -c $CompanyId -e $EnvironmentId -j $InstallToken -i
 $installExit = $LASTEXITCODE
 
+Write-Section 'Restarting CyberCNS services'
+foreach ($n in @('CyberCNSAgent', 'CyberCNSAgentMonitor')) {
+    Invoke-Sc @('config', $n, 'start=', 'auto')
+    Invoke-Sc @('stop', $n)
+    Start-Sleep -Seconds 2
+    Invoke-Sc @('start', $n)
+}
+Start-Sleep -Seconds 3
+
 Write-Section 'Done. Verifying service state'
 Get-CyberCnsServices | Format-Table Name, State, StartMode, PathName -AutoSize | Out-String | Write-Output
 
