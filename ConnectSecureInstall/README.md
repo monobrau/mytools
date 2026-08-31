@@ -1,7 +1,9 @@
 # ConnectSecure (CyberCNS) silent install
 
 Downloads the Windows agent from the ConnectSecure agentlink API and runs a
-fresh install with `-c` / `-e` / `-j` / `-i`.
+fresh install with `-c` / `-e` / `-j` / `-i`. Leftover **Stopped/Disabled**
+`CyberCNSAgent` records are removed first so the installer does not fail with
+`service CyberCNSAgent already exists`.
 
 For stuck agents (wipe + reinstall), use
 [ConnectSecureAgentRepair](../ConnectSecureAgentRepair/).

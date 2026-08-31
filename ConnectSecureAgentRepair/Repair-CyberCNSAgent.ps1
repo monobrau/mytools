@@ -5,8 +5,9 @@
 
 .DESCRIPTION
     If CyberCNSAgent and CyberCNSAgentMonitor are both Running, reports and exits.
-    Otherwise stops/deletes services, kills processes, removes the install folder, downloads
-    a fresh Windows agent, and installs with company/environment/token parameters.
+    Otherwise stops/deletes services (including leftover Stopped/Disabled entries),
+    kills processes, removes the install folder, downloads a fresh Windows agent,
+    and installs with company/environment/token parameters.
 
     Dry-run (default without -Remediate): report service/process/folder state only.
     Reinstall requires -CompanyId, -EnvironmentId, and -InstallToken (do not hardcode secrets).
@@ -49,12 +50,81 @@ function Write-Section([string]$Message) {
 
 function Get-CyberCnsServices {
     Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
-        Where-Object { $_.PathName -like '*cybercns*' }
+        Where-Object { $_.PathName -like '*cybercns*' -or $_.Name -like 'CyberCNS*' }
 }
 
 function Get-CyberCnsProcesses {
     Get-Process -ErrorAction SilentlyContinue |
         Where-Object { $_.ProcessName -like '*cybercns*' }
+}
+
+function Invoke-Sc([string[]]$ScArgs) {
+    $out = & sc.exe @ScArgs 2>&1 | Out-String
+    $out = $out.Trim()
+    if ($out) { Write-Output $out }
+}
+
+function Remove-CyberCnsServiceRecord([string]$Name) {
+    Invoke-Sc @('stop', $Name)
+    Start-Sleep -Seconds 1
+    Invoke-Sc @('delete', $Name)
+    $cim = Get-CimInstance Win32_Service -Filter "Name='$Name'" -ErrorAction SilentlyContinue
+    if ($cim) {
+        try {
+            $cim | Invoke-CimMethod -MethodName Delete -ErrorAction Stop | Out-Null
+            Write-Output ("CIM Delete invoked for {0}" -f $Name)
+        }
+        catch {
+            Write-Output ("CIM Delete {0}: {1}" -f $Name, $_.Exception.Message)
+        }
+    }
+}
+
+function Clear-CyberCnsRemnants {
+    Write-Section 'Stopping/deleting CyberCNS services and killing processes'
+    foreach ($name in @('CyberCNSAgentMonitor', 'CyberCNSAgent')) {
+        Remove-CyberCnsServiceRecord $name
+    }
+
+    foreach ($p in @(Get-CyberCnsProcesses)) {
+        Write-Output ("Killing PID {0} {1}" -f $p.Id, $p.ProcessName)
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 3
+
+    for ($i = 1; $i -le 3; $i++) {
+        $left = @(Get-CyberCnsServices)
+        $procs = @(Get-CyberCnsProcesses)
+        if ($left.Count -eq 0 -and $procs.Count -eq 0) { return $true }
+
+        Write-Output ("Retry {0}/3: leftover service={1} process={2}" -f $i, $left.Count, $procs.Count)
+        foreach ($p in $procs) {
+            Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        }
+        foreach ($s in $left) {
+            Remove-CyberCnsServiceRecord $s.Name
+        }
+        Start-Sleep -Seconds 3
+    }
+
+    $procs = @(Get-CyberCnsProcesses)
+    if ($procs.Count -gt 0) { return $false }
+
+    $left = @(Get-CyberCnsServices)
+    if ($left | Where-Object { $_.State -eq 'Running' }) { return $false }
+
+    foreach ($s in $left) {
+        $reg = Join-Path 'HKLM:\SYSTEM\CurrentControlSet\Services' $s.Name
+        if (Test-Path -LiteralPath $reg) {
+            Write-Output ("Removing leftover service registry {0}" -f $reg)
+            Remove-Item -LiteralPath $reg -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        Invoke-Sc @('delete', $s.Name)
+    }
+    Start-Sleep -Seconds 3
+
+    $left = @(Get-CyberCnsServices)
+    return ($left.Count -eq 0)
 }
 
 $installFolder = ${env:ProgramFiles(x86)}
@@ -101,27 +171,12 @@ if ([string]::IsNullOrWhiteSpace($CompanyId) -or
 Write-Section 'Services not healthy, proceeding with remediation'
 Set-Location C:\
 
-Write-Section 'Stopping and deleting CyberCNSAgentMonitor service'
-& sc.exe stop CyberCNSAgentMonitor | Out-Null
-Start-Sleep -Seconds 2
-& sc.exe delete CyberCNSAgentMonitor | Out-Null
-
-Write-Section 'Stopping and deleting CyberCNSAgent service'
-& sc.exe stop CyberCNSAgent | Out-Null
-Start-Sleep -Seconds 2
-& sc.exe delete CyberCNSAgent | Out-Null
-
-Write-Section 'Killing any lingering CyberCNS processes'
-Stop-Process -Name cybercnsagentmonitor -Force -ErrorAction SilentlyContinue
-Stop-Process -Name cybercnsagent -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
-
-Write-Section 'Checking for surviving service/process'
+$cleared = Clear-CyberCnsRemnants
 $svc = @(Get-CyberCnsServices)
 $proc = @(Get-CyberCnsProcesses)
 
-if ($svc.Count -gt 0 -or $proc.Count -gt 0) {
-    Write-Section 'CyberCNS service/process still present after kill attempt. Reboot before reinstall. Stopping here.'
+if (-not $cleared -or $svc.Count -gt 0 -or $proc.Count -gt 0) {
+    Write-Section 'CyberCNS remnant still present after delete retries. Reboot, then re-run -Remediate.'
     if ($svc.Count -gt 0) {
         Write-Output 'Service state:'
         $svc | Format-Table Name, State, PathName -AutoSize | Out-String | Write-Output
@@ -141,6 +196,7 @@ if (Test-Path -LiteralPath $installFolder) {
 }
 
 Write-Section 'Downloading fresh agent installer'
+$ProgressPreference = 'SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 try {
     $source = Invoke-RestMethod -Method Get -Uri 'https://configuration.myconnectsecure.com/api/v4/configuration/agentlink?ostype=windows'

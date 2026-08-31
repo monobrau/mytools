@@ -11,7 +11,8 @@ reinstalls.
   Pass them at run time (ScToolLauncher fields or placeholders in
   [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1)).
 - Prefer elevated ScreenConnect **Backstage** / SYSTEM.
-- If services/processes survive delete+kill, **reboot** before reinstall.
+- Leftover **Stopped/Disabled** `CyberCNSAgent` is deleted (sc + CIM + registry retry). Do not treat that as healthy.
+- If a service is still registered after retries (often "marked for deletion"), **reboot** then re-run `-Remediate`.
 
 ## ScreenConnect
 
