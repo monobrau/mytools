@@ -61,10 +61,16 @@ function Get-CyberCnsProcesses {
         Where-Object { $_.ProcessName -like '*cybercns*' }
 }
 
+function Write-ToolOutput([string]$Text) {
+    if ([string]::IsNullOrWhiteSpace($Text)) { return }
+    $skip = '(does not exist as an installed service|OpenService FAILED 1060|ControlService FAILED 106[12]|DeleteService FAILED 1060|has not been started|unable to find the specified registry key|The process .* not found|not found\.)'
+    if ($Text -match $skip) { return }
+    Write-Output $Text
+}
+
 function Invoke-Sc([string[]]$ScArgs) {
     $out = & sc.exe @ScArgs 2>&1 | Out-String
-    $out = $out.Trim()
-    if ($out) { Write-Output $out }
+    Write-ToolOutput $out.Trim()
 }
 
 function Enable-RegDeletePrivilege {
@@ -111,10 +117,11 @@ function Test-CyberCnsServiceRegistry {
 }
 
 function Remove-RegistryKeyForced([string]$RegPath) {
+    if (-not (Test-Path -LiteralPath $RegPath)) { return }
     $winPath = ($RegPath -replace '^HKLM:\\', 'HKLM\')
     Write-Output ("reg delete /f {0}" -f $winPath)
     $out = & reg.exe delete $winPath /f 2>&1 | Out-String
-    if ($out.Trim()) { Write-Output $out.Trim() }
+    Write-ToolOutput $out.Trim()
     if (-not (Test-Path -LiteralPath $RegPath)) { return }
 
     Enable-RegDeletePrivilege
@@ -130,8 +137,10 @@ function Remove-RegistryKeyForced([string]$RegPath) {
         Write-Output ("ACL/owner {0}: {1}" -f $RegPath, $_.Exception.Message)
     }
     Remove-Item -LiteralPath $RegPath -Recurse -Force -ErrorAction SilentlyContinue
-    $out2 = & reg.exe delete $winPath /f 2>&1 | Out-String
-    if ($out2.Trim()) { Write-Output $out2.Trim() }
+    if (Test-Path -LiteralPath $RegPath) {
+        $out2 = & reg.exe delete $winPath /f 2>&1 | Out-String
+        Write-ToolOutput $out2.Trim()
+    }
     if (Test-Path -LiteralPath $RegPath) {
         Write-Output ("ERROR: still present {0}" -f $RegPath)
     }
@@ -161,9 +170,8 @@ function Invoke-CyberCnsUninstallBat {
     Start-Sleep -Seconds 5
 
     foreach ($im in @('osqueryi.exe', 'nmap.exe', 'cyberutilities.exe')) {
-        Write-Output ("taskkill /IM {0} /F" -f $im)
         $tk = & taskkill.exe /IM $im /F 2>&1 | Out-String
-        if ($tk.Trim()) { Write-Output $tk.Trim() }
+        Write-ToolOutput $tk.Trim()
     }
 
     if (Test-Path -LiteralPath $exe) {
@@ -198,7 +206,7 @@ function Remove-CyberCnsGhostServices {
     # services.msc / Event Viewer (mmc.exe) is the usual holder — not a reboot.
     Write-Output 'Closing MMC (services.msc / Event Viewer) so SCM can finish the delete'
     $tk = & taskkill.exe /F /IM mmc.exe 2>&1 | Out-String
-    if ($tk.Trim()) { Write-Output $tk.Trim() }
+    Write-ToolOutput $tk.Trim()
     Start-Sleep -Seconds 2
 
     foreach ($n in $names) {
