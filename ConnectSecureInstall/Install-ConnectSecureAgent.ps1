@@ -114,6 +114,12 @@ function Invoke-CyberCnsUninstallBat {
 function Remove-CyberCnsGhostServices {
     Write-Section 'Removing leftover CyberCNS service records (ghost / Failed to Read Description)'
     $names = @('CyberCNSAgent', 'CyberCNSAgentMonitor', 'ConnectSecureAgentMonitor')
+
+    Write-Output 'Closing MMC (services.msc / Event Viewer) so SCM can finish the delete'
+    $tk = & taskkill.exe /F /IM mmc.exe 2>&1 | Out-String
+    if ($tk.Trim()) { Write-Output $tk.Trim() }
+    Start-Sleep -Seconds 2
+
     foreach ($n in $names) {
         Invoke-Sc @('stop', $n)
         Invoke-Sc @('delete', $n)
@@ -130,6 +136,12 @@ function Remove-CyberCnsGhostServices {
         }
     }
     Start-Sleep -Seconds 2
+
+    $still = @(Get-Service -Name $names -ErrorAction SilentlyContinue)
+    if ($still.Count -gt 0) {
+        Write-Output 'Service still listed after MMC kill. Close Task Manager / Computer Management if open, then re-check in a NEW PowerShell. Get-Service in this window can hold the handle.'
+        $still | Format-Table Status, Name, DisplayName -AutoSize | Out-String | Write-Output
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($CompanyId) -or
