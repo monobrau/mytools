@@ -240,8 +240,8 @@ Tools := [
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
-        "Name", "ConnectSecure (CyberCNS) agent repair",
-        "Summary", "If agent+monitor are not both Running: stop/delete services, kill processes, wipe folder, reinstall. Paste company/env/token at copy time — never stored.",
+        "Name", "ConnectSecure agent repair + reinstall",
+        "Summary", "Wipe leftover agent (uninstall.bat + service registry), then reinstall. Paste company/env/token at copy time — never stored.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureAgentRepair",
         "Fetch", "Contents",
         "Path", "ConnectSecureAgentRepair",
@@ -782,7 +782,7 @@ RefreshOptionEnable(*) {
 
     if ToolHasFlag(t, "ConnectSecure") && ToolHasFlag(t, "Remediate") {
         gCtrls["ModeScan"].Text := "Check agent health"
-        gCtrls["ModeUpdate"].Text := "Remediate + reinstall"
+        gCtrls["ModeUpdate"].Text := "Repair + reinstall"
     }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"

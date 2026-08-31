@@ -1,4 +1,4 @@
-# ConnectSecure (CyberCNS) agent repair
+# ConnectSecure agent repair + reinstall
 
 Scan reports service/folder state. **`-Remediate` always wipes then reinstalls**
 (even if a service is already Running): vendor `uninstall.bat`, MMC close,
@@ -18,4 +18,4 @@ download + install.
 ## ScreenConnect
 
 See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Or use ScToolLauncher
-(**Agents / monitoring** → ConnectSecure agent repair).
+(**Agents** → ConnectSecure agent repair + reinstall).
