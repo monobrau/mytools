@@ -4,13 +4,11 @@
     Check / remediate a stuck ConnectSecure (CyberCNS) Windows agent, then optionally reinstall.
 
 .DESCRIPTION
-    If CyberCNSAgent and CyberCNSAgentMonitor are both Running, reports and exits.
-    Otherwise follows the vendor uninstall.bat sequence (stop/delete CyberCNSAgent,
-    taskkill helpers, cybercnsagent.exe --internalAssetArgument uninstallservice,
-    rmdir folder), then downloads a fresh agent and reinstalls.
-
     Dry-run (default without -Remediate): report service/process/folder state only.
-    Reinstall requires -CompanyId, -EnvironmentId, and -InstallToken (do not hardcode secrets).
+
+    -Remediate always wipes (even if a service is Running): vendor uninstall.bat,
+    MMC close, sc delete, forced reg delete /f of service keys, folder remove,
+    then download + reinstall. Requires -CompanyId, -EnvironmentId, -InstallToken.
 
 .PARAMETER CheckOnly
     Report state only; make no changes.
@@ -99,6 +97,17 @@ public class CyberCnsTokPriv {
     [void][CyberCnsTokPriv]::Enable('SeTakeOwnershipPrivilege')
     [void][CyberCnsTokPriv]::Enable('SeRestorePrivilege')
     [void][CyberCnsTokPriv]::Enable('SeBackupPrivilege')
+}
+
+function Test-CyberCnsServiceRegistry {
+    $names = @('CyberCNSAgent', 'CyberCNSAgentMonitor', 'ConnectSecureAgentMonitor')
+    foreach ($n in $names) {
+        foreach ($set in @('CurrentControlSet', 'ControlSet001', 'ControlSet002')) {
+            $reg = "HKLM:\SYSTEM\$set\Services\$n"
+            if (Test-Path -LiteralPath $reg) { return $true }
+        }
+    }
+    return $false
 }
 
 function Remove-RegistryKeyForced([string]$RegPath) {
@@ -200,19 +209,10 @@ function Remove-CyberCnsGhostServices {
             try { $cim | Invoke-CimMethod -MethodName Delete -ErrorAction Stop | Out-Null } catch { }
         }
         foreach ($set in @('CurrentControlSet', 'ControlSet001', 'ControlSet002')) {
-            $reg = "HKLM:\SYSTEM\$set\Services\$n"
-            if (Test-Path -LiteralPath $reg) {
-                Remove-RegistryKeyForced $reg
-            }
+            Remove-RegistryKeyForced "HKLM:\SYSTEM\$set\Services\$n"
         }
     }
     Start-Sleep -Seconds 2
-
-    $still = @(Get-Service -Name $names -ErrorAction SilentlyContinue)
-    if ($still.Count -gt 0) {
-        Write-Output 'Service still listed after MMC kill. Close Task Manager / Computer Management if open, then re-check in a NEW PowerShell. Get-Service in this window can hold the handle.'
-        $still | Format-Table Status, Name, DisplayName -AutoSize | Out-String | Write-Output
-    }
 }
 
 $installFolder = ${env:ProgramFiles(x86)}
@@ -223,15 +223,6 @@ $installerPath = 'C:\cybercnsagent.exe'
 Write-Section 'Checking current CyberCNS service state'
 $existingSvc = @(Get-CyberCnsServices)
 $existingSvc | Format-Table Name, State, StartMode, PathName -AutoSize | Out-String | Write-Output
-
-$agentRunning = $existingSvc | Where-Object { $_.Name -eq 'CyberCNSAgent' -and $_.State -eq 'Running' }
-$monitorRunning = $existingSvc | Where-Object { $_.Name -eq 'CyberCNSAgentMonitor' -and $_.State -eq 'Running' }
-
-if ($agentRunning -and $monitorRunning) {
-    Write-Section 'Both CyberCNSAgent and CyberCNSAgentMonitor are already running. No action needed.'
-    if ($Exit) { exit 0 }
-    return
-}
 
 if ($CheckOnly -or -not $Remediate) {
     Write-Section 'Services not both healthy (CheckOnly / dry-run — no changes)'
@@ -256,26 +247,31 @@ if ([string]::IsNullOrWhiteSpace($CompanyId) -or
     return
 }
 
-Write-Section 'Services not healthy, proceeding with remediation'
+Write-Section 'Remediate: wipe everything, then reinstall'
 Set-Location C:\
 
 Invoke-CyberCnsUninstallBat
 
-$svc = @(Get-CyberCnsServices)
 $proc = @(Get-CyberCnsProcesses)
-if ($svc.Count -gt 0 -or $proc.Count -gt 0) {
-    Write-Section 'Remnant still present after uninstall.bat steps. Reboot, then re-run -Remediate.'
-    if ($svc.Count -gt 0) {
-        Write-Output 'Service state:'
-        $svc | Format-Table Name, State, PathName -AutoSize | Out-String | Write-Output
-    }
-    if ($proc.Count -gt 0) {
-        Write-Output 'Process state:'
-        $proc | Format-Table Id, ProcessName, Path -AutoSize | Out-String | Write-Output
-    }
+if ($proc.Count -gt 0) {
+    Write-Section 'CyberCNS process still running after wipe. Kill failed; not installing.'
+    $proc | Format-Table Id, ProcessName, Path -AutoSize | Out-String | Write-Output
     $script:ExitCode = 3
     if ($Exit) { exit $script:ExitCode }
     return
+}
+
+if (Test-CyberCnsServiceRegistry) {
+    Write-Section 'Service registry keys still present after reg delete /f. Not installing.'
+    $script:ExitCode = 3
+    if ($Exit) { exit $script:ExitCode }
+    return
+}
+
+$svc = @(Get-CyberCnsServices)
+if ($svc.Count -gt 0) {
+    Write-Output 'SCM may still list a 1072 ghost after registry delete. Proceeding to reinstall.'
+    $svc | Format-Table Name, State, PathName -AutoSize | Out-String | Write-Output
 }
 
 Write-Section 'Downloading fresh agent installer'

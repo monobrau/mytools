@@ -247,11 +247,11 @@ Tools := [
         "Path", "ConnectSecureAgentRepair",
         "Script", "Repair-CyberCNSAgent.ps1",
         "UaPrefix", "ConnectSecureAgentRepair-bootstrap",
-        "UaVer", "1.0.5",
+        "UaVer", "1.0.6",
         "TimeoutScan", 120000,
         "TimeoutUpdate", 600000,
         "Flags", "CheckOnly Remediate ConnectSecure AlwaysNote",
-        "Note", "Remediate needs Company ID, Environment ID, and Install Token (filled below — not saved in the AHK file). Prefer Backstage. Reboot if services refuse to die.",
+        "Note", "Remediate wipes (uninstall.bat + forced service registry delete) then reinstalls. Needs Company ID, Environment ID, and Install Token. Prefer Backstage.",
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
     ),
     Map(

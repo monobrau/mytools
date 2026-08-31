@@ -1,9 +1,9 @@
 # ConnectSecure (CyberCNS) agent repair
 
-Checks whether `CyberCNSAgent` and `CyberCNSAgentMonitor` are both running. With
-`-Remediate`, stops/deletes stuck services, kills processes, removes
-`C:\Program Files (x86)\CyberCNSAgent`, downloads a fresh Windows agent, and
-reinstalls.
+Scan reports service/folder state. **`-Remediate` always wipes then reinstalls**
+(even if a service is already Running): vendor `uninstall.bat`, MMC close,
+`sc delete`, `reg delete /f` of service keys, folder remove, then a fresh
+download + install.
 
 ## Safety
 
