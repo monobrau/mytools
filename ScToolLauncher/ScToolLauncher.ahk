@@ -25,7 +25,7 @@ MaxLength := "200000"
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
-;        SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
+;        SkipIfRunning SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
@@ -231,11 +231,11 @@ Tools := [
         "Path", "ConnectSecureInstall",
         "Script", "Install-ConnectSecureAgent.ps1",
         "UaPrefix", "ConnectSecureInstall-bootstrap",
-        "UaVer", "1.0.7",
+        "UaVer", "1.0.8",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
-        "Flags", "RunOnly ConnectSecure AlwaysNote",
-        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Fresh install only (no uninstall). Prefer elevated / Backstage.",
+        "Flags", "RunOnly ConnectSecure SkipIfRunning AlwaysNote",
+        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Prefer elevated / Backstage.",
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
     ),
     Map(
@@ -247,11 +247,11 @@ Tools := [
         "Path", "ConnectSecureAgentRepair",
         "Script", "Repair-CyberCNSAgent.ps1",
         "UaPrefix", "ConnectSecureAgentRepair-bootstrap",
-        "UaVer", "1.0.8",
+        "UaVer", "1.0.9",
         "TimeoutScan", 120000,
         "TimeoutUpdate", 600000,
-        "Flags", "CheckOnly Remediate ConnectSecure AlwaysNote",
-        "Note", "Remediate wipes (uninstall.bat + forced service registry delete) then reinstalls. Needs Company ID, Environment ID, and Install Token. Prefer Backstage.",
+        "Flags", "CheckOnly Remediate ConnectSecure SkipIfRunning AlwaysNote",
+        "Note", "Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Uncheck to always wipe + reinstall. Needs Company ID, Environment ID, and Install Token. Prefer Backstage.",
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
     ),
     Map(
@@ -476,6 +476,7 @@ ShowGui(*) {
     gCtrls["RemoveSupportAssistant"] := gGui.Add("Checkbox", "vOptRemoveSupportAssistant", "Also remove HP Support Assistant")
     gCtrls["ClearAllBackupContent"] := gGui.Add("Checkbox", "vOptClearAllBackupContent", "Clear entire Backup folder contents (not just CW/SC)")
     gCtrls["ClearAllBackupContent"].OnEvent("Click", (*) => RefreshOptionEnable())
+    gCtrls["SkipIfRunning"] := gGui.Add("Checkbox", "Checked vOptSkipIfRunning", "Only if agent is not running (fleet / scan-prep)")
 
     gCtrls["LblProduct"] := gGui.Add("Text", "Section", "Product filter (e.g. DotNet, ShareX)")
     gCtrls["Product"] := gGui.Add("Edit", "w" UiContentW " vProduct", "")
@@ -532,7 +533,7 @@ ShowGui(*) {
         "LblAbout", "Summary", "BtnDocs",
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
-        "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent",
+        "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning",
         "LblProduct", "Product",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
@@ -607,7 +608,8 @@ ReflowGui() {
             ch := 16
         else if (InStr(key, "Mode") = 1 || InStr(key, "Fmt") = 1 || key = "Force" || key = "ForceAppShutdown"
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
-            || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "S1Quiet")
+            || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "SkipIfRunning"
+            || key = "S1Quiet")
             ch := 20
 
         ctrl.Move(rightX, y, cw, ch)
@@ -691,6 +693,7 @@ RefreshOptionEnable(*) {
     showVendor := ToolHasFlag(t, "Vendor")
     showDomain := ToolHasFlag(t, "Domain")
     showConnectSecure := ToolHasFlag(t, "ConnectSecure")
+    showSkipIfRunning := ToolHasFlag(t, "SkipIfRunning")
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
     scanOnly := ToolHasFlag(t, "ScanOnly")
@@ -705,6 +708,7 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["ClearAllBackupContent"], showClearAllBackup)
     if !showClearAllBackup
         gCtrls["ClearAllBackupContent"].Value := 0
+    SetCtrlShown(gCtrls["SkipIfRunning"], showSkipIfRunning)
     SetCtrlShown(gCtrls["LblProduct"], showProduct)
     SetCtrlShown(gCtrls["Product"], showProduct)
     SetCtrlShown(gCtrls["LblVendor"], showVendor)
@@ -738,7 +742,7 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["HuntressTags"], showHuntress)
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
-        || showBlock || showRmHpsa || showClearAllBackup
+        || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning
     SetCtrlShown(gCtrls["LblOptions"], anyOpt)
 
     ; Find-only tools: hide "Apply" mode entirely
@@ -932,6 +936,8 @@ BuildSwitches(tool, isScan, isCommands) {
         if (token != "")
             sw.Push("-InstallToken '" StrReplace(token, "'", "''") "'")
     }
+    if ToolHasFlag(tool, "SkipIfRunning") && CtrlActive(gCtrls["SkipIfRunning"]) && gCtrls["SkipIfRunning"].Value
+        sw.Push("-SkipIfRunning")
 
     if ToolHasFlag(tool, "SentinelOneInstall") {
         token := Trim(gCtrls["S1Token"].Value)
@@ -1073,6 +1079,8 @@ DescribeSelection(tool, isScan) {
         parts.Push("Block reinstall")
     if CtrlActive(gCtrls["RemoveSupportAssistant"]) && gCtrls["RemoveSupportAssistant"].Value
         parts.Push("Remove HPSA too")
+    if CtrlActive(gCtrls["SkipIfRunning"]) && gCtrls["SkipIfRunning"].Value
+        parts.Push("Only if not running")
     if ToolHasFlag(tool, "BackupsOnlyDefault") {
         if CtrlActive(gCtrls["ClearAllBackupContent"]) && gCtrls["ClearAllBackupContent"].Value
             parts.Push("All Backup content")

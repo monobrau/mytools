@@ -11,6 +11,8 @@
     uninstall.bat sequence the vendor ships, so install does not fail with
     "service CyberCNSAgent already exists".
 
+    With -SkipIfRunning (fleet / scan-prep), skip when CyberCNSAgent is Running.
+
     Never hardcode real company/env/token values. Pass them at run time.
 
 .PARAMETER CompanyId
@@ -21,6 +23,10 @@
 
 .PARAMETER InstallToken
     Installer -j value (install JWT / token). Never commit real tokens to git.
+
+.PARAMETER SkipIfRunning
+    If CyberCNSAgent is Running, report and exit 0 (no install). Use for
+    client-wide scan-prep: only install on hosts that do not look healthy.
 
 .PARAMETER Exit
     Call exit with a status code (ScreenConnect Commands). Omit in Backstage.
@@ -35,6 +41,8 @@ param(
 
     [Parameter(Mandatory = $true)]
     [string]$InstallToken,
+
+    [switch]$SkipIfRunning,
 
     [switch]$Exit
 )
@@ -55,6 +63,11 @@ function Get-CyberCnsServices {
         Get-Service -Name $n -ErrorAction SilentlyContinue
     }
     @($byCim + $byName) | Sort-Object Name -Unique
+}
+
+function Test-CyberCnsLooksRunning {
+    $agent = Get-Service -Name 'CyberCNSAgent' -ErrorAction SilentlyContinue
+    return [bool]($agent -and $agent.Status -eq 'Running')
 }
 
 function Write-ToolOutput([string]$Text) {
@@ -220,9 +233,17 @@ if ([string]::IsNullOrWhiteSpace($CompanyId) -or
 }
 
 $existing = @(Get-CyberCnsServices)
+if ($SkipIfRunning -and (Test-CyberCnsLooksRunning)) {
+    Write-Section 'CyberCNSAgent is Running. -SkipIfRunning: no install.'
+    $existing | Format-Table Name, State, StartMode, PathName -AutoSize | Out-String | Write-Output
+    $script:ExitCode = 0
+    if ($Exit) { exit $script:ExitCode }
+    return
+}
+
 $running = @($existing | Where-Object { $_.State -eq 'Running' })
 if ($running.Count -gt 0) {
-    Write-Output 'CyberCNS service already Running. Use ConnectSecure agent repair to wipe + reinstall.'
+    Write-Output 'CyberCNS service already Running. Use ConnectSecure agent repair to wipe + reinstall, or -SkipIfRunning for fleet skip.'
     $existing | Format-Table Name, State, StartMode, PathName -AutoSize | Out-String | Write-Output
     $script:ExitCode = 0
     if ($Exit) { exit $script:ExitCode }

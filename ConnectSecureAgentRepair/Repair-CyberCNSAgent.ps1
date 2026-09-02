@@ -6,9 +6,8 @@
 .DESCRIPTION
     Dry-run (default without -Remediate): report service/process/folder state only.
 
-    -Remediate always wipes (even if a service is Running): vendor uninstall.bat,
-    MMC close, sc delete, forced reg delete /f of service keys, folder remove,
-    then download + reinstall. Requires -CompanyId, -EnvironmentId, -InstallToken.
+    -Remediate wipes then reinstalls. With -SkipIfRunning (fleet / scan-prep),
+    skip when CyberCNSAgent is already Running. Without it, always wipe+reinstall.
 
 .PARAMETER CheckOnly
     Report state only; make no changes.
@@ -25,6 +24,10 @@
 .PARAMETER InstallToken
     Installer -j value (install JWT / token). Never commit real tokens to git.
 
+.PARAMETER SkipIfRunning
+    If CyberCNSAgent is Running, report and exit 0 (no wipe/reinstall). Use for
+    client-wide scan-prep: only touch hosts that do not look healthy.
+
 .PARAMETER Exit
     Call exit with a status code (ScreenConnect Commands). Omit in Backstage.
 #>
@@ -35,6 +38,7 @@ param(
     [string]$CompanyId,
     [string]$EnvironmentId,
     [string]$InstallToken,
+    [switch]$SkipIfRunning,
     [switch]$Exit
 )
 
@@ -54,6 +58,11 @@ function Get-CyberCnsServices {
         Get-Service -Name $n -ErrorAction SilentlyContinue
     }
     @($byCim + $byName) | Sort-Object Name -Unique
+}
+
+function Test-CyberCnsLooksRunning {
+    $agent = Get-Service -Name 'CyberCNSAgent' -ErrorAction SilentlyContinue
+    return [bool]($agent -and $agent.Status -eq 'Running')
 }
 
 function Get-CyberCnsProcesses {
@@ -231,6 +240,12 @@ $installerPath = 'C:\cybercnsagent.exe'
 Write-Section 'Checking current CyberCNS service state'
 $existingSvc = @(Get-CyberCnsServices)
 $existingSvc | Format-Table Name, State, StartMode, PathName -AutoSize | Out-String | Write-Output
+
+if ($SkipIfRunning -and (Test-CyberCnsLooksRunning)) {
+    Write-Section 'CyberCNSAgent is Running. -SkipIfRunning: no wipe/reinstall.'
+    if ($Exit) { exit 0 }
+    return
+}
 
 if ($CheckOnly -or -not $Remediate) {
     Write-Section 'Services not both healthy (CheckOnly / dry-run — no changes)'

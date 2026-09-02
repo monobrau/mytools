@@ -1,9 +1,15 @@
 # ConnectSecure agent repair + reinstall
 
-Scan reports service/folder state. **`-Remediate` always wipes then reinstalls**
-(even if a service is already Running): vendor `uninstall.bat`, MMC close,
+Scan reports service/folder state.
+
+**`-Remediate`** wipes then reinstalls: vendor `uninstall.bat`, MMC close,
 `sc delete`, `reg delete /f` of service keys, folder remove, then a fresh
 download + install.
+
+**`-SkipIfRunning`** (fleet / scan-prep): if `CyberCNSAgent` is already **Running**,
+report and exit 0 with no wipe. Pair with `-Remediate` when you run this on every
+machine before a scan so healthy agents are left alone. Without `-SkipIfRunning`,
+`-Remediate` always wipes even if the agent is Running.
 
 ## Safety
 
