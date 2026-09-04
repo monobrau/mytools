@@ -21,16 +21,17 @@ MaxLength := "200000"
 ; Fetch: Contents (api.github.com + Accept raw) | Raw (raw.githubusercontent.com?v=)
 ;        IrmOutFile (Process Bypass + irm -OutFile + & run — for unsigned remote .ps1)
 ;        DownloadExe (IWR vendor EXE + Start-Process -Wait)
+;        Url (optional) overrides the constructed GitHub raw URL — use for gists
 ; Category: groups tools in the TreeView (order = CategoryOrder below)
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
-;        SkipIfRunning SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
+;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
-    "OEM cleanup — HP Touchpoint, Dell SARemediation",
-    "AV offboarding — Cylance/Webroot, McAfee remnants",
+    "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+    "AV — Defender repair, Cylance/Webroot, McAfee remnants",
     "Agents — SentinelOne, ConnectSecure, Huntress",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — Inky/IPW transport rules (EXO admin)"
@@ -145,7 +146,7 @@ Tools := [
     ),
     ; --- OEM cleanup ---
     Map(
-        "Category", "OEM cleanup — HP Touchpoint, Dell SARemediation",
+        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
         "Name", "HP Touchpoint Analytics",
         "Summary", "Detects/removes HP Touchpoint (Insights) Analytics service, tasks, and driver package. Dry-run first.",
         "DocsUrl", "https://github.com/monobrau/hp-touchpointanalytics-cleanup",
@@ -159,7 +160,23 @@ Tools := [
         "Flags", "Delete BlockReinstall RemoveSupportAssistant CacheBust"
     ),
     Map(
-        "Category", "OEM cleanup — HP Touchpoint, Dell SARemediation",
+        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Name", "HP bloat / Wolf (mark05e gist)",
+        "Summary", "Downloads mark05e's Remove-HPbloatware.ps1 from GitHub gist and runs it. Removes HP AppX + Wolf / Sure Click / Sure Run / HPSA AppX. No dry-run.",
+        "DocsUrl", "https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388",
+        "Fetch", "IrmOutFile",
+        "Url", "https://gist.githubusercontent.com/mark05e/a79221b4245962a477a49eb281d97388/raw/Remove-HPbloatware.ps1",
+        "Script", "Remove-HPbloatware.ps1",
+        "TempName", "Remove-HPbloatware.ps1",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 600000,
+        "Flags", "RunOnly CacheBust RebootAdvisory AlwaysNote",
+        "Note", "Third-party gist (mark05e). Runs immediately — no scan/dry-run. Prefer elevated Backstage. Reboot after Wolf uninstall, then Defender repair if Huntress still shows Defender Disabled.",
+        "ClipboardNote", "NOTE: mark05e HP bloat gist. No dry-run. Prefer elevated Backstage. Reboot after. Then Defender repair if Wolf leftovers remain."
+    ),
+    Map(
+        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
         "Name", "Dell SARemediation Backup (CW/SC)",
         "Summary", "Scan/remove ScreenConnect/ConnectWise-like files from Dell Snapshots\\Backup (S1 revoked-cert hygiene). Pair with SC temp cleanup. Does not uninstall Dell software.",
         "DocsUrl", "https://github.com/monobrau/dell-saremediation-cleanup",
@@ -174,9 +191,25 @@ Tools := [
         "Note", "Always -BackupsOnly. v1.4.2: scan first, timed service stop (no 20min hang), does not kill ScreenConnect. Banner must say v1.4.2 (CDN: reload AHK / new ?v=).",
         "ClipboardNote", "NOTE: Backup cleanup only. Must show v1.4.2. PENDING_REBOOT = reboot to finish. Then SC temp cleanup."
     ),
-    ; --- AV offboarding (not day-to-day AV management) ---
+    ; --- AV ---
     Map(
-        "Category", "AV offboarding — Cylance/Webroot, McAfee remnants",
+        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Name", "Windows Defender repair",
+        "Summary", "Re-enable Defender real-time protection (MpPreference + policy keys) and start WinDefend / WdNisSvc.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsDefenderRepair",
+        "Fetch", "Contents",
+        "Path", "WindowsDefenderRepair",
+        "Script", "Repair-WindowsDefender.ps1",
+        "UaPrefix", "WindowsDefenderRepair-bootstrap",
+        "UaVer", "1.0.1",
+        "TimeoutScan", 120000,
+        "TimeoutUpdate", 300000,
+        "Flags", "RunOnly ResetPlatform AlwaysNote",
+        "Note", "Needs elevation (Backstage / SYSTEM). Default: re-enable RTP + start services. Optional nuclear: MpCmdRun -ResetPlatform first.",
+        "ClipboardNote", "NOTE: Prefer elevated Backstage / SYSTEM. Re-enables Defender RTP and starts WinDefend / WdNisSvc."
+    ),
+    Map(
+        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer Backstage/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
@@ -191,7 +224,7 @@ Tools := [
         "Note", "Use when offboarding the vendor or cleaning remnants after cutover — not for managing an active AV install. Prefer deactivate in the vendor console first. Delete needs elevation (Backstage/SYSTEM). Password/keycode only if Vendor is Cylance or Webroot (not All). Reboot if drivers stay locked."
     ),
     Map(
-        "Category", "AV offboarding — Cylance/Webroot, McAfee remnants",
+        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
         "Name", "McAfee remnant cleanup",
         "Summary", "Detects leftover McAfee AppX + Program Files\McAfee; Remediate kills processes and removes remnants.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/McAfeeRemnantCleanup",
@@ -477,6 +510,7 @@ ShowGui(*) {
     gCtrls["ClearAllBackupContent"] := gGui.Add("Checkbox", "vOptClearAllBackupContent", "Clear entire Backup folder contents (not just CW/SC)")
     gCtrls["ClearAllBackupContent"].OnEvent("Click", (*) => RefreshOptionEnable())
     gCtrls["SkipIfRunning"] := gGui.Add("Checkbox", "Checked vOptSkipIfRunning", "Only if agent is not running (fleet / scan-prep)")
+    gCtrls["ResetPlatform"] := gGui.Add("Checkbox", "vOptResetPlatform", "Nuclear: MpCmdRun -ResetPlatform")
 
     gCtrls["LblProduct"] := gGui.Add("Text", "Section", "Product filter (e.g. DotNet, ShareX)")
     gCtrls["Product"] := gGui.Add("Edit", "w" UiContentW " vProduct", "")
@@ -533,7 +567,7 @@ ShowGui(*) {
         "LblAbout", "Summary", "BtnDocs",
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
-        "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning",
+        "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
         "LblProduct", "Product",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
@@ -609,6 +643,7 @@ ReflowGui() {
         else if (InStr(key, "Mode") = 1 || InStr(key, "Fmt") = 1 || key = "Force" || key = "ForceAppShutdown"
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
             || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "SkipIfRunning"
+            || key = "ResetPlatform"
             || key = "S1Quiet")
             ch := 20
 
@@ -694,6 +729,7 @@ RefreshOptionEnable(*) {
     showDomain := ToolHasFlag(t, "Domain")
     showConnectSecure := ToolHasFlag(t, "ConnectSecure")
     showSkipIfRunning := ToolHasFlag(t, "SkipIfRunning")
+    showResetPlatform := ToolHasFlag(t, "ResetPlatform")
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
     scanOnly := ToolHasFlag(t, "ScanOnly")
@@ -709,6 +745,7 @@ RefreshOptionEnable(*) {
     if !showClearAllBackup
         gCtrls["ClearAllBackupContent"].Value := 0
     SetCtrlShown(gCtrls["SkipIfRunning"], showSkipIfRunning)
+    SetCtrlShown(gCtrls["ResetPlatform"], showResetPlatform)
     SetCtrlShown(gCtrls["LblProduct"], showProduct)
     SetCtrlShown(gCtrls["Product"], showProduct)
     SetCtrlShown(gCtrls["LblVendor"], showVendor)
@@ -742,7 +779,7 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["HuntressTags"], showHuntress)
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
-        || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning
+        || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning || showResetPlatform
     SetCtrlShown(gCtrls["LblOptions"], anyOpt)
 
     ; Find-only tools: hide "Apply" mode entirely
@@ -775,6 +812,10 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Silent install (/ACCT_KEY)"
     } else if runOnly && showConnectSecure {
         gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
+    } else if runOnly && InStr(ToolGet(t, "Path", ""), "WindowsDefender") {
+        gCtrls["ModeUpdate"].Text := "Re-enable Defender RTP"
+    } else if runOnly && InStr(ToolGet(t, "TempName", ""), "HPbloatware") {
+        gCtrls["ModeUpdate"].Text := "Remove HP bloat / Wolf"
     } else if runOnly {
         gCtrls["ModeUpdate"].Text := "Download and run"
     } else if scanOnly {
@@ -938,6 +979,8 @@ BuildSwitches(tool, isScan, isCommands) {
     }
     if ToolHasFlag(tool, "SkipIfRunning") && CtrlActive(gCtrls["SkipIfRunning"]) && gCtrls["SkipIfRunning"].Value
         sw.Push("-SkipIfRunning")
+    if ToolHasFlag(tool, "ResetPlatform") && CtrlActive(gCtrls["ResetPlatform"]) && gCtrls["ResetPlatform"].Value
+        sw.Push("-ResetPlatform")
 
     if ToolHasFlag(tool, "SentinelOneInstall") {
         token := Trim(gCtrls["S1Token"].Value)
@@ -1002,7 +1045,9 @@ BuildSnippet(tool, isScan, isCommands) {
             script := tool["Script"]
             tempName := ToolGet(tool, "TempName", script)
             ver := ToolGet(tool, "UaVer", "1.0.0")
-            url := "https://raw.githubusercontent.com/" owner "/" repo "/main/" script
+            url := ToolGet(tool, "Url", "")
+            if (url = "")
+                url := "https://raw.githubusercontent.com/" owner "/" repo "/main/" script
             if ToolHasFlag(tool, "CacheBust")
                 url .= "?v=" ver
             body := "Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP '" tempName "'; Invoke-RestMethod -Uri '" url "' -OutFile $out; & $out" switches
@@ -1011,7 +1056,9 @@ BuildSnippet(tool, isScan, isCommands) {
             repo := ToolGet(tool, "Repo", "")
             script := tool["Script"]
             ver := ToolGet(tool, "UaVer", "1.0.0")
-            url := "https://raw.githubusercontent.com/" owner "/" repo "/main/" script
+            url := ToolGet(tool, "Url", "")
+            if (url = "")
+                url := "https://raw.githubusercontent.com/" owner "/" repo "/main/" script
             if ToolHasFlag(tool, "CacheBust")
                 url .= "?v=" ver
             body := "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $url='" url "'; $script=(Invoke-WebRequest -Uri $url -UseBasicParsing).Content; & ([ScriptBlock]::Create($script))" switches
@@ -1050,6 +1097,10 @@ DescribeSelection(tool, isScan) {
             mode := "Silent install"
         else if ToolHasFlag(tool, "ConnectSecure")
             mode := "Silent install"
+        else if InStr(ToolGet(tool, "Path", ""), "WindowsDefender")
+            mode := "Repair Defender"
+        else if InStr(ToolGet(tool, "TempName", ""), "HPbloatware")
+            mode := "Remove HP bloat"
         else
             mode := "Download and run"
     } else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "IrmOutFile")
@@ -1081,6 +1132,8 @@ DescribeSelection(tool, isScan) {
         parts.Push("Remove HPSA too")
     if CtrlActive(gCtrls["SkipIfRunning"]) && gCtrls["SkipIfRunning"].Value
         parts.Push("Only if not running")
+    if CtrlActive(gCtrls["ResetPlatform"]) && gCtrls["ResetPlatform"].Value
+        parts.Push("ResetPlatform")
     if ToolHasFlag(tool, "BackupsOnlyDefault") {
         if CtrlActive(gCtrls["ClearAllBackupContent"]) && gCtrls["ClearAllBackupContent"].Value
             parts.Push("All Backup content")

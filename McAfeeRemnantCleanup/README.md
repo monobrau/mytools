@@ -7,4 +7,4 @@ folder delete).
 ## ScreenConnect
 
 See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Prefer elevated /
-Backstage. Or use ScToolLauncher (**AV offboarding / leftovers**).
+Backstage. Or use ScToolLauncher (**AV** → McAfee remnant cleanup).

@@ -2,12 +2,6 @@
 
 Public collection of work tools and scripts.
 
-## Policy
-
-**No PII in this repository.** Do not commit client names, emails, phone numbers, addresses, ticket bodies, production credentials, API keys, tokens, or private URLs. Use placeholders and synthetic examples only.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). Gitleaks runs on pushes and pull requests to `main`.
-
 ## Tools
 
 | Tool | Description |
@@ -18,6 +12,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Gitleaks runs on pushes and pull request
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet delegates + winget; ScreenConnect `#!ps`) |
+| [WindowsDefenderRepair](WindowsDefenderRepair/) | Re-enable Defender real-time protection and start WinDefend / WdNisSvc |
 
 ## Layout
 

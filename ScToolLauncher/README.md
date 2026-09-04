@@ -34,19 +34,21 @@ Categories start **collapsed**. Labels list what is under each group:
 | GPO / MSI finder | [screenconnect-gpo-msi-finder](https://github.com/monobrau/screenconnect-gpo-msi-finder) |
 | Temp file cleanup | [screenconnect-temp-cleanup](https://github.com/monobrau/screenconnect-temp-cleanup) |
 
-### OEM cleanup — HP Touchpoint, Dell SARemediation
+### OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation
 
 | Tool | Repo |
 | --- | --- |
 | HP Touchpoint Analytics | [hp-touchpointanalytics-cleanup](https://github.com/monobrau/hp-touchpointanalytics-cleanup) |
+| HP bloat / Wolf (mark05e gist) | [gist](https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388) — downloads `Remove-HPbloatware.ps1` and runs it (no dry-run; Wolf / Sure Click / HP AppX) |
 | Dell SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.2** — scan-first + timed service stop; Backup CW/SC only; reload AHK for `?v=1.4.2` |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
-### AV offboarding — Cylance/Webroot, McAfee remnants
+### AV — Defender repair, Cylance/Webroot, McAfee remnants
 
 | Tool | Repo |
 | --- | --- |
+| Windows Defender repair | mytools `WindowsDefenderRepair` — re-enable RTP + start WinDefend / WdNisSvc. Optional nuclear: `MpCmdRun -ResetPlatform` |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration, not day-to-day AV management |
 | McAfee remnant cleanup | mytools — AppX + `Program Files\McAfee` leftovers |
 
