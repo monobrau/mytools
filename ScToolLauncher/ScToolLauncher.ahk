@@ -34,7 +34,8 @@ CategoryOrder := [
     "AV — Defender repair, Cylance/Webroot, McAfee remnants",
     "Agents — SentinelOne, ConnectSecure, Huntress",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
-    "M365 / Exchange — Inky/IPW transport rules (EXO admin)"
+    "M365 / Exchange — Inky/IPW transport rules (EXO admin)",
+    "Client-specific"
 ]
 
 ; TreeView (left) / options column (right) — side-by-side so short screens fit
@@ -371,6 +372,24 @@ Tools := [
         "Note", "Run after Connect-ExchangeOnline on an admin workstation. Scan lists; Delete removes with no Read-Host prompt.",
         "ClipboardNote", "NOTE: Requires Connect-ExchangeOnline in this session. Delete has no interactive confirm — Scan first."
     ),
+    ; --- Client-specific campaigns ---
+    Map(
+        "Category", "Client-specific",
+        "Client", "Naviant",
+        "Name", "Acrobat XI removal (EOL)",
+        "Summary", "Scan or uninstall Adobe Acrobat XI (11.x). Reports Foxit Reader/Editor. Skips uninstall if Foxit is missing unless Force.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ClientSpecific/Naviant/AcrobatXiRemoval",
+        "Fetch", "Contents",
+        "Path", "ClientSpecific/Naviant/AcrobatXiRemoval",
+        "Script", "Remove-AcrobatXi.ps1",
+        "UaPrefix", "AcrobatXiRemoval-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 300000,
+        "Flags", "CheckOnly Remediate Force AlwaysNote",
+        "Note", "Client campaign. Scan first. Apply uninstalls XI only. Force = uninstall even if Foxit is missing. Prefer elevated / Backstage. Do not uninstall if the host has a documented XI dependency.",
+        "ClipboardNote", "NOTE: Scan first. Default uninstall skips hosts with no Foxit. Force removes XI anyway. Prefer elevated Backstage."
+    ),
 ]
 
 gToolByNode := Map()   ; TreeView item id -> Tools index (1-based)
@@ -421,24 +440,41 @@ PopulateToolTree(tv) {
     ; Bold category headers. Expand Agents so install tools are visible without hunting.
     expandCats := Map()
     expandCats["Agents — SentinelOne, ConnectSecure, Huntress"] := true
+    expandCats["Client-specific"] := true
     for cat in CategoryOrder
         catNodes[cat] := tv.Add(cat, 0, "Bold")
 
+    clientNodes := Map()
     agentsNode := 0
+    clientCatNode := 0
     firstCatNode := 0
     for i, t in Tools {
         cat := ToolGet(t, "Category", "Other")
         if !catNodes.Has(cat)
             catNodes[cat] := tv.Add(cat, 0, "Bold")
-        node := tv.Add(t["Name"], catNodes[cat])
+        parent := catNodes[cat]
+        client := ToolGet(t, "Client", "")
+        if (client != "") {
+            ck := cat "|" client
+            if !clientNodes.Has(ck)
+                clientNodes[ck] := tv.Add(client, parent)
+            parent := clientNodes[ck]
+        }
+        node := tv.Add(t["Name"], parent)
         gToolByNode[node] := i
         if !firstCatNode && catNodes.Has(cat)
             firstCatNode := catNodes[cat]
         if (cat = "Agents — SentinelOne, ConnectSecure, Huntress" && !agentsNode)
             agentsNode := catNodes[cat]
+        if (cat = "Client-specific" && !clientCatNode)
+            clientCatNode := catNodes[cat]
     }
     for cat, node in catNodes {
         if expandCats.Has(cat)
+            tv.Modify(node, "Expand")
+    }
+    for ck, node in clientNodes {
+        if InStr(ck, "Client-specific|") = 1
             tv.Modify(node, "Expand")
     }
     gLastToolIndex := 1
@@ -828,6 +864,10 @@ RefreshOptionEnable(*) {
     if ToolHasFlag(t, "ConnectSecure") && ToolHasFlag(t, "Remediate") {
         gCtrls["ModeScan"].Text := "Check agent health"
         gCtrls["ModeUpdate"].Text := "Repair + reinstall"
+    }
+    if InStr(ToolGet(t, "Path", ""), "AcrobatXiRemoval") {
+        gCtrls["ModeScan"].Text := "Scan Acrobat XI + Foxit"
+        gCtrls["ModeUpdate"].Text := "Uninstall Acrobat XI"
     }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"

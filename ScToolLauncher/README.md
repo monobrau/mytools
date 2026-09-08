@@ -81,6 +81,14 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | --- | --- |
 | Inky / IPW transport rules | mytools — requires `Connect-ExchangeOnline` on an admin workstation; Scan lists, Delete removes (no `Read-Host`) |
 
+### Client-specific
+
+Grouped by client name. Campaign tools that are not meant for general use.
+
+| Client | Tool | Source |
+| --- | --- | --- |
+| Naviant | Acrobat XI removal (EOL) | mytools `ClientSpecific/Naviant/AcrobatXiRemoval` — scan XI + Foxit; uninstall XI (skip if no Foxit unless Force) |
+
 ### Dell SARemediation Backup cleanup
 
 Launcher exposes **Backup hygiene only** (no SupportAssist / full SARemediation uninstall — those paths caused SC drops / reboot risk):
