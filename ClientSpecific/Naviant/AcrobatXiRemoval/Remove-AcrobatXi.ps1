@@ -11,6 +11,11 @@
     -Uninstall / -Remediate: remove Acrobat XI. Skips uninstall if Foxit
     Reader/Editor is not found, unless -Force is also set.
 
+    Uninstall waits for the Windows Installer mutex, retries MSI 1618, and
+    uses silent msiexec with REBOOT=ReallySuppress and Restart Manager off.
+    A verbose log is written to %SystemRoot%\Temp\AcrobatXi-uninstall.log.
+    Commands output is flushed so ScreenConnect is not blank during msiexec.
+
     This script cannot detect a business dependency on Acrobat XI. Scan first;
     do not run -Uninstall on hosts that must keep XI.
 
@@ -41,9 +46,16 @@ param(
 Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $script:ExitCode = 0
+$script:MsiLogPath = Join-Path $env:SystemRoot 'Temp\AcrobatXi-uninstall.log'
+
+function Write-Line([string]$Message) {
+    Write-Host $Message
+    try { [Console]::Out.Flush() } catch { }
+    try { [Console]::Error.Flush() } catch { }
+}
 
 function Write-Section([string]$Message) {
-    Write-Output "=== $Message ==="
+    Write-Line "=== $Message ==="
 }
 
 function Get-UninstallEntries {
@@ -87,29 +99,95 @@ function Format-ProductLine {
     '{0} ({1})' -f $Entry.DisplayName, $ver
 }
 
+function Test-MsiMutexFree {
+    $m = $null
+    try {
+        $m = [System.Threading.Mutex]::new($false, 'Global\_MSIExecute')
+        $got = $m.WaitOne(0)
+        if ($got) {
+            try { [void]$m.ReleaseMutex() } catch { }
+            return $true
+        }
+        return $false
+    } catch {
+        return $true
+    } finally {
+        if ($m) { $m.Dispose() }
+    }
+}
+
+function Wait-WindowsInstaller {
+    param([int]$TimeoutSeconds = 180)
+    if (Test-MsiMutexFree) {
+        Write-Line 'WindowsInstaller: ready'
+        return $true
+    }
+    Write-Line 'WindowsInstaller: busy — waiting (do not start another uninstall)'
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 15
+        if (Test-MsiMutexFree) {
+            Write-Line 'WindowsInstaller: ready'
+            return $true
+        }
+        $left = [Math]::Max(0, [int]($deadline - (Get-Date)).TotalSeconds)
+        Write-Line ("WindowsInstaller: still busy ({0}s left)" -f $left)
+    }
+    Write-Line 'WindowsInstaller: still busy after wait'
+    return $false
+}
+
 function Stop-AcrobatXiProcesses {
-    foreach ($n in @('Acrobat', 'AcroCEF', 'AdobeCollabSync')) {
+    foreach ($n in @('Acrobat', 'AcroCEF', 'AcroDist', 'AcroBroker', 'AdobeCollabSync', 'AdobeARM')) {
         Get-Process -Name $n -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Test-MsiexecSuccess([int]$Code) {
+    return ($Code -eq 0 -or $Code -eq 1605 -or $Code -eq 3010)
 }
 
 function Uninstall-AcrobatXiProduct {
     param($Entry)
     $name = [string]$Entry.DisplayName
     $guid = [string]$Entry.PSChildName
-    Write-Output ("Uninstalling: {0}" -f $name)
-    if ($guid -match '^\{[0-9A-Fa-f-]+\}$') {
-        $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList @('/x', $guid, '/qn', '/norestart') -Wait -PassThru -NoNewWindow
-        Write-Output ("msiexec /x {0} exit {1}" -f $guid, $p.ExitCode)
-        return ($p.ExitCode -eq 0 -or $p.ExitCode -eq 1605 -or $p.ExitCode -eq 3010)
-    }
-    $us = [string]$Entry.UninstallString
-    if ([string]::IsNullOrWhiteSpace($us)) {
-        Write-Output 'ERROR: No ProductCode or UninstallString.'
+    Write-Line ("Uninstalling: {0}" -f $name)
+    if ($guid -notmatch '^\{[0-9A-Fa-f-]+\}$') {
+        $us = [string]$Entry.UninstallString
+        if ([string]::IsNullOrWhiteSpace($us)) {
+            Write-Line 'ERROR: No ProductCode or UninstallString.'
+            return $false
+        }
+        Write-Line ("UninstallString (not msiexec GUID): {0}" -f $us)
+        Write-Line 'ERROR: Non-MSI uninstall is not automated. Record as exception.'
         return $false
     }
-    Write-Output ("UninstallString (not msiexec GUID): {0}" -f $us)
-    Write-Output 'ERROR: Non-MSI uninstall is not automated. Record as exception.'
+
+    Write-Line ("ProductCode: {0}" -f $guid)
+    Write-Line ("MsiexecLog: {0}" -f $script:MsiLogPath)
+    [void](Wait-WindowsInstaller -TimeoutSeconds 180)
+    Stop-AcrobatXiProcesses
+
+    $maxAttempts = 3
+    for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+        Write-Line ("msiexec /x attempt {0}/{1} — this can take 10+ minutes; do not rerun or Force" -f $attempt, $maxAttempts)
+        $argList = @(
+            '/x', $guid, '/qn', '/norestart',
+            'REBOOT=ReallySuppress',
+            'MSIRESTARTMANAGERCONTROL=Disable',
+            '/L*v', $script:MsiLogPath
+        )
+        $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList $argList -Wait -PassThru -NoNewWindow
+        $code = [int]$p.ExitCode
+        Write-Line ("msiexec /x {0} exit {1}" -f $guid, $code)
+        if (Test-MsiexecSuccess $code) { return $true }
+        if ($code -eq 1618 -and $attempt -lt $maxAttempts) {
+            Write-Line 'msiexec 1618 (another install in progress) — waiting to retry'
+            [void](Wait-WindowsInstaller -TimeoutSeconds 180)
+            continue
+        }
+        return $false
+    }
     return $false
 }
 
@@ -120,37 +198,37 @@ $foxitEditor = @($all | Where-Object { Test-IsFoxitEditor $_ } | Sort-Object Dis
 $hasFoxit = ($foxitReader.Count -gt 0 -or $foxitEditor.Count -gt 0)
 
 Write-Section 'Acrobat XI + Foxit evidence'
-Write-Output ("ComputerName: {0}" -f $env:COMPUTERNAME)
-Write-Output ("AcrobatXiPresent: {0}" -f $(if ($xi.Count -gt 0) { 'Yes' } else { 'No' }))
+Write-Line ("ComputerName: {0}" -f $env:COMPUTERNAME)
+Write-Line ("AcrobatXiPresent: {0}" -f $(if ($xi.Count -gt 0) { 'Yes' } else { 'No' }))
 if ($xi.Count -gt 0) {
-    foreach ($e in $xi) { Write-Output ("AcrobatXiProduct: {0}" -f (Format-ProductLine $e)) }
+    foreach ($e in $xi) { Write-Line ("AcrobatXiProduct: {0}" -f (Format-ProductLine $e)) }
 } else {
-    Write-Output 'AcrobatXiProduct: (none)'
+    Write-Line 'AcrobatXiProduct: (none)'
 }
 if ($foxitReader.Count -gt 0) {
-    foreach ($e in $foxitReader) { Write-Output ("FoxitReader: {0}" -f (Format-ProductLine $e)) }
+    foreach ($e in $foxitReader) { Write-Line ("FoxitReader: {0}" -f (Format-ProductLine $e)) }
 } else {
-    Write-Output 'FoxitReader: (none)'
+    Write-Line 'FoxitReader: (none)'
 }
 if ($foxitEditor.Count -gt 0) {
-    foreach ($e in $foxitEditor) { Write-Output ("FoxitEditor: {0}" -f (Format-ProductLine $e)) }
+    foreach ($e in $foxitEditor) { Write-Line ("FoxitEditor: {0}" -f (Format-ProductLine $e)) }
 } else {
-    Write-Output 'FoxitEditor: (none)'
+    Write-Line 'FoxitEditor: (none)'
 }
 
 $doUninstall = ($Uninstall -or $Remediate) -and -not $CheckOnly
 
 if (-not $doUninstall) {
     if ($xi.Count -gt 0) {
-        Write-Output 'Action: CheckOnly'
-        Write-Output 'Result: Acrobat XI present. Re-run with -Uninstall to remove (skipped here if Foxit is missing unless -Force).'
-        Write-Output 'Exception: If this host has a documented Acrobat XI business dependency, do not uninstall.'
+        Write-Line 'Action: CheckOnly'
+        Write-Line 'Result: Acrobat XI present. Re-run with -Uninstall to remove (skipped here if Foxit is missing unless -Force).'
+        Write-Line 'Exception: If this host has a documented Acrobat XI business dependency, do not uninstall.'
         $script:ExitCode = 1
     } else {
-        Write-Output 'Action: CheckOnly'
-        Write-Output 'Result: Acrobat XI not installed.'
+        Write-Line 'Action: CheckOnly'
+        Write-Line 'Result: Acrobat XI not installed.'
         if (-not $hasFoxit) {
-            Write-Output 'Exception: No Foxit Reader or Editor detected.'
+            Write-Line 'Exception: No Foxit Reader or Editor detected.'
         }
         $script:ExitCode = 0
     }
@@ -159,29 +237,29 @@ if (-not $doUninstall) {
 }
 
 if ($xi.Count -eq 0) {
-    Write-Output 'Action: Uninstall'
-    Write-Output 'Result: Nothing to remove (Acrobat XI not installed).'
+    Write-Line 'Action: Uninstall'
+    Write-Line 'Result: Nothing to remove (Acrobat XI not installed).'
     if (-not $hasFoxit) {
-        Write-Output 'Exception: No Foxit Reader or Editor detected.'
+        Write-Line 'Exception: No Foxit Reader or Editor detected.'
     }
     if ($Exit) { exit 0 }
     return
 }
 
 if (-not $hasFoxit -and -not $Force) {
-    Write-Output 'Action: Skipped'
-    Write-Output 'Result: Acrobat XI left installed because Foxit Reader/Editor was not found. Use -Force to uninstall anyway, or install Foxit first.'
-    Write-Output 'Exception: Missing Foxit; Acrobat XI not removed.'
+    Write-Line 'Action: Skipped'
+    Write-Line 'Result: Acrobat XI left installed because Foxit Reader/Editor was not found. Use -Force to uninstall anyway, or install Foxit first.'
+    Write-Line 'Exception: Missing Foxit; Acrobat XI not removed.'
     $script:ExitCode = 3
     if ($Exit) { exit $script:ExitCode }
     return
 }
 
 if (-not $hasFoxit -and $Force) {
-    Write-Output 'Warning: -Force uninstall without Foxit Reader/Editor.'
+    Write-Line 'Warning: -Force uninstall without Foxit Reader/Editor.'
 }
 
-Write-Output 'Action: Uninstall'
+Write-Line 'Action: Uninstall'
 Stop-AcrobatXiProcesses
 $failed = $false
 foreach ($e in $xi) {
@@ -190,14 +268,14 @@ foreach ($e in $xi) {
 
 $after = @(Get-UninstallEntries | Where-Object { Test-IsAcrobatXi $_ })
 if ($after.Count -gt 0) {
-    foreach ($e in $after) { Write-Output ("StillPresent: {0}" -f (Format-ProductLine $e)) }
-    Write-Output 'Result: Uninstall incomplete.'
+    foreach ($e in $after) { Write-Line ("StillPresent: {0}" -f (Format-ProductLine $e)) }
+    Write-Line 'Result: Uninstall incomplete.'
     $script:ExitCode = 2
 } elseif ($failed) {
-    Write-Output 'Result: Uninstall reported failure; Acrobat XI no longer in Uninstall registry.'
+    Write-Line 'Result: Uninstall reported failure; Acrobat XI no longer in Uninstall registry.'
     $script:ExitCode = 0
 } else {
-    Write-Output 'Result: Acrobat XI removed.'
+    Write-Line 'Result: Acrobat XI removed.'
     $script:ExitCode = 0
 }
 

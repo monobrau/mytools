@@ -383,12 +383,12 @@ Tools := [
         "Path", "ClientSpecific/Naviant/AcrobatXiRemoval",
         "Script", "Remove-AcrobatXi.ps1",
         "UaPrefix", "AcrobatXiRemoval-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.0.1",
         "TimeoutScan", 180000,
-        "TimeoutUpdate", 300000,
+        "TimeoutUpdate", 1200000,
         "Flags", "CheckOnly Remediate Force AlwaysNote",
-        "Note", "Client campaign. Scan first. Apply uninstalls XI only. Force = uninstall even if Foxit is missing. Prefer elevated / Backstage. Do not uninstall if the host has a documented XI dependency.",
-        "ClipboardNote", "NOTE: Scan first. Default uninstall skips hosts with no Foxit. Force removes XI anyway. Prefer elevated Backstage."
+        "Note", "Client campaign. Scan first. Apply uninstalls XI only (10+ min). Waits for MSI mutex; retries 1618. Force = uninstall even if Foxit is missing. Prefer elevated / Backstage. Do not rerun or Force while msiexec is running.",
+        "ClipboardNote", "NOTE: Scan first. Uninstall can take 10+ minutes — do not rerun or Force while it runs. Default skips hosts with no Foxit. Prefer elevated Backstage. Log: C:\\Windows\\Temp\\AcrobatXi-uninstall.log"
     ),
 ]
 

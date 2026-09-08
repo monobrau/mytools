@@ -87,7 +87,7 @@ Grouped by client name. Campaign tools that are not meant for general use.
 
 | Client | Tool | Source |
 | --- | --- | --- |
-| Naviant | Acrobat XI removal (EOL) | mytools `ClientSpecific/Naviant/AcrobatXiRemoval` — scan XI + Foxit; uninstall XI (skip if no Foxit unless Force) |
+| Naviant | Acrobat XI removal (EOL) | mytools `ClientSpecific/Naviant/AcrobatXiRemoval` — scan XI + Foxit; uninstall XI (skip if no Foxit unless Force); 20 min timeout; MSI mutex wait / 1618 retry |
 
 ### Dell SARemediation Backup cleanup
 
