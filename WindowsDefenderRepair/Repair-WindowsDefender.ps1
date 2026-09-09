@@ -32,6 +32,7 @@ param(
 Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $script:ExitCode = 0
+$script:RegistryDenied = 0
 
 $script:PolWd = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender'
 $script:PolRtp = Join-Path $script:PolWd 'Real-Time Protection'
@@ -85,7 +86,11 @@ function Set-DefenderDword([string]$Path, [string]$Name, [int]$Value) {
             New-Item -Path $Path -Force | Out-Null
         }
     }
-    New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWORD -Force | Out-Null
+    try {
+        New-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -PropertyType DWORD -Force -ErrorAction Stop | Out-Null
+    } catch {
+        $script:RegistryDenied++
+    }
 }
 
 function Write-ServiceLine([string]$Name) {
@@ -117,6 +122,8 @@ function Write-DefenderHealth {
 
     $wd = Write-ServiceLine 'WinDefend'
     $nis = Write-ServiceLine 'WdNisSvc'
+    [void](Write-ServiceLine 'WdFilter')
+    [void](Write-ServiceLine 'WdNisDrv')
     [void](Write-ServiceLine 'Sense')
     if (-not $CheckOnly) {
         [void](Write-ServiceLine 'MdCoreSvc')
@@ -127,17 +134,25 @@ function Write-DefenderHealth {
     $st = Get-MpComputerStatus -ErrorAction SilentlyContinue
     if ($st) {
         Write-Line ("RealTimeProtectionEnabled: {0}" -f $st.RealTimeProtectionEnabled)
+        Write-Line ("OnAccessProtectionEnabled: {0}" -f $st.OnAccessProtectionEnabled)
+        Write-Line ("IoavProtectionEnabled: {0}" -f $st.IoavProtectionEnabled)
+        Write-Line ("BehaviorMonitorEnabled: {0}" -f $st.BehaviorMonitorEnabled)
+        Write-Line ("NisEnabled: {0}" -f $st.NisEnabled)
         Write-Line ("AMServiceEnabled: {0}" -f $st.AMServiceEnabled)
         Write-Line ("AntivirusEnabled: {0}" -f $st.AntivirusEnabled)
         Write-Line ("IsTamperProtected: {0}" -f $st.IsTamperProtected)
         Write-Line ("AMRunningMode: {0}" -f $st.AMRunningMode)
+        Write-Line ("ComputerState: {0}" -f (Format-ComputerState $st.ComputerState))
+        if ($st.PSObject.Properties['RebootRequired']) {
+            Write-Line ("RebootRequired: {0}" -f $st.RebootRequired)
+        }
     } else {
         Write-Line 'RealTimeProtectionEnabled: (empty)'
         Write-Line 'AMServiceEnabled: (empty)'
         Write-Line 'AntivirusEnabled: (empty)'
         Write-Line 'IsTamperProtected: (empty)'
         Write-Line 'AMRunningMode: (empty)'
-        Write-Line 'Get-MpComputerStatus: (empty) — Defender CIM may still be down.'
+        Write-Line 'Get-MpComputerStatus: (empty) - Defender CIM may still be down.'
     }
 
     $pref = Get-MpPreference -ErrorAction SilentlyContinue
@@ -172,6 +187,20 @@ function Write-DefenderHealth {
         Write-Line 'Result: WinDefend running; real-time protection on.'
     }
     return $ok
+}
+
+function Format-ComputerState($Value) {
+    if ($null -eq $Value) { return '(empty)' }
+    $n = 0
+    try { $n = [int]$Value } catch { return [string]$Value }
+    if ($n -eq 0) { return '0 (clean)' }
+    $parts = @()
+    if ($n -band 1) { $parts += 'PendingFullScan' }
+    if ($n -band 2) { $parts += 'PendingReboot' }
+    if ($n -band 4) { $parts += 'PendingManualSteps' }
+    if ($n -band 8) { $parts += 'PendingMsftService' }
+    if ($parts.Count -eq 0) { return [string]$n }
+    return ('{0} ({1})' -f $n, ($parts -join ', '))
 }
 
 function Wait-WinDefend {
@@ -264,7 +293,7 @@ function Write-RepairException {
     } elseif ($otherAv.Count -gt 0) {
         Write-Line 'Exception: Another Security Center AV is registered. Uninstall it (or complete Wolf/S1 cutover), reboot, then rerun.'
     } else {
-        Write-Line 'Exception: RTP stayed off. Check Tamper Protection, GPO DisableRealtimeMonitoring, ForceDefenderPassiveMode, and other WSC AVs. Reboot if services were just re-enabled from Disabled.'
+        Write-Line 'Exception: CIM still reports RTP off. Preferences/mode may already be healthy -- wait 30s and run CheckOnly. If CheckOnly is True, the Apply verify was stale. If it stays False, reboot and recheck WdFilter / ComputerState.'
     }
 }
 
@@ -319,6 +348,9 @@ Set-DefenderDword $script:PolAtp 'ForceDefenderPassiveMode' 0
 if (Test-Path -LiteralPath $script:PrefAtp) {
     try { Set-DefenderDword $script:PrefAtp 'ForceDefenderPassiveMode' 0 } catch { }
 }
+if ($script:RegistryDenied -gt 0) {
+    Write-Line ("Registry: {0} writes denied on protected Defender keys (PPL). Policy + Set-MpPreference still applied." -f $script:RegistryDenied)
+}
 
 Write-Section 'Enable + start services'
 Enable-AndStartService -Name 'WinDefend' -StartupType Automatic
@@ -335,14 +367,23 @@ if (-not (Wait-WinDefend)) {
 Write-Section 'Set-MpPreference (after WinDefend is Running)'
 Enable-MpRealtimePreferences
 
-$st = Get-MpComputerStatus -ErrorAction SilentlyContinue
-$pref = Get-MpPreference -ErrorAction SilentlyContinue
-$stillOff = (-not $st -or -not $st.RealTimeProtectionEnabled -or ($pref -and $pref.DisableRealtimeMonitoring -eq $true))
-if ($stillOff) {
-    Write-Line 'RTP still off — restarting WinDefend and retrying Set-MpPreference'
-    try { Restart-Service -Name WinDefend -Force -ErrorAction Stop } catch { Write-Line ("Restart-Service WinDefend: {0}" -f $_.Exception.Message) }
-    [void](Wait-WinDefend)
-    Enable-MpRealtimePreferences
+Write-Line 'Waiting for Get-MpComputerStatus to refresh (can lag after Set-MpPreference)...'
+$rtpOn = $false
+foreach ($i in 1..8) {
+    Start-Sleep -Seconds 5
+    $st = Get-MpComputerStatus -ErrorAction SilentlyContinue
+    if ($st -and $st.RealTimeProtectionEnabled) {
+        Write-Line ("RealTimeProtectionEnabled: True (after {0}s)" -f ($i * 5))
+        $rtpOn = $true
+        break
+    }
+    Write-Line ("RealTimeProtectionEnabled: {0} (wait {1}s)" -f $(if ($st) { $st.RealTimeProtectionEnabled } else { '(empty)' }), ($i * 5))
+}
+if (-not $rtpOn) {
+    Write-Line 'Still False after settle wait. Not restarting WinDefend (protected service). Starting WdFilter if present, then one more status check.'
+    Enable-AndStartService -Name 'WdFilter' -StartupType Automatic
+    Enable-AndStartService -Name 'WdNisDrv' -StartupType Manual
+    Start-Sleep -Seconds 8
 }
 
 Write-Section 'Policy / preference registry'
