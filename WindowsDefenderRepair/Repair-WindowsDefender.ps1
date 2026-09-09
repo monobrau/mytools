@@ -167,17 +167,24 @@ function Write-DefenderHealth {
         Write-Line ("ForceDefenderPassiveMode (HKLM Defender): {0}" -f (Get-DwordValue $script:PrefWd 'ForceDefenderPassiveMode'))
     }
 
+    if ($nis -and $nis.Status -ne 'Running') {
+        Write-Line 'Note: WdNisSvc is Stopped (Manual). Common on servers/DCs; not a fail when RTP is on.'
+    }
+    if ($st -and $st.RealTimeProtectionEnabled -and (-not $st.OnAccessProtectionEnabled -or -not $st.BehaviorMonitorEnabled -or -not $st.NisEnabled)) {
+        Write-Line 'Note: OnAccess / Behavior / NIS can stay False on Server while RealTimeProtectionEnabled is True.'
+    }
+
     $ok = $true
     if (-not $wd -or $wd.Status -ne 'Running') {
-        Write-Line 'Result: WinDefend is not Running.'
+        Write-Line ("Result: WinDefend is {0}." -f $(if ($wd) { $wd.Status } else { 'missing' }))
         $ok = $false
     }
-    if ($nis -and $nis.Status -ne 'Running') {
-        Write-Line 'Result: WdNisSvc is not Running.'
-        $ok = $false
+    if ($wd -and [string]$wd.Status -eq 'StopPending') {
+        Write-Line 'Result: WinDefend is StopPending (often after -ResetPlatform). Wait until Stopped, then Start-Service WinDefend. Do not run ResetPlatform again. Reboot if it stays StopPending.'
     }
     if (-not $st) {
-        Write-Line 'Result: Defender status unavailable.'
+        if ($ok) { Write-Line 'Result: Defender status unavailable (CIM empty). If WinDefend is StopPending, wait or reboot.' }
+        else { Write-Line 'Result: Defender status unavailable.' }
         $ok = $false
     } elseif (-not $st.RealTimeProtectionEnabled) {
         Write-Line 'Result: Real-time protection is off.'
@@ -203,22 +210,46 @@ function Format-ComputerState($Value) {
     return ('{0} ({1})' -f $n, ($parts -join ', '))
 }
 
-function Wait-WinDefend {
-    param([int]$TimeoutSeconds = 45)
+function Wait-ServiceStatus {
+    param(
+        [string]$Name,
+        [string[]]$Wanted,
+        [int]$TimeoutSeconds = 60
+    )
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $svc = $null
     while ((Get-Date) -lt $deadline) {
-        $svc = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
-        if ($svc -and $svc.Status -eq 'Running') { return $true }
+        $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if ($svc -and ($Wanted -contains [string]$svc.Status)) { return $svc }
         Start-Sleep -Seconds 2
     }
-    return $false
+    return $svc
+}
+
+function Wait-WinDefend {
+    param([int]$TimeoutSeconds = 90)
+    $svc = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
+    if ($svc -and [string]$svc.Status -eq 'StopPending') {
+        Write-Line 'WinDefend is StopPending - waiting for Stopped (do not ResetPlatform again)'
+        $svc = Wait-ServiceStatus -Name 'WinDefend' -Wanted @('Stopped', 'Running') -TimeoutSeconds $TimeoutSeconds
+    }
+    if ($svc -and [string]$svc.Status -eq 'Stopped') {
+        try {
+            Start-Service -Name WinDefend -ErrorAction Stop
+        } catch {
+            Write-Line ("Start-Service WinDefend: {0}" -f $_.Exception.Message)
+        }
+    }
+    $svc = Wait-ServiceStatus -Name 'WinDefend' -Wanted @('Running') -TimeoutSeconds 45
+    return ($svc -and [string]$svc.Status -eq 'Running')
 }
 
 function Enable-AndStartService {
     param(
         [string]$Name,
         [ValidateSet('Automatic', 'Manual')]
-        [string]$StartupType = 'Manual'
+        [string]$StartupType = 'Manual',
+        [switch]$Required
     )
     $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
     if (-not $svc) {
@@ -239,17 +270,20 @@ function Enable-AndStartService {
             }
         }
     }
-    try {
-        $cur = Get-Service -Name $Name -ErrorAction Stop
-        if ($cur.Status -ne 'Running') {
-            Start-Service -Name $Name
-        }
-        $after = Get-Service -Name $Name
+    $cur = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($cur -and [string]$cur.Status -eq 'StopPending') {
+        Write-Line ("{0}: StopPending - waiting" -f $Name)
+        $cur = Wait-ServiceStatus -Name $Name -Wanted @('Stopped', 'Running') -TimeoutSeconds 90
+    }
+    if ($cur -and [string]$cur.Status -ne 'Running') {
+        Write-Line ("{0}: starting (sc.exe, no long Start-Service wait)" -f $Name)
+        & sc.exe start $Name 2>&1 | Out-Null
+        $cur = Wait-ServiceStatus -Name $Name -Wanted @('Running') -TimeoutSeconds 20
+    }
+    $after = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if ($after) {
         Write-Line ("{0}: {1} ({2})" -f $Name, $after.Status, $after.StartType)
-        if ($Name -eq 'WinDefend' -and $after.Status -ne 'Running') { $script:ExitCode = 1 }
-    } catch {
-        Write-Line ("{0}: start failed ({1})" -f $Name, $_.Exception.Message)
-        if ($Name -eq 'WinDefend') { $script:ExitCode = 1 }
+        if ($Required -and [string]$after.Status -ne 'Running') { $script:ExitCode = 1 }
     }
 }
 
@@ -284,6 +318,15 @@ function Write-RepairException {
     $avs = @(Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue)
     $otherAv = @($avs | Where-Object { $_.displayName -and $_.displayName -notmatch 'Defender|Windows Security' })
 
+    $wd = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
+    if ($wd -and [string]$wd.Status -eq 'StopPending') {
+        Write-Line 'Exception: WinDefend is StopPending (ResetPlatform or a stop in progress). Wait until Stopped, then Start-Service WinDefend. Do not run ResetPlatform again. Reboot if it stays StopPending.'
+        return
+    }
+    if ($wd -and [string]$wd.Status -ne 'Running') {
+        Write-Line 'Exception: WinDefend is not Running. Start it after any StopPending clears. Do not use ResetPlatform unless the platform is corrupt.'
+        return
+    }
     if ($mode -eq 'Passive' -or $passive -eq '1') {
         Write-Line 'Exception: Defender is in Passive mode. Another AV (Wolf / S1 / third-party) or ForceDefenderPassiveMode=1 is in control. Uninstall the other AV, set ForceDefenderPassiveMode=0, then reboot and rerun.'
     } elseif ($tamper) {
@@ -318,7 +361,9 @@ if ($ResetPlatform) {
     Write-Line ("MpCmdRun exit: {0}" -f $resetExit)
     if ($null -ne $resetExit -and $resetExit -ne 0) {
         $script:ExitCode = 3
+        Write-Line 'ResetPlatform failed or timed out. WinDefend may be StopPending. Waiting before start.'
     }
+    [void](Wait-WinDefend -TimeoutSeconds 120)
 }
 
 Write-Section 'Policy / registry (enable RTP, leave Passive)'
@@ -353,37 +398,47 @@ if ($script:RegistryDenied -gt 0) {
 }
 
 Write-Section 'Enable + start services'
-Enable-AndStartService -Name 'WinDefend' -StartupType Automatic
+Enable-AndStartService -Name 'WinDefend' -StartupType Automatic -Required
 Enable-AndStartService -Name 'WdNisSvc' -StartupType Manual
-Enable-AndStartService -Name 'Sense' -StartupType Manual
 Enable-AndStartService -Name 'MdCoreSvc' -StartupType Manual
 Enable-AndStartService -Name 'SecurityHealthService' -StartupType Manual
 Enable-AndStartService -Name 'wscsvc' -StartupType Automatic
+$sense = Get-Service -Name Sense -ErrorAction SilentlyContinue
+if ($sense) {
+    Write-Line ("Sense: {0} ({1}) - not started here (MDE; start wait hangs when not onboarded)" -f $sense.Status, $sense.StartType)
+}
 if (-not (Wait-WinDefend)) {
     Write-Line 'ERROR: WinDefend did not reach Running.'
     $script:ExitCode = 1
 }
 
 Write-Section 'Set-MpPreference (after WinDefend is Running)'
-Enable-MpRealtimePreferences
-
-Write-Line 'Waiting for Get-MpComputerStatus to refresh (can lag after Set-MpPreference)...'
-$rtpOn = $false
-foreach ($i in 1..8) {
-    Start-Sleep -Seconds 5
-    $st = Get-MpComputerStatus -ErrorAction SilentlyContinue
-    if ($st -and $st.RealTimeProtectionEnabled) {
-        Write-Line ("RealTimeProtectionEnabled: True (after {0}s)" -f ($i * 5))
-        $rtpOn = $true
-        break
-    }
-    Write-Line ("RealTimeProtectionEnabled: {0} (wait {1}s)" -f $(if ($st) { $st.RealTimeProtectionEnabled } else { '(empty)' }), ($i * 5))
+$wdNow = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
+if ($wdNow -and [string]$wdNow.Status -eq 'Running') {
+    Enable-MpRealtimePreferences
+} else {
+    Write-Line 'Skipping Set-MpPreference until WinDefend is Running (0x800106b5 if CIM is down).'
 }
-if (-not $rtpOn) {
-    Write-Line 'Still False after settle wait. Not restarting WinDefend (protected service). Starting WdFilter if present, then one more status check.'
-    Enable-AndStartService -Name 'WdFilter' -StartupType Automatic
-    Enable-AndStartService -Name 'WdNisDrv' -StartupType Manual
-    Start-Sleep -Seconds 8
+
+$rtpOn = $false
+if ($wdNow -and [string]$wdNow.Status -eq 'Running') {
+    Write-Line 'Waiting for Get-MpComputerStatus to refresh (can lag after Set-MpPreference)...'
+    foreach ($i in 1..8) {
+        Start-Sleep -Seconds 5
+        $st = Get-MpComputerStatus -ErrorAction SilentlyContinue
+        if ($st -and $st.RealTimeProtectionEnabled) {
+            Write-Line ("RealTimeProtectionEnabled: True (after {0}s)" -f ($i * 5))
+            $rtpOn = $true
+            break
+        }
+        Write-Line ("RealTimeProtectionEnabled: {0} (wait {1}s)" -f $(if ($st) { $st.RealTimeProtectionEnabled } else { '(empty)' }), ($i * 5))
+    }
+    if (-not $rtpOn) {
+        Write-Line 'Still False after settle wait. Starting WdFilter if present, then one more status check.'
+        Enable-AndStartService -Name 'WdFilter' -StartupType Automatic
+        Enable-AndStartService -Name 'WdNisDrv' -StartupType Manual
+        Start-Sleep -Seconds 8
+    }
 }
 
 Write-Section 'Policy / preference registry'

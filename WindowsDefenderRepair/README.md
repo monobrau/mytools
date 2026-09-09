@@ -22,7 +22,7 @@ applies the same real-time protection repair.
 ## ScreenConnect
 
 Use ScToolLauncher (**AV** → Windows Defender repair). Paste format is locked
-to Backstage. Reload the launcher after pull so the catalog picks up `1.0.6`.
+to Backstage. Reload the launcher after pull so the catalog picks up `1.0.7`.
 Scan = health only. Apply covers disabled services, policy/preference
 `Disable*` keys, Passive mode, and a status settle wait. If Apply says RTP
 is off, run Scan — CIM can lag. If Scan is still off, read the Exception.

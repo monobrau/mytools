@@ -203,7 +203,7 @@ Tools := [
         "Path", "WindowsDefenderRepair",
         "Script", "Repair-WindowsDefender.ps1",
         "UaPrefix", "WindowsDefenderRepair-bootstrap",
-        "UaVer", "1.0.6",
+        "UaVer", "1.0.7",
         "TimeoutScan", 120000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly ResetPlatform BackstageOnly",
