@@ -203,7 +203,7 @@ Tools := [
         "Path", "WindowsDefenderRepair",
         "Script", "Repair-WindowsDefender.ps1",
         "UaPrefix", "WindowsDefenderRepair-bootstrap",
-        "UaVer", "1.0.7",
+        "UaVer", "1.0.8",
         "TimeoutScan", 120000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly ResetPlatform BackstageOnly",
@@ -215,14 +215,15 @@ Tools := [
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer Backstage/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
-        "Fetch", "Raw",
+        "Fetch", "Contents",
         "Owner", "monobrau",
         "Repo", "windows-av-cleanup",
         "Script", "Remove-Antivirus.ps1",
-        "UaVer", "1.1.0",
+        "UaPrefix", "windows-av-cleanup-bootstrap",
+        "UaVer", "1.1.1",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 300000,
-        "Flags", "Delete Force Vendor CacheBust",
+        "Flags", "Delete Force Vendor",
         "Note", "Use when offboarding the vendor or cleaning remnants after cutover — not for managing an active AV install. Prefer deactivate in the vendor console first. Delete needs elevation (Backstage/SYSTEM). Password/keycode only if Vendor is Cylance or Webroot (not All). Reboot if drivers stay locked."
     ),
     Map(
@@ -1118,11 +1119,21 @@ BuildSnippet(tool, isScan, isCommands) {
                 url .= "?v=" ver
             body := "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $url='" url "'; $script=(Invoke-WebRequest -Uri $url -UseBasicParsing).Content; & ([ScriptBlock]::Create($script))" switches
         } else {
-            ua := tool["UaPrefix"] "/" tool["UaVer"]
-            path := tool["Path"]
+            uaPrefix := ToolGet(tool, "UaPrefix", "")
+            if (uaPrefix = "")
+                uaPrefix := ToolGet(tool, "Repo", DefaultRepo)
+            ua := uaPrefix "/" ToolGet(tool, "UaVer", "1.0.0")
+            owner := ToolGet(tool, "Owner", DefaultOwner)
+            repo := ToolGet(tool, "Repo", DefaultRepo)
+            if (repo = "")
+                repo := DefaultRepo
+            path := ToolGet(tool, "Path", "")
             script := tool["Script"]
-            url := "https://api.github.com/repos/" DefaultOwner "/" DefaultRepo "/contents/" path "/" script "?ref=" DefaultRef
-            body := "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','" ua "'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('" url "'); & ([scriptblock]::Create($script))" switches
+            if (path != "")
+                url := "https://api.github.com/repos/" owner "/" repo "/contents/" path "/" script "?ref=" DefaultRef
+            else
+                url := "https://api.github.com/repos/" owner "/" repo "/contents/" script "?ref=" DefaultRef
+            body := "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','" ua "'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('" url "'); if ($script -match '(?i)<html|github.com/login|&redirect') { throw 'Download returned HTML, not a script.' }; & ([scriptblock]::Create($script))" switches
         }
     }
 

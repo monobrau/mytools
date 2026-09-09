@@ -327,14 +327,17 @@ function Write-RepairException {
         Write-Line 'Exception: WinDefend is not Running. Start it after any StopPending clears. Do not use ResetPlatform unless the platform is corrupt.'
         return
     }
+    if ($otherAv.Count -gt 0) {
+        $names = ($otherAv | ForEach-Object { $_.displayName } | Sort-Object -Unique) -join ', '
+        Write-Line ("Exception: Another Security Center AV is registered ({0}). Defender RTP stays off until that product is uninstalled and the host is rebooted. Then rerun this repair. Do not keep applying Defender preferences while the other AV is present." -f $names)
+        return
+    }
     if ($mode -eq 'Passive' -or $passive -eq '1') {
         Write-Line 'Exception: Defender is in Passive mode. Another AV (Wolf / S1 / third-party) or ForceDefenderPassiveMode=1 is in control. Uninstall the other AV, set ForceDefenderPassiveMode=0, then reboot and rerun.'
     } elseif ($tamper) {
         Write-Line 'Exception: Tamper Protection is on and may be blocking preference/registry writes. Clear the disable policy in the security portal or GPO, then rerun.'
     } elseif ($polRtp -eq '1' -or $polAs -eq '1') {
         Write-Line 'Exception: Policy still has DisableRealtimeMonitoring or DisableAntiSpyware=1 (GPO/Intune likely reapplied). Change the policy, then rerun. Do not gpupdate if that policy disables Defender.'
-    } elseif ($otherAv.Count -gt 0) {
-        Write-Line 'Exception: Another Security Center AV is registered. Uninstall it (or complete Wolf/S1 cutover), reboot, then rerun.'
     } else {
         Write-Line 'Exception: CIM still reports RTP off. Preferences/mode may already be healthy -- wait 30s and run CheckOnly. If CheckOnly is True, the Apply verify was stale. If it stays False, reboot and recheck WdFilter / ComputerState.'
     }
