@@ -110,7 +110,9 @@ function Write-WscProducts {
         return @()
     }
     foreach ($av in $avs) {
-        Write-Line ("AntiVirusProduct: {0}" -f $av.displayName)
+        $exe = [string]$av.pathToSignedProductExe
+        $onDisk = if ($exe -and (Test-Path -LiteralPath $exe)) { 'exe-present' } else { 'exe-missing (stale WSC?)' }
+        Write-Line ("AntiVirusProduct: {0} | {1} | {2}" -f $av.displayName, $onDisk, $exe)
     }
     return $avs
 }
@@ -119,6 +121,7 @@ function Write-DefenderHealth {
     Write-Section 'Defender health'
     Write-Line ("ComputerName: {0}" -f $env:COMPUTERNAME)
     Write-Line ("Action: {0}" -f $(if ($CheckOnly) { 'CheckOnly' } else { 'Verify' }))
+    [void](Write-WscProducts)
 
     $wd = Write-ServiceLine 'WinDefend'
     $nis = Write-ServiceLine 'WdNisSvc'
@@ -454,9 +457,6 @@ Write-Line ("Policy DisableIOAVProtection: {0}" -f (Get-DwordValue $script:PolRt
 Write-Line ("Policy ForceDefenderPassiveMode: {0}" -f (Get-DwordValue $script:PolAtp 'ForceDefenderPassiveMode'))
 Write-Line ("HKLM Defender RTP DisableRealtimeMonitoring: {0}" -f (Get-DwordValue $script:PrefRtp 'DisableRealtimeMonitoring'))
 Write-Line ("HKLM Defender ForceDefenderPassiveMode: {0}" -f (Get-DwordValue $script:PrefWd 'ForceDefenderPassiveMode'))
-
-Write-Section 'Security Center AV'
-[void](Write-WscProducts)
 
 if (-not (Write-DefenderHealth)) {
     Write-RepairException
