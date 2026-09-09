@@ -48,7 +48,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 | Tool | Repo |
 | --- | --- |
-| Windows Defender repair | mytools `WindowsDefenderRepair` — re-enable RTP + start WinDefend / WdNisSvc. Optional nuclear: `MpCmdRun -ResetPlatform` |
+| Windows Defender repair | mytools `WindowsDefenderRepair` — Backstage only. Scan: services + RTP + tamper. Apply: full RTP repair (services + policy + PassiveMode + preferences). Optional nuclear: `MpCmdRun -ResetPlatform` |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration, not day-to-day AV management |
 | McAfee remnant cleanup | mytools — AppX + `Program Files\McAfee` leftovers |
 

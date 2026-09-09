@@ -27,6 +27,7 @@ MaxLength := "200000"
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
+;        BackstageOnly
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
@@ -196,18 +197,18 @@ Tools := [
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
         "Name", "Windows Defender repair",
-        "Summary", "Re-enable Defender real-time protection (MpPreference + policy keys) and start WinDefend / WdNisSvc.",
+        "Summary", "Check or repair Defender RTP. Scan reports services, real-time protection, and tamper protection. Apply re-enables RTP and starts WinDefend / WdNisSvc.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsDefenderRepair",
         "Fetch", "Contents",
         "Path", "WindowsDefenderRepair",
         "Script", "Repair-WindowsDefender.ps1",
         "UaPrefix", "WindowsDefenderRepair-bootstrap",
-        "UaVer", "1.0.1",
+        "UaVer", "1.0.5",
         "TimeoutScan", 120000,
         "TimeoutUpdate", 300000,
-        "Flags", "RunOnly ResetPlatform AlwaysNote",
-        "Note", "Needs elevation (Backstage / SYSTEM). Default: re-enable RTP + start services. Optional nuclear: MpCmdRun -ResetPlatform first.",
-        "ClipboardNote", "NOTE: Prefer elevated Backstage / SYSTEM. Re-enables Defender RTP and starts WinDefend / WdNisSvc."
+        "Flags", "CheckOnly ResetPlatform BackstageOnly",
+        "Note", "Backstage / SYSTEM only. Scan = services + RTP + tamper. Apply: enable disabled services, clear Disable* / PassiveMode policy, start WinDefend family, Set-MpPreference, retry once. Nuclear optional.",
+        "ClipboardNote", "NOTE: Elevated Backstage / SYSTEM only. Scan does not change anything. Apply is a full RTP repair (services + policy + preferences)."
     ),
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
@@ -766,6 +767,8 @@ RefreshOptionEnable(*) {
     showConnectSecure := ToolHasFlag(t, "ConnectSecure")
     showSkipIfRunning := ToolHasFlag(t, "SkipIfRunning")
     showResetPlatform := ToolHasFlag(t, "ResetPlatform")
+    if InStr(ToolGet(t, "Path", ""), "WindowsDefender") && gCtrls["ModeScan"].Value
+        showResetPlatform := false
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
     scanOnly := ToolHasFlag(t, "ScanOnly")
@@ -848,8 +851,6 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Silent install (/ACCT_KEY)"
     } else if runOnly && showConnectSecure {
         gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
-    } else if runOnly && InStr(ToolGet(t, "Path", ""), "WindowsDefender") {
-        gCtrls["ModeUpdate"].Text := "Re-enable Defender RTP"
     } else if runOnly && InStr(ToolGet(t, "TempName", ""), "HPbloatware") {
         gCtrls["ModeUpdate"].Text := "Remove HP bloat / Wolf"
     } else if runOnly {
@@ -864,6 +865,20 @@ RefreshOptionEnable(*) {
     if ToolHasFlag(t, "ConnectSecure") && ToolHasFlag(t, "Remediate") {
         gCtrls["ModeScan"].Text := "Check agent health"
         gCtrls["ModeUpdate"].Text := "Repair + reinstall"
+    }
+    if ToolHasFlag(t, "BackstageOnly") {
+        gCtrls["FmtBackstage"].Value := 1
+        gCtrls["FmtCommands"].Value := 0
+        gCtrls["FmtCommands"].Enabled := false
+        gCtrls["LblPaste"].Text := "Paste format (Backstage only)"
+    } else {
+        gCtrls["FmtCommands"].Enabled := true
+        gCtrls["LblPaste"].Text := "Paste format"
+    }
+
+    if InStr(ToolGet(t, "Path", ""), "WindowsDefender") {
+        gCtrls["ModeScan"].Text := "Check RTP + services"
+        gCtrls["ModeUpdate"].Text := "Re-enable Defender RTP"
     }
     if InStr(ToolGet(t, "Path", ""), "AcrobatXiRemoval") {
         gCtrls["ModeScan"].Text := "Scan Acrobat XI + Foxit"
@@ -1019,7 +1034,7 @@ BuildSwitches(tool, isScan, isCommands) {
     }
     if ToolHasFlag(tool, "SkipIfRunning") && CtrlActive(gCtrls["SkipIfRunning"]) && gCtrls["SkipIfRunning"].Value
         sw.Push("-SkipIfRunning")
-    if ToolHasFlag(tool, "ResetPlatform") && CtrlActive(gCtrls["ResetPlatform"]) && gCtrls["ResetPlatform"].Value
+    if ToolHasFlag(tool, "ResetPlatform") && !isScan && CtrlActive(gCtrls["ResetPlatform"]) && gCtrls["ResetPlatform"].Value
         sw.Push("-ResetPlatform")
 
     if ToolHasFlag(tool, "SentinelOneInstall") {
@@ -1137,8 +1152,6 @@ DescribeSelection(tool, isScan) {
             mode := "Silent install"
         else if ToolHasFlag(tool, "ConnectSecure")
             mode := "Silent install"
-        else if InStr(ToolGet(tool, "Path", ""), "WindowsDefender")
-            mode := "Repair Defender"
         else if InStr(ToolGet(tool, "TempName", ""), "HPbloatware")
             mode := "Remove HP bloat"
         else
@@ -1152,6 +1165,12 @@ DescribeSelection(tool, isScan) {
             mode := "Clean up"
         else
             mode := "Apply updates"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "WindowsDefender") {
+        if isScan
+            mode := "Check RTP + services"
+        else
+            mode := "Repair Defender"
     }
     parts := [tool["Name"], mode]
     if CtrlActive(gCtrls["Force"]) && gCtrls["Force"].Value
@@ -1209,6 +1228,8 @@ DoCopy(*) {
         gCtrls["ModeUpdate"].Value := 1
     isScan := gCtrls["ModeScan"].Value
     isCommands := gCtrls["FmtCommands"].Value
+    if ToolHasFlag(tool, "BackstageOnly")
+        isCommands := false
 
     if ToolHasFlag(tool, "ConnectSecure") && !isScan {
         if (Trim(gCtrls["CsCompanyId"].Value) = "" || Trim(gCtrls["CsEnvironmentId"].Value) = "" || Trim(gCtrls["CsInstallToken"].Value) = "") {
