@@ -28,6 +28,9 @@
     Include Preview updates. Continue Apply after non-critical pre-check
     Fail. Still stops on critical disk (under 5 GB quality / 10 GB feature).
 
+.PARAMETER NoExit
+    Keep the PowerShell host open (Backstage). Does not call exit.
+
 .PARAMETER Exit
     Call exit with a status code (ScreenConnect Commands). Omit in Backstage.
 #>
@@ -38,6 +41,7 @@ param(
     [switch]$Feature,
     [switch]$Reboot,
     [switch]$Force,
+    [switch]$NoExit,
     [switch]$Exit
 )
 

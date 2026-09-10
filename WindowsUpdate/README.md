@@ -31,6 +31,7 @@ feature) always stops.
 | `-Feature` | Feature Update / Enablement Package only |
 | `-Reboot` | Auto-reboot when required |
 | `-Force` | Include Preview; continue after non-critical pre-check Fail |
+| `-NoExit` | Keep the host open (Backstage). Accepted so the launcher does not fail |
 | `-Exit` | Exit with a status code (Commands) |
 
 ## ScreenConnect
