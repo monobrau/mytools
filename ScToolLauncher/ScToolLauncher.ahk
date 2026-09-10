@@ -27,7 +27,7 @@ MaxLength := "200000"
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
-;        BackstageOnly
+;        BackstageOnly AutoReboot
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
@@ -116,6 +116,38 @@ Tools := [
         "TimeoutScan", 300000,
         "TimeoutUpdate", 600000,
         "Flags", "Detailed Remediate NoExit"
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "Windows Update (quality)",
+        "Summary", "Pre-check then scan/install quality updates (CU, security, SSU). Default does not reboot.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsUpdate",
+        "Fetch", "Contents",
+        "Path", "WindowsUpdate",
+        "Script", "Invoke-WindowsUpdate.ps1",
+        "UaPrefix", "WindowsUpdate-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 3600000,
+        "DefaultArgs", "-Quality",
+        "Flags", "CheckOnly Force AutoReboot NoExit",
+        "Note", "Pre-check: disk, WinRE/recovery size, WU services/policy, pending reboot. Feature updates are a separate tool. Reload launcher after pull."
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "Windows Update (feature)",
+        "Summary", "Pre-check then scan/install feature updates / enablement packages. Hours. Default does not reboot.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsUpdate",
+        "Fetch", "Contents",
+        "Path", "WindowsUpdate",
+        "Script", "Invoke-WindowsUpdate.ps1",
+        "UaPrefix", "WindowsUpdate-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 14400000,
+        "DefaultArgs", "-Feature",
+        "Flags", "CheckOnly Force AutoReboot NoExit",
+        "Note", "Needs ~20+ GB free and a 750+ MB recovery/WinRE partition. Use Backstage or a 4-hour Commands timeout. Session drops if Auto reboot is checked."
     ),
     ; --- ScreenConnect ---
     Map(
@@ -549,6 +581,7 @@ ShowGui(*) {
     gCtrls["ClearAllBackupContent"].OnEvent("Click", (*) => RefreshOptionEnable())
     gCtrls["SkipIfRunning"] := gGui.Add("Checkbox", "Checked vOptSkipIfRunning", "Only if agent is not running (fleet / scan-prep)")
     gCtrls["ResetPlatform"] := gGui.Add("Checkbox", "vOptResetPlatform", "Nuclear: MpCmdRun -ResetPlatform")
+    gCtrls["AutoReboot"] := gGui.Add("Checkbox", "vOptAutoReboot", "Auto reboot when required")
 
     gCtrls["LblProduct"] := gGui.Add("Text", "Section", "Product filter (e.g. DotNet, ShareX)")
     gCtrls["Product"] := gGui.Add("Edit", "w" UiContentW " vProduct", "")
@@ -606,6 +639,7 @@ ShowGui(*) {
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
+        "AutoReboot",
         "LblProduct", "Product",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
@@ -681,7 +715,7 @@ ReflowGui() {
         else if (InStr(key, "Mode") = 1 || InStr(key, "Fmt") = 1 || key = "Force" || key = "ForceAppShutdown"
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
             || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "SkipIfRunning"
-            || key = "ResetPlatform"
+            || key = "ResetPlatform" || key = "AutoReboot"
             || key = "S1Quiet")
             ch := 20
 
@@ -770,6 +804,7 @@ RefreshOptionEnable(*) {
     showResetPlatform := ToolHasFlag(t, "ResetPlatform")
     if InStr(ToolGet(t, "Path", ""), "WindowsDefender") && gCtrls["ModeScan"].Value
         showResetPlatform := false
+    showAutoReboot := ToolHasFlag(t, "AutoReboot") && !gCtrls["ModeScan"].Value
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
     scanOnly := ToolHasFlag(t, "ScanOnly")
@@ -786,6 +821,7 @@ RefreshOptionEnable(*) {
         gCtrls["ClearAllBackupContent"].Value := 0
     SetCtrlShown(gCtrls["SkipIfRunning"], showSkipIfRunning)
     SetCtrlShown(gCtrls["ResetPlatform"], showResetPlatform)
+    SetCtrlShown(gCtrls["AutoReboot"], showAutoReboot)
     SetCtrlShown(gCtrls["LblProduct"], showProduct)
     SetCtrlShown(gCtrls["Product"], showProduct)
     SetCtrlShown(gCtrls["LblVendor"], showVendor)
@@ -820,6 +856,7 @@ RefreshOptionEnable(*) {
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning || showResetPlatform
+        || showAutoReboot
     SetCtrlShown(gCtrls["LblOptions"], anyOpt)
 
     ; Find-only tools: hide "Apply" mode entirely
@@ -884,6 +921,10 @@ RefreshOptionEnable(*) {
     if InStr(ToolGet(t, "Path", ""), "AcrobatXiRemoval") {
         gCtrls["ModeScan"].Text := "Scan Acrobat XI + Foxit"
         gCtrls["ModeUpdate"].Text := "Uninstall Acrobat XI"
+    }
+    if InStr(ToolGet(t, "Path", ""), "WindowsUpdate") {
+        gCtrls["ModeScan"].Text := "Scan pending updates + pre-check"
+        gCtrls["ModeUpdate"].Text := "Install (no reboot unless option)"
     }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
@@ -1037,6 +1078,8 @@ BuildSwitches(tool, isScan, isCommands) {
         sw.Push("-SkipIfRunning")
     if ToolHasFlag(tool, "ResetPlatform") && !isScan && CtrlActive(gCtrls["ResetPlatform"]) && gCtrls["ResetPlatform"].Value
         sw.Push("-ResetPlatform")
+    if ToolHasFlag(tool, "AutoReboot") && !isScan && CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value
+        sw.Push("-Reboot")
 
     if ToolHasFlag(tool, "SentinelOneInstall") {
         token := Trim(gCtrls["S1Token"].Value)
@@ -1183,6 +1226,12 @@ DescribeSelection(tool, isScan) {
         else
             mode := "Repair Defender"
     }
+    if InStr(ToolGet(tool, "Path", ""), "WindowsUpdate") {
+        if isScan
+            mode := "Scan + pre-check"
+        else
+            mode := "Install"
+    }
     parts := [tool["Name"], mode]
     if CtrlActive(gCtrls["Force"]) && gCtrls["Force"].Value
         parts.Push("Force")
@@ -1204,6 +1253,8 @@ DescribeSelection(tool, isScan) {
         parts.Push("Only if not running")
     if CtrlActive(gCtrls["ResetPlatform"]) && gCtrls["ResetPlatform"].Value
         parts.Push("ResetPlatform")
+    if CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value
+        parts.Push("Auto reboot")
     if ToolHasFlag(tool, "BackupsOnlyDefault") {
         if CtrlActive(gCtrls["ClearAllBackupContent"]) && gCtrls["ClearAllBackupContent"].Value
             parts.Push("All Backup content")

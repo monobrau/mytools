@@ -13,6 +13,7 @@ Public collection of work tools and scripts.
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet delegates + winget; ScreenConnect `#!ps`) |
 | [WindowsDefenderRepair](WindowsDefenderRepair/) | Re-enable Defender real-time protection and start WinDefend / WdNisSvc |
+| [WindowsUpdate](WindowsUpdate/) | Scan/install quality or feature Windows Updates; pre-check for disk, WinRE, WU policy; default no reboot |
 | [ClientSpecific](ClientSpecific/) | Per-client campaign tools (ScToolLauncher: Client-specific → client name) |
 
 ## Layout

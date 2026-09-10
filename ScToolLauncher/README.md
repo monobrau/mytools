@@ -26,6 +26,8 @@ Categories start **collapsed**. Labels list what is under each group:
 | .NET runtime / SDK patches | mytools |
 | HP Support Assistant | mytools |
 | Classic Teams remnants | mytools |
+| Windows Update (quality) | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
+| Windows Update (feature) | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot |
 
 ### ScreenConnect — GPO/MSI finder, temp cleanup
 
