@@ -42,7 +42,7 @@ Categories start **collapsed**. Labels list what is under each group:
 | --- | --- |
 | HP Touchpoint Analytics | [hp-touchpointanalytics-cleanup](https://github.com/monobrau/hp-touchpointanalytics-cleanup) |
 | HP bloat / Wolf (mark05e gist) | [gist](https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388) — downloads `Remove-HPbloatware.ps1` and runs it (no dry-run; Wolf / Sure Click / HP AppX) |
-| Dell SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.2** — scan-first + timed service stop; Backup CW/SC only; reload AHK for `?v=1.4.2` |
+| Dell SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.4** — EnumerateFiles + skip VersionInfo-identified non-CW PEs; 60 min timeout; reload AHK for `?v=1.4.4` |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
@@ -74,7 +74,7 @@ Tokens/IDs are only embedded in the clipboard snippet when you copy — nothing 
 | HarkinsCollector (event logs) | [ExceedingLife/HarkinsCollector](https://github.com/ExceedingLife/HarkinsCollector) — zip under `C:\ForensicLogs` |
 | Forensic Investigator (Sysinternals) | [monobrau/forensicinvestigator](https://github.com/monobrau/forensicinvestigator) — reports under `C:\SecurityReports` |
 | Malwarebytes ADWCleaner | [ADWCleaner](https://www.malwarebytes.com/adwcleaner) — silent `/eula /clean /noreboot` |
-| PUP remnant cleanup (Ask Toolbar) | mytools `PupRemnantCleanup` — dry-run the catalog and report what is present; Remediate deletes those families. Add more ids in the catalog |
+| PUP remnant cleanup | mytools `PupRemnantCleanup` — family dropdown (All on host, or one catalog id). Dry-run reports what is present; Remediate deletes those families |
 
 Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypass` plus `Invoke-RestMethod -OutFile` then `&` run. ADWCleaner downloads the vendor EXE and runs `Start-Process -Wait`. Prefer elevated / Backstage.
 

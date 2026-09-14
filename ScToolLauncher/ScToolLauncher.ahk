@@ -23,7 +23,7 @@ MaxLength := "200000"
 ;        DownloadExe (IWR vendor EXE + Start-Process -Wait)
 ;        Url (optional) overrides the constructed GitHub raw URL — use for gists
 ; Category: groups tools in the TreeView (order = CategoryOrder below)
-; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product
+; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product ProductList
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
@@ -218,12 +218,12 @@ Tools := [
         "Owner", "monobrau",
         "Repo", "dell-saremediation-cleanup",
         "Script", "Remove-DellSARemediation.ps1",
-        "UaVer", "1.4.2",
-        "TimeoutScan", 600000,
-        "TimeoutUpdate", 900000,
+        "UaVer", "1.4.4",
+        "TimeoutScan", 3600000,
+        "TimeoutUpdate", 3600000,
         "Flags", "Delete CacheBust RebootAdvisory BackupsOnlyDefault ClearAllBackupContent",
-        "Note", "Always -BackupsOnly. v1.4.2: scan first, timed service stop (no 20min hang), does not kill ScreenConnect. Banner must say v1.4.2 (CDN: reload AHK / new ?v=).",
-        "ClipboardNote", "NOTE: Backup cleanup only. Must show v1.4.2. PENDING_REBOOT = reboot to finish. Then SC temp cleanup."
+        "Note", "Always -BackupsOnly. v1.4.4: EnumerateFiles + skip any VersionInfo-identified non-CW PE; 64KB IndexOf peek. Banner must say v1.4.4. 60 min timeout. Huge trees: optional Clear all Backup content.",
+        "ClipboardNote", "NOTE: Backup cleanup only. Must show v1.4.4. 60 min timeout. PENDING_REBOOT = reboot to finish. Then SC temp cleanup."
     ),
     ; --- AV ---
     Map(
@@ -391,8 +391,8 @@ Tools := [
     ),
     Map(
         "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
-        "Name", "PUP remnant cleanup (Ask Toolbar)",
-        "Summary", "Dry-run every catalog PUP and report what is on the host (Ask Toolbar first; add more families in the script). Clean up deletes all matched remnants for those families. Chromium/Firefox prefs are reported only. Product box limits to one or more catalog ids.",
+        "Name", "PUP remnant cleanup",
+        "Summary", "Dry-run the catalog (Ask Toolbar, MediaArena converters, AppSuite PDF Editor, Wave, OneLaunch, fake PDF installers) and report what is on the host. Clean up deletes all matched remnants. Chromium/Firefox prefs are reported only. Family dropdown limits to one catalog id.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PupRemnantCleanup",
         "Fetch", "Contents",
         "Path", "PupRemnantCleanup",
@@ -401,9 +401,10 @@ Tools := [
         "UaVer", "1.2.0",
         "TimeoutScan", 180000,
         "TimeoutUpdate", 300000,
-        "Flags", "CheckOnly Remediate Product NoExit",
-        "Note", "Prefer elevated / Backstage. Scan first. Blank Product = every catalog family (whatever is present). Type an id (or AskToolbar,NextPup) to limit the job.",
-        "ClipboardNote", "NOTE: Blank Product scans the whole catalog and acts on what is present. Scan is dry-run. Remove deletes folders/tasks/registry; browser prefs stay report-only."
+        "Flags", "CheckOnly Remediate ProductList NoExit",
+        "ProductList", "All on host|AskToolbar|MediaArena|AppSuitePdf|WaveBrowser|OneLaunch|FakePdfConverter",
+        "Note", "Prefer elevated / Backstage. Scan first. Family list is the catalog. All on host = every family that is actually present.",
+        "ClipboardNote", "NOTE: Family dropdown — All on host scans the whole catalog. Pick one id to limit. Scan is dry-run. Remove deletes folders/tasks/registry; browser prefs stay report-only."
     ),
     ; --- M365 / Exchange ---
     Map(
@@ -445,6 +446,7 @@ Tools := [
 gToolByNode := Map()   ; TreeView item id -> Tools index (1-based)
 gLastToolIndex := 1     ; last real tool selection (survives category collapse)
 gFlowKeys := []         ; control stack order for ReflowGui
+gPupFamilySource := ""  ; last ProductList loaded into the PUP family dropdown
 
 ; --- tray / identity ---
 ; Keep the default AHK v2 tray icon + menu (includes Reload Script / Edit / Exit).
@@ -601,6 +603,8 @@ ShowGui(*) {
 
     gCtrls["LblProduct"] := gGui.Add("Text", "Section", "Product filter (e.g. DotNet, ShareX)")
     gCtrls["Product"] := gGui.Add("Edit", "w" UiContentW " vProduct", "")
+    gCtrls["LblPupFamily"] := gGui.Add("Text", "Section", "PUP family")
+    gCtrls["PupFamily"] := gGui.Add("DropDownList", "w" UiContentW " vPupFamily", ["All on host"])
 
     gCtrls["LblVendor"] := gGui.Add("Text", "Section", "Antivirus vendor")
     gCtrls["Vendor"] := gGui.Add("DropDownList", "w160 vVendor", ["All", "Cylance", "Webroot"])
@@ -657,6 +661,7 @@ ShowGui(*) {
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
         "AutoReboot",
         "LblProduct", "Product",
+        "LblPupFamily", "PupFamily",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
         "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
@@ -721,7 +726,7 @@ ReflowGui() {
             ch := 26
             cw := 200
         }
-        else if (key = "Product" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor"
+        else if (key = "Product" || key = "PupFamily" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor"
             || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
             || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl"
             || key = "HuntressAccountKey" || key = "HuntressOrgKey" || key = "HuntressTags")
@@ -787,6 +792,25 @@ ToolGet(tool, key, default := "") {
     return default
 }
 
+FillPupFamilyList(tool) {
+    global gCtrls, gPupFamilySource
+    raw := ToolGet(tool, "ProductList", "")
+    if (raw = gPupFamilySource)
+        return
+    gPupFamilySource := raw
+    items := []
+    for part in StrSplit(raw, "|") {
+        p := Trim(part)
+        if (p != "")
+            items.Push(p)
+    }
+    gCtrls["PupFamily"].Delete()
+    if items.Length
+        gCtrls["PupFamily"].Add(items)
+    if items.Length
+        gCtrls["PupFamily"].Choose(1)
+}
+
 SelectedTool() {
     global Tools, gCtrls, gToolByNode, gLastToolIndex
     node := gCtrls["ToolTree"].GetSelection()
@@ -813,6 +837,7 @@ RefreshOptionEnable(*) {
     showRmHpsa := ToolHasFlag(t, "RemoveSupportAssistant")
     showClearAllBackup := ToolHasFlag(t, "ClearAllBackupContent")
     showProduct := ToolHasFlag(t, "Product")
+    showPupFamily := ToolHasFlag(t, "ProductList")
     showVendor := ToolHasFlag(t, "Vendor")
     showDomain := ToolHasFlag(t, "Domain")
     showConnectSecure := ToolHasFlag(t, "ConnectSecure")
@@ -840,6 +865,12 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["AutoReboot"], showAutoReboot)
     SetCtrlShown(gCtrls["LblProduct"], showProduct)
     SetCtrlShown(gCtrls["Product"], showProduct)
+    if showPupFamily {
+        gCtrls["LblPupFamily"].Text := "PUP family (All on host = whatever is present)"
+        FillPupFamilyList(t)
+    }
+    SetCtrlShown(gCtrls["LblPupFamily"], showPupFamily)
+    SetCtrlShown(gCtrls["PupFamily"], showPupFamily)
     SetCtrlShown(gCtrls["LblVendor"], showVendor)
     SetCtrlShown(gCtrls["Vendor"], showVendor)
     SetCtrlShown(gCtrls["LblAvSecret"], showVendor)
@@ -1070,6 +1101,12 @@ BuildSwitches(tool, isScan, isCommands) {
         }
     }
 
+    if ToolHasFlag(tool, "ProductList") && CtrlActive(gCtrls["PupFamily"]) {
+        fam := Trim(gCtrls["PupFamily"].Text)
+        if (fam != "" && fam != "All on host")
+            sw.Push("-Name " fam)
+    }
+
     if ToolHasFlag(tool, "Domain") && CtrlActive(gCtrls["DomainController"]) {
         dc := Trim(gCtrls["DomainController"].Value)
         dom := Trim(gCtrls["Domain"].Value)
@@ -1283,6 +1320,11 @@ DescribeSelection(tool, isScan) {
         prod := Trim(gCtrls["Product"].Value)
         if prod != ""
             parts.Push("Product=" prod)
+    }
+    if CtrlActive(gCtrls["PupFamily"]) {
+        fam := Trim(gCtrls["PupFamily"].Text)
+        if (fam != "")
+            parts.Push("Family=" fam)
     }
     if ToolHasFlag(tool, "SentinelOneInstall") && CtrlActive(gCtrls["S1InstallerUrl"]) {
         if (Trim(gCtrls["S1InstallerUrl"].Value) != "")
