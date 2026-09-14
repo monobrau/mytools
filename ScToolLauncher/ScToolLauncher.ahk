@@ -337,8 +337,8 @@ Tools := [
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly HuntressInstall AlwaysNote",
-        "Note", "Account key + org key below are not saved. Official flag is /ACCT_KEY= ( /ACCOUNT_KEY= is wrong and often exits 53 ). Prefer elevated / Backstage. Check C:\Windows\Temp\HuntressInstaller.log on failure.",
-        "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=."
+        "Note", "Account key + org key below are not saved. Official flag is /ACCT_KEY= ( /ACCOUNT_KEY= is wrong and often exits 53 ). Commands snippet is PS2-safe (downloads Huntress EXE directly, no GitHub / no 5.1). Prefer elevated / Backstage. Check C:\Windows\Temp\HuntressInstaller.log on failure.",
+        "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=. PS2-safe inline download."
     ),
     ; --- IR / forensics ---
     Map(
@@ -1182,22 +1182,30 @@ BootstrapTls() {
     return "try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}"
 }
 
-; ScreenConnect #!ps sometimes runs the v2 engine even when 5.1 is installed
-; (error text uses <<<< and "possible values are Ssl3, Tls"). Re-invoke the
-; same SC temp file with System32 powershell.exe. Env guard avoids a loop when
-; the host truly has only 2.0.
+; ScreenConnect #!ps is often the 32-bit v2 engine. System32\powershell.exe then
+; Wow64-redirects to the same 2.0 host. Probe SysNative (64-bit) first, then
+; System32 / SysWOW64, and only relaunch an exe that reports Major >= 5.
 BootstrapPs5Relaunch() {
-    return "if($PSVersionTable.PSVersion.Major -lt 5){if($env:SC_TOOL_PS5){throw 'PowerShell 5.1 required (this host is running 2.0).'}; $env:SC_TOOL_PS5=1; & `"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`" -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path; exit $LASTEXITCODE}; "
+    return "if($PSVersionTable.PSVersion.Major -lt 5){$exe=$null; foreach($c in @(`"$env:SystemRoot\SysNative\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\SysWOW64\WindowsPowerShell\v1.0\powershell.exe`")){if(Test-Path -LiteralPath $c){try{$v=& $c -NoProfile -Command '$PSVersionTable.PSVersion.Major'}catch{$v=0}; if(($v -as [int]) -ge 5){$exe=$c; break}}}; if(-not $exe){throw 'PowerShell 5.1 required (this host has only 2.0). Install WMF 5.1 or use Huntress inline install.'}; & $exe -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path; exit $LASTEXITCODE}; "
 }
 
 BuildSnippet(tool, isScan, isCommands) {
-    global DefaultOwner, DefaultRepo, DefaultRef, MaxLength
+    global DefaultOwner, DefaultRepo, DefaultRef, MaxLength, gCtrls
     timeout := isScan ? tool["TimeoutScan"] : tool["TimeoutUpdate"]
     fetch := ToolGet(tool, "Fetch", "Contents")
     tls := BootstrapTls()
     ps5 := isCommands ? BootstrapPs5Relaunch() : ""
 
-    if (fetch = "DownloadExe") {
+    ; Huntress: no GitHub / no #Requires 5.1. Download the vendor EXE with
+    ; WebClient so ScreenConnect's v2 engine can still install the agent.
+    if ToolHasFlag(tool, "HuntressInstall") {
+        acct := StrReplace(Trim(gCtrls["HuntressAccountKey"].Value), "'", "''")
+        org := StrReplace(Trim(gCtrls["HuntressOrgKey"].Value), "'", "''")
+        tags := StrReplace(Trim(gCtrls["HuntressTags"].Value), "'", "''")
+        endSkip := isCommands ? "exit 0" : "return"
+        endOk := isCommands ? "exit $p.ExitCode" : ""
+        body := tls "; $acct='" acct "'; $org='" org "'; $tags='" tags "'; $svc=Get-Service -Name HuntressAgent -EA SilentlyContinue; $exes=@((Join-Path $env:ProgramFiles 'Huntress\HuntressAgent.exe'),(Join-Path ${env:ProgramFiles(x86)} 'Huntress\HuntressAgent.exe')); $hit=$false; if($svc){$hit=$true; Write-Output ('Service HuntressAgent: '+[string]$svc.Status)}; foreach($e in $exes){if($e -and (Test-Path -LiteralPath $e)){$hit=$true; Write-Output ('Found '+$e)}}; if($hit){Write-Output 'Huntress agent already present. Skipping.'; " endSkip "}; $out=Join-Path $env:TEMP 'HuntressInstaller.exe'; Write-Output 'Downloading Huntress installer (update.huntress.io)'; $wc=New-Object Net.WebClient; $wc.DownloadFile(('https://update.huntress.io/download/'+$acct+'/HuntressInstaller.exe'),$out); if(-not(Test-Path -LiteralPath $out) -or ((Get-Item -LiteralPath $out).Length -eq 0)){throw 'Huntress download failed or 0 bytes'}; $a='/ACCT_KEY='+$acct+' /ORG_KEY='+$org; if($tags){$a+=' /TAGS='+$tags}; $a+=' /S'; Write-Output 'Installing with official /ACCT_KEY='; $p=Start-Process -FilePath $out -ArgumentList $a -Wait -PassThru; Write-Output ('Installer exit '+$p.ExitCode); Remove-Item -LiteralPath $out -Force -EA SilentlyContinue; " endOk
+    } else if (fetch = "DownloadExe") {
         url := ToolGet(tool, "Url", "")
         outFile := ToolGet(tool, "OutFile", "C:\Windows\Temp\tool.exe")
         argList := ToolGet(tool, "ExeArgList", "")

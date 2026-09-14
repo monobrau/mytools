@@ -122,7 +122,9 @@ Double-click the script, or create a shortcut / Startup entry.
 3. **Copy to clipboard**.
 4. Paste into ScreenConnect **Commands** (`#!ps`) or **Backstage** (one-liner format).
    Commands snippets set TLS 1.2 via numeric `3072` (not `::Tls12`) and re-launch
-   Windows PowerShell 5.1 when SC’s `#!ps` host is the v2 engine.
+   a probed 5.1 host (`SysNative` first — 32-bit SC often Wow64-redirects
+   `System32\powershell.exe` back to v2). Huntress is an exception: it downloads
+   the vendor EXE inline so a 2.0-only guest can still install.
 
 ## Bump versions
 

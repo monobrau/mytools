@@ -39,7 +39,11 @@ Already-installed agents are detected via the `HuntressAgent` service or
 See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Or use ScToolLauncher
 (**Agents** → Huntress silent install).
 
-If Commands fails with `Cannot convert null` / `SecurityProtocolType` values
-`Ssl3, Tls` (error marker `<<<<`), the guest ran **PowerShell 2.0**. The
-bootstrap re-launches `System32\WindowsPowerShell\v1.0\powershell.exe` (5.1).
-If that throw says 5.1 is required, WMF 5.1 is not installed on the host.
+ScreenConnect `#!ps` is often the **32-bit PowerShell 2.0** engine (`<<<<`
+errors, `Ssl3, Tls` only). The Commands snippet does **not** pull this 5.1
+script from GitHub — it downloads `HuntressInstaller.exe` from
+`update.huntress.io` with `WebClient` and runs `/ACCT_KEY= /ORG_KEY= /S`.
+That works on 2.0 if the OS can speak TLS 1.2 (numeric `3072`).
+
+Other launcher tools still need Windows PowerShell 5.1 (WMF 5.1, or a
+64-bit session via `SysNative`).
