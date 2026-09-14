@@ -398,7 +398,7 @@ Tools := [
         "Path", "PupRemnantCleanup",
         "Script", "Invoke-PupRemnantCleanup.ps1",
         "UaPrefix", "PupRemnantCleanup-bootstrap",
-        "UaVer", "1.1.0",
+        "UaVer", "1.2.0",
         "TimeoutScan", 180000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly Remediate Product NoExit",

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Scan and remove leftover PUP remnants. Ask Toolbar ships first; add more families in the catalog.
+    Scan and remove leftover PUP remnants. Catalog covers Ask Toolbar, MediaArena converters, AppSuite PDF Editor, Wave/OneLaunch, and fake PDF installers.
 
 .DESCRIPTION
     Definition-driven remnant sweep for toolbars / search hijackers. Default is a dry-run report.
@@ -66,7 +66,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.1.0'
+$ScriptVersion = '1.2.0'
 $script:ExitCode = 0
 $script:Findings = New-Object System.Collections.Generic.List[object]
 $script:Seen = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -133,6 +133,143 @@ function Get-PupCatalog {
             ProcessMatch               = '(?i)^updatetask$|AskToolbar|Ask\.com'
             SkipRemoveTypes            = @('ChromiumPrefs', 'FirefoxPrefs')
         }
+
+        MediaArena = @{
+            Id          = 'MediaArena'
+            DisplayName = 'MediaArena (PdfPower / PdfMagic / search hijack converters)'
+            Notes       = 'BrowserModifier:Win32/MediaArena. Fake PDF/GIF/zip converters from malvertising. Uninstaller often only deletes a desktop shortcut. Huntress/Defender may already quarantine the exe.'
+            Folders     = @(
+                '%ProgramFiles%\MediaArena'
+                '%ProgramFiles(x86)%\MediaArena'
+                '%ProgramData%\MediaArena'
+            )
+            FolderNameMatch = '(?i)^MediaArena$|^Gifsearchutils$|^Gifsmakerpro$|^PdfHub$|^PdfMagic(App)?$|^PdfPower$|^PdfShark$|^Screensearchutils$|^Screensrecorder$|^Searcharchiver$|^Searchpoweronline$|^Searchtoolshub$|^Sharksearchonline$|^Ziplikeapro(app)?$|^Ziprararchiver$|^GiveMeRecipe$|^FoodFormula$|^KitchenCanvas$'
+            LooseFileMatch  = '(?i)^(MediaArena(E|Service)?|Gifsearchutils|Gifsmakerpro|PdfHub|PdfMagic(App)?|PdfPower|PdfShark|Screensearchutils|Screensrecorder|Searcharchiver|Searchpoweronline|Searchtoolshub|Sharksearchonline|Ziplikeapro(app)?|Ziprararchiver|GiveMeRecipe|FoodFormula|KitchenCanvas)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\MediaArena'
+                'HKLM:\SOFTWARE\WOW6432Node\MediaArena'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\MediaArena'
+            )
+            TaskMatch                 = '(?i)MediaArena|PdfPower|PdfMagic|Searchpoweronline|Searcharchiver|Ziprararchiver'
+            ServiceMatch              = '(?i)MediaArena'
+            UninstallDisplayNameMatch = '(?i)^(MediaArena|Gifsearchutils|Gifsmakerpro|PdfHub|PdfMagic(App)?|PdfPower|PdfShark|Screensearchutils|Screensrecorder|Searcharchiver|Searchpoweronline|Searchtoolshub|Sharksearchonline|Ziplikeapro(app)?|Ziprararchiver|GiveMeRecipe|FoodFormula|KitchenCanvas)$'
+            UninstallPublisherMatch   = '(?i)^Media ?Arena$|^PdfPower$|^PdfMagic$|^Searchpoweronline$'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(searchpoweronline|searchtoolshub|sharksearchonline)\.com'
+            SearchDisplayNameMatch    = '(?i)AASearchpoweronline|Searchpoweronline|MediaArena'
+            RunValueMatch             = '(?i)MediaArena|PdfPower|PdfMagic|Searchpoweronline|\\MediaArena\\'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(searchpoweronline|searchtoolshub|sharksearchonline)\.com'
+            ProcessMatch              = '(?i)^MediaArena(E|Service)?$|^PdfPower$|^PdfMagic(App)?$|^PdfHub$|^PdfShark$|^Ziprararchiver$|^Ziplikeapro(app)?$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        AppSuitePdf = @{
+            Id          = 'AppSuitePdf'
+            DisplayName = 'AppSuite / TamperedChef PDF Editor'
+            Notes       = 'Malvertising MSI AppSuite-PDF.msi / PDF Editor.exe / ManualFinderApp. Persistence: PDFEditorScheduledTask, PDFEditorUScheduledTask, Run PDFEditorUpdater. Do not match Foxit/Adobe PDF Editor.'
+            UserFolders = @(
+                'PDF Editor'
+                'AppData\Local\AppSuite'
+                'AppData\Roaming\AppSuite'
+                'AppData\Local\PDF Editor'
+                'AppData\Roaming\PDF Editor'
+                'AppData\Local\ManualFinder'
+                'AppData\Roaming\ManualFinder'
+            )
+            FolderNameMatch = '(?i)^AppSuite$|^ManualFinder$'
+            LooseFileMatch  = '(?i)^(AppSuite-PDF|AppSuite|PDFEditorSetup|ManualFinderApp|PDF Editor)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\AppSuite'
+                'HKLM:\SOFTWARE\WOW6432Node\AppSuite'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\AppSuite'
+                'SOFTWARE\PDF Editor'
+            )
+            TaskMatch                 = '(?i)PDFEditorScheduledTask|PDFEditorUScheduledTask|ManualFinder'
+            ServiceMatch              = '(?i)AppSuite PDF|PDFEditor'
+            UninstallDisplayNameMatch = '(?i)^PDF Editor$|^AppSuite|ManualFinder'
+            UninstallPublisherMatch   = '(?i)^AppSuite(s)?$|^PDF Editor$'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])appsuites?\.ai'
+            SearchDisplayNameMatch    = '(?i)AppSuite|ManualFinder'
+            RunValueMatch             = '(?i)PDFEditorUpdater|AppSuite|ManualFinderApp|\\PDF Editor\\'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])appsuites?\.ai'
+            ProcessMatch              = '(?i)^PDF Editor$|^ManualFinderApp$|^PDFEditorSetup$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        WaveBrowser = @{
+            Id          = 'WaveBrowser'
+            DisplayName = 'Wave Browser (Wavesor)'
+            Notes       = 'Chromium PUP often bundled with MediaArena/AppSuite-style converters. Task WaveBrowser-StartAtLogin; vendor Wavesor Software.'
+            FolderNameMatch = '(?i)^Wavesor Software$|^WaveBrowser$'
+            LooseFileMatch  = '(?i)^(WaveBrowser|Wave Browser)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\Wavesor'
+                'HKLM:\SOFTWARE\WOW6432Node\Wavesor'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\Wavesor'
+                'SOFTWARE\WaveBrowser'
+            )
+            TaskMatch                 = '(?i)WaveBrowser-StartAtLogin|Wavesor|WaveBrowser'
+            ServiceMatch              = '(?i)WaveBrowser|Wavesor'
+            UninstallDisplayNameMatch = '(?i)Wave Browser|WaveBrowser'
+            UninstallPublisherMatch   = '(?i)^Wavesor'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(wavebrowser|wavesor)\.com'
+            SearchDisplayNameMatch    = '(?i)Wave Browser|WaveBrowser'
+            RunValueMatch             = '(?i)WaveBrowser|Wavesor|swupdater'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(wavebrowser|wavesor)\.com'
+            ProcessMatch              = '(?i)^WaveBrowser$|^swupdater$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        OneLaunch = @{
+            Id          = 'OneLaunch'
+            DisplayName = 'OneLaunch / OneStart'
+            Notes       = 'Launcher/adware browser often dropped with AppSuite PDF Editor (OneLaunchLaunchTask).'
+            FolderNameMatch = '(?i)^OneLaunch$|^OneStart$'
+            LooseFileMatch  = '(?i)^(OneLaunch|OneStart)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\OneLaunch'
+                'HKLM:\SOFTWARE\WOW6432Node\OneLaunch'
+                'HKLM:\SOFTWARE\OneStart'
+                'HKLM:\SOFTWARE\WOW6432Node\OneStart'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\OneLaunch'
+                'SOFTWARE\OneStart'
+            )
+            TaskMatch                 = '(?i)OneLaunchLaunchTask|OneStart|OneLaunch'
+            ServiceMatch              = '(?i)OneLaunch|OneStart'
+            UninstallDisplayNameMatch = '(?i)^OneLaunch$|^OneStart$'
+            UninstallPublisherMatch   = '(?i)^OneLaunch$|^OneStart$'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(onelaunch|onestart)\.com'
+            SearchDisplayNameMatch    = '(?i)OneLaunch|OneStart'
+            RunValueMatch             = '(?i)OneLaunch|OneStart'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(onelaunch|onestart)\.com'
+            ProcessMatch              = '(?i)^OneLaunch$|^OneStart$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        FakePdfConverter = @{
+            Id          = 'FakePdfConverter'
+            DisplayName = 'Fake PDF/file converter installers (ConvertMate / Easy2Convert)'
+            Notes       = 'Malvertising converters that drop UpdateRetriever.exe (or similar) under LocalAppData and a +1 day scheduled task. Not Adobe, Foxit, Nitro, or PDF24.'
+            FolderNameMatch = '(?i)^ConvertMate$|^Easy2Convert$|^InfiniteDocs$|^PowerDoc$|^PdfSkills$|^PdfClick$|^ZapPdf$|^OneZip$|^ZipMate(Pro)?$|^NotaWord$|^CrystalPdf$|^PdfSpark$|^ConvertMaster$'
+            LooseFileMatch  = '(?i)^(ConvertMate|Easy2Convert|InfiniteDocs|PowerDoc|PdfSkills|PdfClick|ZapPdf|OneZip|ZipMate(Pro)?|NotaWord|CrystalPdf|PdfSpark|ConvertMaster|UpdateRetriever)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            TaskMatch                 = '(?i)Easy2ConvertTask|Crystal_updater|PDC_Update|ConvertMate|UpdateRetriever'
+            ServiceMatch              = '(?i)ConvertMate|Easy2Convert'
+            UninstallDisplayNameMatch = '(?i)^ConvertMate$|^Easy2Convert$|^InfiniteDocs$|^PowerDoc$|^PdfSkills$|^PdfClick$|^ZapPdf$|^OneZip$|^ZipMate(Pro)?$|^NotaWord$|^CrystalPdf$|^PdfSpark$|^ConvertMaster$'
+            UninstallPublisherMatch   = '(?i)^BLUE TAKIN|^ConvertMate$|^Easy2Convert$'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(conmateapp|convertyfileapp|ez2convertapp|powerdocapp|infinitedocsapp|convertmasterapp|pdfskillsapp|pdfclickapp|zappdfapp|onezipapp|crystalpdf|pdfsparkware|zipmatepro|notawordapp)\.com'
+            SearchDisplayNameMatch    = '(?i)ConvertMate|Easy2Convert'
+            RunValueMatch             = '(?i)ConvertMate|Easy2Convert|UpdateRetriever|\\ConvertMate\\'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(conmateapp|convertyfileapp|ez2convertapp|powerdocapp|infinitedocsapp|convertmasterapp|pdfskillsapp|pdfclickapp|zappdfapp|onezipapp|crystalpdf|pdfsparkware|zipmatepro|notawordapp)\.com'
+            ProcessMatch              = '(?i)^ConvertMate$|^Easy2Convert$|^UpdateRetriever$|^InfiniteDocs$|^PowerDoc$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
     }
 }
 
@@ -157,6 +294,11 @@ function Complete-PupRun {
     $global:LASTEXITCODE = $Code
     Write-PupLog ("Log saved to: {0}" -f $script:LogPath)
     if (Test-PupShouldExitProcess) { exit $Code }
+}
+
+function Get-PupDefList {
+    param($Value)
+    @($Value) | Where-Object { $_ -and -not [string]::IsNullOrWhiteSpace([string]$_) }
 }
 
 function Test-PupRegex {
@@ -266,19 +408,86 @@ function Get-PupUninstallPaths {
 
 function Find-PupFolders {
     param($Def)
-    foreach ($raw in @($Def.Folders)) {
+    foreach ($raw in Get-PupDefList $Def.Folders) {
         $path = Expand-PupPath $raw
         if ($path -and (Test-Path -LiteralPath $path -ErrorAction SilentlyContinue)) {
             Add-PupFinding -Pup $Def.Id -Type 'Folder' -Item $path
         }
     }
     foreach ($profile in Get-PupUserProfiles) {
-        foreach ($rel in @($Def.UserFolders)) {
+        foreach ($rel in Get-PupDefList $Def.UserFolders) {
             $path = Join-Path $profile.LocalPath $rel
             if (Test-Path -LiteralPath $path -ErrorAction SilentlyContinue) {
                 Add-PupFinding -Pup $Def.Id -Type 'Folder' -Item $path -Detail $profile.LocalPath
             }
         }
+    }
+}
+
+function Find-PupNamedFolders {
+    param($Def)
+    if (-not $Def.FolderNameMatch) { return }
+    $machineRoots = @(
+        $env:ProgramFiles
+        ${env:ProgramFiles(x86)}
+        $env:ProgramData
+    ) | Where-Object { $_ }
+    foreach ($root in $machineRoots) {
+        if (-not (Test-Path -LiteralPath $root -ErrorAction SilentlyContinue)) { continue }
+        Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+            Where-Object { Test-PupRegex $_.Name $Def.FolderNameMatch } |
+            ForEach-Object {
+                Add-PupFinding -Pup $Def.Id -Type 'Folder' -Item $_.FullName
+            }
+    }
+    foreach ($profile in Get-PupUserProfiles) {
+        foreach ($rel in @('AppData\Local', 'AppData\Roaming')) {
+            $root = Join-Path $profile.LocalPath $rel
+            if (-not (Test-Path -LiteralPath $root -ErrorAction SilentlyContinue)) { continue }
+            Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue |
+                Where-Object { Test-PupRegex $_.Name $Def.FolderNameMatch } |
+                ForEach-Object {
+                    Add-PupFinding -Pup $Def.Id -Type 'Folder' -Item $_.FullName -Detail $profile.LocalPath
+                }
+        }
+    }
+}
+
+function Get-PupLooseFileRoots {
+    param($Def)
+    $rels = @(Get-PupDefList $Def.LooseFileRoots)
+    if ($rels.Count -eq 0) {
+        $rels = @(
+            'Downloads'
+            'Desktop'
+            'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup'
+            'AppData\Roaming\Microsoft\Windows\Start Menu\Programs'
+        )
+    }
+    $rels
+}
+
+function Find-PupLooseFiles {
+    param($Def)
+    if (-not $Def.LooseFileMatch) { return }
+    foreach ($profile in Get-PupUserProfiles) {
+        foreach ($rel in Get-PupLooseFileRoots -Def $Def) {
+            $root = Join-Path $profile.LocalPath $rel
+            if (-not (Test-Path -LiteralPath $root -ErrorAction SilentlyContinue)) { continue }
+            Get-ChildItem -LiteralPath $root -File -ErrorAction SilentlyContinue |
+                Where-Object { Test-PupRegex $_.Name $Def.LooseFileMatch } |
+                ForEach-Object {
+                    Add-PupFinding -Pup $Def.Id -Type 'LooseFile' -Item $_.FullName -Detail $rel
+                }
+        }
+    }
+    $publicDesktop = Join-Path $env:PUBLIC 'Desktop'
+    if (Test-Path -LiteralPath $publicDesktop -ErrorAction SilentlyContinue) {
+        Get-ChildItem -LiteralPath $publicDesktop -File -ErrorAction SilentlyContinue |
+            Where-Object { Test-PupRegex $_.Name $Def.LooseFileMatch } |
+            ForEach-Object {
+                Add-PupFinding -Pup $Def.Id -Type 'LooseFile' -Item $_.FullName -Detail 'Public Desktop'
+            }
     }
 }
 
@@ -350,14 +559,14 @@ function Find-PupUninstallKeys {
 
 function Find-PupRegistryKeys {
     param($Def)
-    foreach ($root in @($Def.RegistryKeys)) {
+    foreach ($root in Get-PupDefList $Def.RegistryKeys) {
         $path = Expand-PupPath $root
         if ($path -and (Test-Path -LiteralPath $path)) {
             Add-PupFinding -Pup $Def.Id -Type 'RegistryKey' -Item $path
         }
     }
     foreach ($hive in Get-PupUserHiveRoots) {
-        foreach ($rel in @($Def.UserRegistryKeys)) {
+        foreach ($rel in Get-PupDefList $Def.UserRegistryKeys) {
             $path = Join-Path $hive $rel
             if (Test-Path -LiteralPath $path) {
                 Add-PupFinding -Pup $Def.Id -Type 'RegistryKey' -Item $path
@@ -373,7 +582,7 @@ function Find-PupRegistryValues {
     if (-not $pattern) { return }
 
     $roots = New-Object System.Collections.Generic.List[string]
-    foreach ($raw in @($Def.RegistryValueRoots)) {
+    foreach ($raw in Get-PupDefList $Def.RegistryValueRoots) {
         if ($raw -like 'HKCU:\*') {
             $rel = $raw.Substring(6)
             foreach ($hive in Get-PupUserHiveRoots) {
@@ -522,6 +731,8 @@ function Invoke-PupScan {
     Write-PupLog ("--- Scanning {0} ({1}) ---" -f $Def.Id, $Def.DisplayName)
     if ($Def.Notes) { Write-PupLog $Def.Notes }
     Find-PupFolders -Def $Def
+    Find-PupNamedFolders -Def $Def
+    Find-PupLooseFiles -Def $Def
     Find-PupTasks -Def $Def
     Find-PupServices -Def $Def
     Find-PupUninstallKeys -Def $Def
@@ -554,6 +765,7 @@ function Remove-PupFinding {
             else { Stop-Process -Name $item -Force -ErrorAction Stop }
         }
         'Folder' { Remove-Item -LiteralPath $item -Recurse -Force -ErrorAction Stop }
+        'LooseFile' { Remove-Item -LiteralPath $item -Force -ErrorAction Stop }
         'ScheduledTask' {
             $taskName = $Finding.Meta.TaskName
             $taskPath = $Finding.Meta.TaskPath
@@ -708,6 +920,7 @@ try {
             UninstallRegKey = 7
             RegistryKey    = 8
             Folder         = 9
+            LooseFile      = 10
         }
         $ordered = @($script:Findings | Sort-Object { if ($removeOrder.ContainsKey($_.Type)) { $removeOrder[$_.Type] } else { 50 } }, Type, Item)
         foreach ($f in $ordered) {
