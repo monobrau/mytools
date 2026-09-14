@@ -67,13 +67,14 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 Tokens/IDs are only embedded in the clipboard snippet when you copy — nothing is stored in the AHK file. Do not paste them into tickets or git.
 
-### IR / forensics — event logs, Sysinternals, ADWCleaner
+### IR / forensics — event logs, Sysinternals, ADWCleaner, PUP remnants
 
 | Tool | Repo |
 | --- | --- |
 | HarkinsCollector (event logs) | [ExceedingLife/HarkinsCollector](https://github.com/ExceedingLife/HarkinsCollector) — zip under `C:\ForensicLogs` |
 | Forensic Investigator (Sysinternals) | [monobrau/forensicinvestigator](https://github.com/monobrau/forensicinvestigator) — reports under `C:\SecurityReports` |
 | Malwarebytes ADWCleaner | [ADWCleaner](https://www.malwarebytes.com/adwcleaner) — silent `/eula /clean /noreboot` |
+| PUP remnant cleanup (Ask Toolbar) | mytools `PupRemnantCleanup` — dry-run the catalog and report what is present; Remediate deletes those families. Add more ids in the catalog |
 
 Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypass` plus `Invoke-RestMethod -OutFile` then `&` run. ADWCleaner downloads the vendor EXE and runs `Start-Process -Wait`. Prefer elevated / Backstage.
 

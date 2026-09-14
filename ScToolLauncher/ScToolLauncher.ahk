@@ -389,6 +389,22 @@ Tools := [
         "Note", "Silent adware/PUA clean. /noreboot — schedule reboot yourself if needed. EDR may alert on the download or run.",
         "ClipboardNote", "NOTE: ADWCleaner /eula /clean /noreboot. Does not reboot. Prefer elevated session. Check EDR alerts if the download is blocked."
     ),
+    Map(
+        "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
+        "Name", "PUP remnant cleanup (Ask Toolbar)",
+        "Summary", "Dry-run every catalog PUP and report what is on the host (Ask Toolbar first; add more families in the script). Clean up deletes all matched remnants for those families. Chromium/Firefox prefs are reported only. Product box limits to one or more catalog ids.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PupRemnantCleanup",
+        "Fetch", "Contents",
+        "Path", "PupRemnantCleanup",
+        "Script", "Invoke-PupRemnantCleanup.ps1",
+        "UaPrefix", "PupRemnantCleanup-bootstrap",
+        "UaVer", "1.1.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 300000,
+        "Flags", "CheckOnly Remediate Product NoExit",
+        "Note", "Prefer elevated / Backstage. Scan first. Blank Product = every catalog family (whatever is present). Type an id (or AskToolbar,NextPup) to limit the job.",
+        "ClipboardNote", "NOTE: Blank Product scans the whole catalog and acts on what is present. Scan is dry-run. Remove deletes folders/tasks/registry; browser prefs stay report-only."
+    ),
     ; --- M365 / Exchange ---
     Map(
         "Category", "M365 / Exchange — Inky/IPW transport rules (EXO admin)",
