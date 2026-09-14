@@ -121,6 +121,8 @@ Double-click the script, or create a shortcut / Startup entry.
 2. Select a tool, mode, and options.
 3. **Copy to clipboard**.
 4. Paste into ScreenConnect **Commands** (`#!ps`) or **Backstage** (one-liner format).
+   Commands snippets set TLS 1.2 via numeric `3072` (not `::Tls12`) and re-launch
+   Windows PowerShell 5.1 when SC’s `#!ps` host is the v2 engine.
 
 ## Bump versions
 

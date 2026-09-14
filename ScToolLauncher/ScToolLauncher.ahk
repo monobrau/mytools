@@ -2,6 +2,8 @@
 ; ScToolLauncher — hotkey picker for any ScreenConnect-ready tool shortcut (not vuln-only).
 ; Copies a GitHub bootstrap #!ps / Backstage one-liner to the clipboard.
 ; Hotkey: Ctrl+Shift+Alt+S (change HotkeySpec below). Prefer Commands tab #!ps.
+; Commands snippets relaunch Windows PowerShell 5.1 when #!ps is the v2 engine
+; (Tls12 enum is missing; GitHub then fails). TLS uses numeric 3072, not ::Tls12.
 ; Catalog: mytools (Contents API) + other monobrau repos (raw.githubusercontent.com).
 
 #SingleInstance Force
@@ -1174,16 +1176,32 @@ BuildSwitches(tool, isScan, isCommands) {
     return out
 }
 
+; TLS 1.2 as numeric 3072 — [Net.SecurityProtocolType]::Tls12 is $null on PS 2.0
+; (.NET only exposes Ssl3, Tls), which throws and leaves GitHub on TLS 1.0.
+BootstrapTls() {
+    return "try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}"
+}
+
+; ScreenConnect #!ps sometimes runs the v2 engine even when 5.1 is installed
+; (error text uses <<<< and "possible values are Ssl3, Tls"). Re-invoke the
+; same SC temp file with System32 powershell.exe. Env guard avoids a loop when
+; the host truly has only 2.0.
+BootstrapPs5Relaunch() {
+    return "if($PSVersionTable.PSVersion.Major -lt 5){if($env:SC_TOOL_PS5){throw 'PowerShell 5.1 required (this host is running 2.0).'}; $env:SC_TOOL_PS5=1; & `"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`" -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path; exit $LASTEXITCODE}; "
+}
+
 BuildSnippet(tool, isScan, isCommands) {
     global DefaultOwner, DefaultRepo, DefaultRef, MaxLength
     timeout := isScan ? tool["TimeoutScan"] : tool["TimeoutUpdate"]
     fetch := ToolGet(tool, "Fetch", "Contents")
+    tls := BootstrapTls()
+    ps5 := isCommands ? BootstrapPs5Relaunch() : ""
 
     if (fetch = "DownloadExe") {
         url := ToolGet(tool, "Url", "")
         outFile := ToolGet(tool, "OutFile", "C:\Windows\Temp\tool.exe")
         argList := ToolGet(tool, "ExeArgList", "")
-        body := "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $url='" url "'; $out='" outFile "'; Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing; Start-Process -FilePath $out -ArgumentList " argList " -Wait"
+        body := ps5 "$ProgressPreference='SilentlyContinue'; " tls "; $url='" url "'; $out='" outFile "'; Invoke-WebRequest -Uri $url -OutFile $out -UseBasicParsing; Start-Process -FilePath $out -ArgumentList " argList " -Wait"
     } else {
         switches := BuildSwitches(tool, isScan, isCommands)
         defaultArgs := ToolGet(tool, "DefaultArgs", "")
@@ -1202,7 +1220,7 @@ BuildSnippet(tool, isScan, isCommands) {
                 url := "https://raw.githubusercontent.com/" owner "/" repo "/main/" script
             if ToolHasFlag(tool, "CacheBust")
                 url .= "?v=" ver
-            body := "Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP '" tempName "'; Invoke-RestMethod -Uri '" url "' -OutFile $out; & $out" switches
+            body := ps5 "Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; " tls "; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP '" tempName "'; Invoke-RestMethod -Uri '" url "' -OutFile $out; & $out" switches
         } else if (fetch = "Raw") {
             owner := ToolGet(tool, "Owner", DefaultOwner)
             repo := ToolGet(tool, "Repo", "")
@@ -1213,7 +1231,7 @@ BuildSnippet(tool, isScan, isCommands) {
                 url := "https://raw.githubusercontent.com/" owner "/" repo "/main/" script
             if ToolHasFlag(tool, "CacheBust")
                 url .= "?v=" ver
-            body := "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $url='" url "'; $script=(Invoke-WebRequest -Uri $url -UseBasicParsing).Content; & ([ScriptBlock]::Create($script))" switches
+            body := ps5 tls "; $url='" url "'; $script=(Invoke-WebRequest -Uri $url -UseBasicParsing).Content; & ([ScriptBlock]::Create($script))" switches
         } else {
             uaPrefix := ToolGet(tool, "UaPrefix", "")
             if (uaPrefix = "")
@@ -1229,7 +1247,7 @@ BuildSnippet(tool, isScan, isCommands) {
                 url := "https://api.github.com/repos/" owner "/" repo "/contents/" path "/" script "?ref=" DefaultRef
             else
                 url := "https://api.github.com/repos/" owner "/" repo "/contents/" script "?ref=" DefaultRef
-            body := "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','" ua "'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('" url "'); if ($script -match '(?i)<html|github.com/login|&redirect') { throw 'Download returned HTML, not a script.' }; & ([scriptblock]::Create($script))" switches
+            body := ps5 "$ProgressPreference='SilentlyContinue'; " tls "; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','" ua "'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('" url "'); if ($script -match '(?i)<html|github.com/login|&redirect') { throw 'Download returned HTML, not a script.' }; & ([scriptblock]::Create($script))" switches
         }
     }
 

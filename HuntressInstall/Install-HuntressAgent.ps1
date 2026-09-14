@@ -116,14 +116,14 @@ if ($existing.IsPresent) {
 
 $InstallerUrl = "https://update.huntress.io/download/$AccountKey/HuntressInstaller.exe"
 $ProgressPreference = 'SilentlyContinue'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch { }
 
 Write-Section 'Downloading Huntress installer'
 Write-Output ("URL host: update.huntress.io (account key used in path; not printed)")
 try {
     $job = Start-Job -ScriptBlock {
         param($url, $path)
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch { }
         Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing -ErrorAction Stop
     } -ArgumentList $InstallerUrl, $InstallerPath
 
