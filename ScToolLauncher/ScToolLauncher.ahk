@@ -169,13 +169,13 @@ Tools := [
     Map(
         "Category", "ScreenConnect — GPO/MSI finder, temp cleanup",
         "Name", "Temp file cleanup",
-        "Summary", "Removes stale ScreenConnect temp folders, old installers, and Automate package cache leftovers. Dry-run first.",
+        "Summary", "Removes stale ScreenConnect temp leftovers; reports CVE-2026-84869 client version; cleans Huntress staging IOCs. Dry-run first.",
         "DocsUrl", "https://github.com/monobrau/screenconnect-temp-cleanup",
         "Fetch", "Raw",
         "Owner", "monobrau",
         "Repo", "screenconnect-temp-cleanup",
         "Script", "Remove-ScreenConnectTempCopies.ps1",
-        "UaVer", "1.6.0",
+        "UaVer", "1.7.1",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 300000,
         "Flags", "Delete Force CacheBust"

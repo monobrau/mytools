@@ -34,7 +34,7 @@ Categories start **collapsed**. Labels list what is under each group:
 | Tool | Repo |
 | --- | --- |
 | GPO / MSI finder | [screenconnect-gpo-msi-finder](https://github.com/monobrau/screenconnect-gpo-msi-finder) |
-| Temp file cleanup | [screenconnect-temp-cleanup](https://github.com/monobrau/screenconnect-temp-cleanup) |
+| Temp file cleanup | [screenconnect-temp-cleanup](https://github.com/monobrau/screenconnect-temp-cleanup) **v1.7.1** — CVE-2026-84869 advisory is report-only; in-use/installed clients are never deleted |
 
 ### OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation
 
