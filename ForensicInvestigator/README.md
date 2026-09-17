@@ -9,11 +9,16 @@ Reports default to `C:\SecurityReports` from ScreenConnect.
 | Source | Output |
 |--------|--------|
 | Sysinternals autorunsc + services + TCP + processes | CSV with SHA256, signature, optional VirusTotal, risk level |
-| **All-user Downloads and Desktop** | `{HOST}_UserDownloads_{stamp}.csv` (hash/signature on PE and scripts) |
+| **All-user Downloads and Desktop** | CSV with hash/signature plus **Zone.Identifier** (ZoneId, ReferrerUrl, HostUrl) on hashed files |
+| Per-user PowerShell history / transcripts | `Artifacts_*/PowerShell/` + `PowerShellHistory` CSV |
+| Amcache.hve + SYSTEM hive (and LOG files) | `Artifacts_*/Hives/` — copy only, parse offline |
+| Chrome / Edge / Brave `History` SQLite | `Artifacts_*/BrowserHistory/` — copied with share-read, not queried live |
+| Local Administrators (SID S-1-5-32-544) + RMM inventory | CSVs |
+| Defender detections + DetectionHistory folder | `DefenderDetections` CSV + `Artifacts_*/Defender/` |
 | Prefetch, scheduled tasks, installed software, local users, logged-on users, DNS cache, ARP | CSVs |
 | `systeminfo` | `{HOST}_SystemInfo_{stamp}.txt` |
-| Harkins EVTX set (Security, PowerShell, Sysmon, RDP, WinRM, WMI, Defender, …) | `EventLogs_{stamp}\` |
-| Zip of CSVs + EVTX folder | `{HOST}_ForensicAnalysis_{stamp}.zip` |
+| Harkins EVTX set | `EventLogs_{stamp}\` |
+| Manifest + zip hash | `{HOST}_CollectionSummary_{stamp}.json` and `{zip}.sha256` |
 
 Does **not** enable extra Windows logs (Harkins does; that changes the host). It only exports logs that already exist.
 

@@ -5,8 +5,10 @@
 .DESCRIPTION
     Downloads and runs Sysinternals tools to perform comprehensive system analysis
     (autoruns, services, network, processes) with optional VirusTotal hash checking.
-    Also collects Harkins-style host artifacts (prefetch, tasks, users, software,
-    DNS/ARP) and event logs, and inventories every user Downloads and Desktop folder.
+    Also collects Harkins-style host artifacts and event logs, inventories every
+    user Downloads/Desktop (with Zone.Identifier), copies PowerShell history,
+    Amcache/SYSTEM hives, Chrome/Edge History DBs, local admins, RMM inventory,
+    and Defender detections, then writes a hashed collection manifest.
 
 .PARAMETER OutputPath
     Directory where reports will be saved. Defaults to .\ForensicReports
@@ -96,9 +98,13 @@ param(
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch { }
 
 # Script version - for verification
-$script:Version = "3.0.0"
+$script:Version = "3.1.0"
 $script:AdditionalCsvPaths = New-Object 'System.Collections.Generic.List[string]'
 $script:EventLogFolder = $null
+$script:ArtifactRoot = $null
+$script:ZipPath = $null
+$script:CollectionStartUtc = $null
+$script:RmmNamePattern = 'screenconnect|connectwise|huntress|sentinelone|anydesk|ultraviewer|teamviewer|splashtop|logmein|atera|ninjarmm|connectsecure|cybercns|ltsvc|automate|meshagent|rustdesk|remotepc|bomgar|beyondtrust'
 $script:DownloadHashExtensions = @(
     '.exe', '.dll', '.msi', '.scr', '.com', '.sys', '.cpl', '.ocx',
     '.ps1', '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh', '.bat', '.cmd', '.hta', '.lnk'
@@ -904,6 +910,63 @@ function Get-UserDownloadScanRoots {
     return @($roots)
 }
 
+function Get-ZoneIdentifierInfo {
+    param([string]$Path)
+
+    $info = [pscustomobject]@{ ZoneId = $null; ReferrerUrl = $null; HostUrl = $null }
+    try {
+        $lines = Get-Content -LiteralPath $Path -Stream Zone.Identifier -ErrorAction Stop
+        foreach ($line in @($lines)) {
+            if ($line -match '^ZoneId=(.+)$') { $info.ZoneId = $Matches[1].Trim() }
+            elseif ($line -match '^ReferrerUrl=(.+)$') { $info.ReferrerUrl = $Matches[1].Trim() }
+            elseif ($line -match '^HostUrl=(.+)$') { $info.HostUrl = $Matches[1].Trim() }
+        }
+    }
+    catch {
+    }
+
+    return $info
+}
+
+function Copy-LockedFile {
+    param(
+        [string]$Source,
+        [string]$Destination
+    )
+
+    if (-not (Test-Path -LiteralPath $Source)) {
+        return $false
+    }
+
+    $destDir = Split-Path -Parent $Destination
+    if (-not (Test-Path -LiteralPath $destDir)) {
+        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    }
+
+    try {
+        Copy-Item -LiteralPath $Source -Destination $Destination -Force -ErrorAction Stop
+        return $true
+    }
+    catch {
+        $in = $null
+        $out = $null
+        try {
+            $in = [System.IO.File]::Open($Source, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            $out = [System.IO.File]::Create($Destination)
+            $in.CopyTo($out)
+            return $true
+        }
+        catch {
+            Write-ColoredMessage ("[!] Copy failed: {0} ({1})" -f $Source, $_.Exception.Message) -Color Yellow
+            return $false
+        }
+        finally {
+            if ($out) { $out.Dispose() }
+            if ($in) { $in.Dispose() }
+        }
+    }
+}
+
 function Get-UserDownloadEntries {
     Write-ColoredMessage "`n=== Scanning all user Downloads and Desktop folders ===" -Color Cyan
 
@@ -956,6 +1019,11 @@ function Get-UserDownloadEntries {
                 $risk = 'Medium'
             }
 
+            $zone = $null
+            if ($hash) {
+                $zone = Get-ZoneIdentifierInfo -Path $file.FullName
+            }
+
             [void]$entries.Add([pscustomobject]@{
                     Type           = 'UserDownload'
                     User           = $root.User
@@ -968,6 +1036,9 @@ function Get-UserDownloadEntries {
                     LastWriteTime  = $file.LastWriteTime
                     SHA256         = $hash
                     Signature      = $signature
+                    ZoneId         = if ($zone) { $zone.ZoneId } else { $null }
+                    ReferrerUrl    = if ($zone) { $zone.ReferrerUrl } else { $null }
+                    HostUrl        = if ($zone) { $zone.HostUrl } else { $null }
                     VT_Detections  = if ($vtReport) { $vtReport.Malicious } else { 'N/A' }
                     RiskLevel      = $risk
                 })
@@ -1145,6 +1216,370 @@ function Get-ArpEntries {
     }
 
     return @($rows)
+}
+
+function Get-LocalAdminEntries {
+    $rows = New-Object System.Collections.Generic.List[object]
+    try {
+        Get-LocalGroupMember -SID 'S-1-5-32-544' -ErrorAction Stop | ForEach-Object {
+            [void]$rows.Add([pscustomobject]@{
+                    Name            = $_.Name
+                    SID             = $_.SID.Value
+                    ObjectClass     = [string]$_.ObjectClass
+                    PrincipalSource = [string]$_.PrincipalSource
+                })
+        }
+    }
+    catch {
+        try {
+            $net = net localgroup administrators 2>$null
+            [void]$rows.Add([pscustomobject]@{
+                    Name            = 'net localgroup'
+                    SID             = ''
+                    ObjectClass     = 'raw'
+                    PrincipalSource = [string]$net
+                })
+        }
+        catch {
+        }
+    }
+
+    return @($rows)
+}
+
+function Get-RmmInventoryEntries {
+    $rows = New-Object System.Collections.Generic.List[object]
+    $rx = $script:RmmNamePattern
+
+    Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match $rx -or $_.DisplayName -match $rx -or $_.PathName -match $rx
+    } | ForEach-Object {
+        [void]$rows.Add([pscustomobject]@{
+                Kind        = 'Service'
+                Name        = $_.Name
+                DisplayName = $_.DisplayName
+                State       = $_.State
+                StartMode   = $_.StartMode
+                Path        = $_.PathName
+            })
+    }
+
+    Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.ProcessName -match $rx -or ($_.Path -and $_.Path -match $rx)
+    } | ForEach-Object {
+        [void]$rows.Add([pscustomobject]@{
+                Kind        = 'Process'
+                Name        = $_.ProcessName
+                DisplayName = $_.Id
+                State       = 'Running'
+                StartMode   = ''
+                Path        = $_.Path
+            })
+    }
+
+    foreach ($path in @(
+            'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        )) {
+        Get-ItemProperty -Path $path -ErrorAction SilentlyContinue | ForEach-Object {
+            $dn = $_.PSObject.Properties['DisplayName']
+            if ($null -eq $dn -or [string]$dn.Value -notmatch $rx) {
+                return
+            }
+
+            $loc = $_.PSObject.Properties['InstallLocation']
+            [void]$rows.Add([pscustomobject]@{
+                    Kind        = 'Uninstall'
+                    Name        = [string]$dn.Value
+                    DisplayName = [string]$dn.Value
+                    State       = 'Installed'
+                    StartMode   = ''
+                    Path        = if ($loc) { [string]$loc.Value } else { '' }
+                })
+        }
+    }
+
+    return @($rows)
+}
+
+function Get-DefenderDetectionEntries {
+    $rows = New-Object System.Collections.Generic.List[object]
+    try {
+        Get-MpThreatDetection -ErrorAction Stop | ForEach-Object {
+            $resources = @($_.Resources) -join '; '
+            [void]$rows.Add([pscustomobject]@{
+                    InitialDetectionTime       = $_.InitialDetectionTime
+                    LastThreatStatusChangeTime = $_.LastThreatStatusChangeTime
+                    ThreatID                   = $_.ThreatID
+                    ActionSuccess              = $_.ActionSuccess
+                    DomainUser                 = $_.DomainUser
+                    ProcessName                = $_.ProcessName
+                    Resources                  = $resources
+                    CleaningActionID           = $_.CleaningActionID
+                })
+        }
+    }
+    catch {
+        Write-ColoredMessage "[!] Get-MpThreatDetection unavailable" -Color Yellow
+    }
+
+    return @($rows)
+}
+
+function Copy-PowerShellHistory {
+    param([string]$Timestamp)
+
+    Write-ColoredMessage "`n=== Copying PowerShell history and transcripts ===" -Color Cyan
+    $destRoot = Join-Path $script:ArtifactRoot 'PowerShell'
+    $index = New-Object System.Collections.Generic.List[object]
+
+    foreach ($profile in (Get-UserProfileRoots)) {
+        $userDest = Join-Path $destRoot $profile.Name
+        $candidates = New-Object System.Collections.Generic.List[System.IO.FileInfo]
+
+        $psrl = Join-Path $profile.FullName 'AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine'
+        if (Test-Path -LiteralPath $psrl) {
+            foreach ($f in @(Get-ChildItem -LiteralPath $psrl -File -Filter '*_history.txt' -Force -ErrorAction SilentlyContinue)) {
+                [void]$candidates.Add($f)
+            }
+        }
+
+        foreach ($rel in @('Documents\PowerShell', 'Documents\WindowsPowerShell')) {
+            $t = Join-Path $profile.FullName $rel
+            if (Test-Path -LiteralPath $t) {
+                foreach ($f in @(Get-ChildItem -LiteralPath $t -File -Force -Recurse -Filter '*transcript*' -ErrorAction SilentlyContinue)) {
+                    [void]$candidates.Add($f)
+                }
+            }
+        }
+
+        $temp = Join-Path $profile.FullName 'AppData\Local\Temp'
+        if (Test-Path -LiteralPath $temp) {
+            foreach ($f in @(Get-ChildItem -LiteralPath $temp -File -Force -Filter '*PowerShell_transcript*' -ErrorAction SilentlyContinue)) {
+                [void]$candidates.Add($f)
+            }
+        }
+
+        foreach ($file in $candidates) {
+            $copied = Join-Path $userDest $file.Name
+            $ok = Copy-LockedFile -Source $file.FullName -Destination $copied
+            [void]$index.Add([pscustomobject]@{
+                    User         = $profile.Name
+                    Kind         = $(if ($file.Name -like '*transcript*') { 'Transcript' } else { 'History' })
+                    SourcePath   = $file.FullName
+                    CopiedPath   = $(if ($ok) { $copied } else { '' })
+                    Length       = $file.Length
+                    LastWriteTime = $file.LastWriteTime
+                    Copied       = $ok
+                })
+        }
+    }
+
+    Write-ReportCsv -Data $index -Name 'PowerShellHistory' -Timestamp $Timestamp | Out-Null
+    Write-ColoredMessage ("[+] PowerShell history/transcript sources: {0}" -f $index.Count) -Color Green
+}
+
+function Copy-ExecutionHives {
+    param([string]$Timestamp)
+
+    Write-ColoredMessage "`n=== Copying Amcache and SYSTEM hives (offline parse) ===" -Color Cyan
+    $dest = Join-Path $script:ArtifactRoot 'Hives'
+    $index = New-Object System.Collections.Generic.List[object]
+    $sources = @(
+        (Join-Path $env:WINDIR 'AppCompat\Programs\Amcache.hve'),
+        (Join-Path $env:WINDIR 'AppCompat\Programs\Amcache.hve.LOG1'),
+        (Join-Path $env:WINDIR 'AppCompat\Programs\Amcache.hve.LOG2'),
+        (Join-Path $env:WINDIR 'System32\config\SYSTEM'),
+        (Join-Path $env:WINDIR 'System32\config\SYSTEM.LOG1'),
+        (Join-Path $env:WINDIR 'System32\config\SYSTEM.LOG2')
+    )
+
+    foreach ($source in $sources) {
+        if (-not (Test-Path -LiteralPath $source)) {
+            continue
+        }
+
+        $copied = Join-Path $dest (Split-Path -Leaf $source)
+        $ok = Copy-LockedFile -Source $source -Destination $copied
+        $hash = $null
+        if ($ok) {
+            $hash = Get-FileHashQuick -FilePath $copied
+        }
+
+        [void]$index.Add([pscustomobject]@{
+                Source   = $source
+                Copied   = $ok
+                Dest     = $(if ($ok) { $copied } else { '' })
+                SHA256   = $hash
+                Length   = (Get-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue).Length
+            })
+    }
+
+    Write-ReportCsv -Data $index -Name 'HiveCopies' -Timestamp $Timestamp | Out-Null
+}
+
+function Copy-BrowserHistoryDatabases {
+    param([string]$Timestamp)
+
+    Write-ColoredMessage "`n=== Copying Chrome/Edge History databases (no live query) ===" -Color Cyan
+    $destRoot = Join-Path $script:ArtifactRoot 'BrowserHistory'
+    $index = New-Object System.Collections.Generic.List[object]
+
+    foreach ($profile in (Get-UserProfileRoots)) {
+        $pairs = @(
+            @{ Browser = 'Chrome'; Root = (Join-Path $profile.FullName 'AppData\Local\Google\Chrome\User Data') },
+            @{ Browser = 'Edge'; Root = (Join-Path $profile.FullName 'AppData\Local\Microsoft\Edge\User Data') },
+            @{ Browser = 'Brave'; Root = (Join-Path $profile.FullName 'AppData\Local\BraveSoftware\Brave-Browser\User Data') }
+        )
+
+        foreach ($pair in $pairs) {
+            if (-not (Test-Path -LiteralPath $pair.Root)) {
+                continue
+            }
+
+            Get-ChildItem -LiteralPath $pair.Root -Directory -Force -ErrorAction SilentlyContinue | ForEach-Object {
+                $history = Join-Path $_.FullName 'History'
+                if (-not (Test-Path -LiteralPath $history)) {
+                    return
+                }
+
+                $leaf = '{0}_{1}_{2}_History' -f $profile.Name, $pair.Browser, $_.Name
+                $copied = Join-Path $destRoot $leaf
+                $ok = Copy-LockedFile -Source $history -Destination $copied
+                $journal = $history + '-journal'
+                if (Test-Path -LiteralPath $journal) {
+                    Copy-LockedFile -Source $journal -Destination ($copied + '-journal') | Out-Null
+                }
+
+                [void]$index.Add([pscustomobject]@{
+                        User     = $profile.Name
+                        Browser  = $pair.Browser
+                        Profile  = $_.Name
+                        Source   = $history
+                        Copied   = $ok
+                        Dest     = $(if ($ok) { $copied } else { '' })
+                        SHA256   = $(if ($ok) { Get-FileHashQuick -FilePath $copied } else { $null })
+                    })
+            }
+        }
+    }
+
+    Write-ReportCsv -Data $index -Name 'BrowserHistoryCopies' -Timestamp $Timestamp | Out-Null
+    Write-ColoredMessage ("[+] Browser History DBs copied: {0}" -f @($index | Where-Object Copied).Count) -Color Green
+}
+
+function Copy-DefenderDetectionHistory {
+    param([string]$Timestamp)
+
+    $src = Join-Path $env:ProgramData 'Microsoft\Windows Defender\Scans\History\Service\DetectionHistory'
+    if (-not (Test-Path -LiteralPath $src)) {
+        return
+    }
+
+    $dest = Join-Path $script:ArtifactRoot 'Defender\DetectionHistory'
+    Write-ColoredMessage "`n=== Copying Defender DetectionHistory ===" -Color Cyan
+    try {
+        Copy-Item -LiteralPath $src -Destination $dest -Recurse -Force -ErrorAction Stop
+        Write-ColoredMessage "[+] Defender DetectionHistory copied" -Color Green
+    }
+    catch {
+        Write-ColoredMessage "[!] Defender DetectionHistory copy failed: $_" -Color Yellow
+    }
+}
+
+function Write-CollectionManifest {
+    param([string]$Timestamp)
+
+    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction SilentlyContinue
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $admin = ([Security.Principal.WindowsPrincipal]$identity).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+    $fileRows = New-Object System.Collections.Generic.List[object]
+    $scanRoots = New-Object System.Collections.Generic.List[string]
+    if ($script:EventLogFolder) { [void]$scanRoots.Add($script:EventLogFolder) }
+    if ($script:ArtifactRoot) { [void]$scanRoots.Add($script:ArtifactRoot) }
+    foreach ($csv in @($script:AdditionalCsvPaths)) {
+        if ($csv -and (Test-Path -LiteralPath $csv)) {
+            [void]$scanRoots.Add($csv)
+        }
+    }
+
+    foreach ($root in $scanRoots) {
+        if (-not $root -or -not (Test-Path -LiteralPath $root)) {
+            continue
+        }
+
+        if ((Get-Item -LiteralPath $root).PSIsContainer) {
+            Get-ChildItem -LiteralPath $root -File -Force -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($_.Name -like '*.zip' -or $_.Name -like '*.sha256' -or $_.FullName -match '\\DetectionHistory\\') {
+                    return
+                }
+
+                [void]$fileRows.Add([pscustomobject]@{
+                        Path   = $_.FullName
+                        Length = $_.Length
+                        SHA256 = (Get-FileHashQuick -FilePath $_.FullName)
+                    })
+            }
+        }
+        else {
+            [void]$fileRows.Add([pscustomobject]@{
+                    Path   = $root
+                    Length = (Get-Item -LiteralPath $root).Length
+                    SHA256 = (Get-FileHashQuick -FilePath $root)
+                })
+        }
+    }
+
+    $manifest = [ordered]@{
+        ScriptVersion = $script:Version
+        ComputerName  = $env:COMPUTERNAME
+        StartUtc      = if ($script:CollectionStartUtc) { $script:CollectionStartUtc.ToString('o') } else { $null }
+        EndUtc        = [datetime]::UtcNow.ToString('o')
+        Collector     = $identity.Name
+        IsAdmin       = $admin
+        OSCaption     = if ($os) { $os.Caption } else { '' }
+        OSVersion     = if ($os) { $os.Version } else { [Environment]::OSVersion.Version.ToString() }
+        OutputPath    = $OutputPath
+        ArtifactRoot  = $script:ArtifactRoot
+        EventLogFolder = $script:EventLogFolder
+        VirusTotal    = [bool]$script:VTEnabled
+        FileCount     = $fileRows.Count
+        Files         = @($fileRows)
+    }
+
+    $jsonPath = Join-Path $OutputPath ("{0}_CollectionSummary_{1}.json" -f $env:COMPUTERNAME, $Timestamp)
+    ($manifest | ConvertTo-Json -Depth 6) | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    Write-ColoredMessage "[+] Collection manifest: $jsonPath" -Color Green
+    [void]$script:AdditionalCsvPaths.Add($jsonPath)
+    return $jsonPath
+}
+
+function Write-ZipHashFile {
+    param([string]$ZipPath)
+
+    if (-not $ZipPath -or -not (Test-Path -LiteralPath $ZipPath)) {
+        return
+    }
+
+    $hash = Get-FileHashQuick -FilePath $ZipPath
+    $hashPath = $ZipPath + '.sha256'
+    $line = '{0}  {1}' -f $hash, (Split-Path -Leaf $ZipPath)
+    Set-Content -LiteralPath $hashPath -Value $line -Encoding ASCII
+    Write-ColoredMessage "[+] Zip hash: $hashPath" -Color Green
+}
+
+function Export-PriorityEvidence {
+    param([string]$Timestamp)
+
+    Write-ColoredMessage "`n=== Priority evidence (Zone.ID / PS history / hives / browser / admins / RMM / Defender) ===" -Color Cyan
+    Write-ReportCsv -Data (Get-LocalAdminEntries) -Name 'LocalAdministrators' -Timestamp $Timestamp | Out-Null
+    Write-ReportCsv -Data (Get-RmmInventoryEntries) -Name 'RmmInventory' -Timestamp $Timestamp | Out-Null
+    Write-ReportCsv -Data (Get-DefenderDetectionEntries) -Name 'DefenderDetections' -Timestamp $Timestamp | Out-Null
+    Copy-PowerShellHistory -Timestamp $Timestamp
+    Copy-ExecutionHives -Timestamp $Timestamp
+    Copy-BrowserHistoryDatabases -Timestamp $Timestamp
+    Copy-DefenderDetectionHistory -Timestamp $Timestamp
 }
 
 function Export-HostArtifactReports {
@@ -1641,12 +2076,31 @@ function Export-Results {
             $zipSources += $script:EventLogFolder
         }
 
-        # Create zip archive of CSV files + event logs
+        if ($script:ArtifactRoot -and (Test-Path -LiteralPath $script:ArtifactRoot)) {
+            $zipSources += $script:ArtifactRoot
+        }
+
+        foreach ($p in $csvPaths) {
+            if ($p -and ($script:AdditionalCsvPaths -notcontains $p)) {
+                [void]$script:AdditionalCsvPaths.Add($p)
+            }
+        }
+
+        Write-CollectionManifest -Timestamp $timestamp | Out-Null
+        foreach ($extra in @($script:AdditionalCsvPaths)) {
+            if ($extra -and (Test-Path -LiteralPath $extra) -and ($zipSources -notcontains $extra)) {
+                $zipSources += $extra
+            }
+        }
+
+        # Create zip archive of CSV files + event logs + artifacts
         if ($zipSources.Count -gt 0) {
             try {
                 $zipPath = Join-Path $OutputPath "${hostname}_ForensicAnalysis_${timestamp}.zip"
                 Compress-Archive -Path $zipSources -DestinationPath $zipPath -Force -ErrorAction Stop
+                $script:ZipPath = $zipPath
                 Write-ColoredMessage "[+] Reports archived: $zipPath" -Color Green
+                Write-ZipHashFile -ZipPath $zipPath
             } catch {
                 Write-ColoredMessage "[!] Warning: Failed to create zip archive: $_" -Color Yellow
             }
@@ -1721,6 +2175,9 @@ try {
     }
 
     $runStamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $script:CollectionStartUtc = [datetime]::UtcNow
+    $script:ArtifactRoot = Join-Path $OutputPath ("Artifacts_{0}" -f $runStamp)
+    New-Item -ItemType Directory -Path $script:ArtifactRoot -Force | Out-Null
 
     # Run analyses
     $autorunEntries = Get-AutorunEntries
@@ -1736,6 +2193,15 @@ try {
 
     if (-not $SkipHostArtifacts) {
         Export-HostArtifactReports -Timestamp $runStamp
+    }
+
+    $savedEapPriority = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        Export-PriorityEvidence -Timestamp $runStamp
+    }
+    finally {
+        $ErrorActionPreference = $savedEapPriority
     }
 
     if (-not $SkipEventLogs) {

@@ -5,7 +5,7 @@
 # =============================================================================
 # BACKSTAGE — FULL SCAN
 # =============================================================================
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP 'Invoke-ForensicAnalysis.ps1'; Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/monobrau/mytools/main/ForensicInvestigator/Invoke-ForensicAnalysis.ps1?v=3.0.0' -OutFile $out; & $out -OutputPath "C:\SecurityReports"
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP 'Invoke-ForensicAnalysis.ps1'; Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/monobrau/mytools/main/ForensicInvestigator/Invoke-ForensicAnalysis.ps1?v=3.1.0' -OutFile $out; & $out -OutputPath "C:\SecurityReports"
 
 # =============================================================================
 # COMMANDS tab — FULL SCAN (#!ps)
@@ -13,7 +13,7 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.Serv
 #!ps
 #timeout=900000
 #maxlength=100000
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP 'Invoke-ForensicAnalysis.ps1'; Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/monobrau/mytools/main/ForensicInvestigator/Invoke-ForensicAnalysis.ps1?v=3.0.0' -OutFile $out; & $out -OutputPath "C:\SecurityReports"
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP 'Invoke-ForensicAnalysis.ps1'; Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/monobrau/mytools/main/ForensicInvestigator/Invoke-ForensicAnalysis.ps1?v=3.1.0' -OutFile $out; & $out -OutputPath "C:\SecurityReports"
 # NOTE: Reports under C:\SecurityReports (CSV + EventLogs + zip). All-user Downloads/Desktop included. Prefer elevated. No VirusTotal in this snippet.
 
 # =============================================================================
@@ -22,4 +22,4 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.Serv
 #!ps
 #timeout=600000
 #maxlength=100000
-Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP 'Invoke-ForensicAnalysis.ps1'; Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/monobrau/mytools/main/ForensicInvestigator/Invoke-ForensicAnalysis.ps1?v=3.0.0' -OutFile $out; & $out -OutputPath "C:\SecurityReports" -SkipEventLogs
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force; try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}; $ProgressPreference='SilentlyContinue'; $out=Join-Path $env:TEMP 'Invoke-ForensicAnalysis.ps1'; Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/monobrau/mytools/main/ForensicInvestigator/Invoke-ForensicAnalysis.ps1?v=3.1.0' -OutFile $out; & $out -OutputPath "C:\SecurityReports" -SkipEventLogs

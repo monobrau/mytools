@@ -72,7 +72,7 @@ Tokens/IDs are only embedded in the clipboard snippet when you copy — nothing 
 | Tool | Repo |
 | --- | --- |
 | HarkinsCollector (event logs) | [ExceedingLife/HarkinsCollector](https://github.com/ExceedingLife/HarkinsCollector) — zip under `C:\ForensicLogs` |
-| Forensic Investigator (Sysinternals) | mytools `ForensicInvestigator` **v3.0.0** — Sysinternals + Harkins EVTX/artifacts + all-user Downloads/Desktop; `C:\SecurityReports` |
+| Forensic Investigator (Sysinternals) | mytools `ForensicInvestigator` **v3.1.0** — plus Zone.ID, PS history, Amcache/SYSTEM, browser History copies, admins/RMM, Defender, hashed manifest |
 | Malwarebytes ADWCleaner | [ADWCleaner](https://www.malwarebytes.com/adwcleaner) — silent `/eula /clean /noreboot` |
 | PUP remnant cleanup | mytools `PupRemnantCleanup` — family dropdown (All on host, or one catalog id). Dry-run reports what is present; Remediate deletes those families |
 
