@@ -7,6 +7,7 @@ Public collection of work tools and scripts.
 | Tool | Description |
 | --- | --- |
 | [DotNetUpdate](DotNetUpdate/) | Patch installed .NET 6+ Runtime/Desktop/ASP.NET/SDK to latest same-major security release |
+| [ForensicInvestigator](ForensicInvestigator/) | Sysinternals risk scan + Harkins EVTX/artifacts + all-user Downloads/Desktop; `C:\SecurityReports` |
 | [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
 | [M365AppsUpdate](M365AppsUpdate/) | Silent M365 Apps Click-to-Run check/update; clear up-to-date verdict; does not close Office apps by default |
 | [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep (Ask Toolbar, MediaArena/PDF converters, AppSuite, Wave, OneLaunch). Dry-run by default; `-Remove` deletes remnants |
