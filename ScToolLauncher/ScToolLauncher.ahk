@@ -340,7 +340,7 @@ Tools := [
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "RunOnly HuntressInstall Force AutoReboot AlwaysNote",
-        "Note", "Account key is built in. Set the org key. Rip and replace = wipe + install now (no reboot). Schedule = SYSTEM tasks + cleanup in 30 min + reboot in 3.5h. Official /ACCT_KEY=. Prefer Backstage.",
+        "Note", "Account key is built in. Set the org key. Pick one: Rip and replace = wipe + install now (no reboot). Schedule = wipe via SYSTEM + cleanup in 30 min + reboot at the date/time you pick (endpoint local). Official /ACCT_KEY=. Prefer Backstage.",
         "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=. PS2-safe inline download."
     ),
     ; --- IR / forensics ---
@@ -594,6 +594,7 @@ ShowGui(*) {
 
     gCtrls["LblOptions"] := gGui.Add("Text", "Section", "Options")
     gCtrls["Force"] := gGui.Add("Checkbox", "vOptForce", "Force (skip soft guards / re-run)")
+    gCtrls["Force"].OnEvent("Click", OnForceOptClick)
     gCtrls["ForceAppShutdown"] := gGui.Add("Checkbox", "vOptForceAppShutdown", "Close Office apps (Word, Excel, Outlook, …)")
     gCtrls["IncludeBrowsers"] := gGui.Add("Checkbox", "vOptIncludeBrowsers", "Include browsers (Chrome, Edge, Firefox)")
     gCtrls["Uninstall"] := gGui.Add("Checkbox", "vOptUninstall", "Uninstall HP Support Assistant")
@@ -605,6 +606,10 @@ ShowGui(*) {
     gCtrls["SkipIfRunning"] := gGui.Add("Checkbox", "Checked vOptSkipIfRunning", "Only if agent is not running (fleet / scan-prep)")
     gCtrls["ResetPlatform"] := gGui.Add("Checkbox", "vOptResetPlatform", "Nuclear: MpCmdRun -ResetPlatform")
     gCtrls["AutoReboot"] := gGui.Add("Checkbox", "vOptAutoReboot", "Auto reboot when required")
+    gCtrls["AutoReboot"].OnEvent("Click", OnAutoRebootOptClick)
+    gCtrls["LblHuntressRebootAt"] := gGui.Add("Text", "Section", "Reboot at (endpoint local time)")
+    gCtrls["HuntressRebootAt"] := gGui.Add("DateTime", "w220 vHuntressRebootAt", "yyyy-MM-dd HH:mm")
+    gCtrls["HuntressRebootAt"].Value := DefaultHuntressRebootAt()
 
     gCtrls["LblProduct"] := gGui.Add("Text", "Section", "Product filter (e.g. DotNet, ShareX)")
     gCtrls["Product"] := gGui.Add("Edit", "w" UiContentW " vProduct", "")
@@ -666,7 +671,7 @@ ShowGui(*) {
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
-        "AutoReboot",
+        "AutoReboot", "LblHuntressRebootAt", "HuntressRebootAt",
         "LblProduct", "Product",
         "LblPupFamily", "PupFamily",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
@@ -736,7 +741,8 @@ ReflowGui() {
         else if (key = "Product" || key = "PupFamily" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor"
             || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
             || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl"
-            || key = "HuntressAccountKey" || key = "HuntressOrgKey" || key = "HuntressTags")
+            || key = "HuntressAccountKey" || key = "HuntressOrgKey" || key = "HuntressTags"
+            || key = "HuntressRebootAt")
             ch := 22
         else if (InStr(key, "Lbl") = 1)
             ch := 16
@@ -841,6 +847,20 @@ SelectedTool() {
     return Tools[gLastToolIndex]
 }
 
+OnForceOptClick(*) {
+    global gCtrls
+    if ToolHasFlag(SelectedTool(), "HuntressInstall") && gCtrls["Force"].Value
+        gCtrls["AutoReboot"].Value := 0
+    RefreshOptionEnable()
+}
+
+OnAutoRebootOptClick(*) {
+    global gCtrls
+    if ToolHasFlag(SelectedTool(), "HuntressInstall") && gCtrls["AutoReboot"].Value
+        gCtrls["Force"].Value := 0
+    RefreshOptionEnable()
+}
+
 RefreshOptionEnable(*) {
     global gGui, gCtrls
     t := SelectedTool()
@@ -871,7 +891,7 @@ RefreshOptionEnable(*) {
 
     if (showHuntress) {
         gCtrls["Force"].Text := "Rip and replace (wipe leftover Huntress, then install now; no reboot)"
-        gCtrls["AutoReboot"].Text := "Schedule SYSTEM install + cleanup + reboot in 3.5h"
+        gCtrls["AutoReboot"].Text := "Schedule SYSTEM install + cleanup + reboot at chosen time"
     } else {
         gCtrls["Force"].Text := "Force (skip soft guards / re-run)"
         gCtrls["AutoReboot"].Text := "Auto reboot when required"
@@ -889,6 +909,17 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["SkipIfRunning"], showSkipIfRunning)
     SetCtrlShown(gCtrls["ResetPlatform"], showResetPlatform)
     SetCtrlShown(gCtrls["AutoReboot"], showAutoReboot)
+    if (showHuntress) {
+        if gCtrls["Force"].Value && gCtrls["AutoReboot"].Value
+            gCtrls["AutoReboot"].Value := 0
+        if gCtrls["Force"].Value
+            gCtrls["AutoReboot"].Enabled := false
+        if gCtrls["AutoReboot"].Value
+            gCtrls["Force"].Enabled := false
+    }
+    showHuntressRebootAt := showHuntress && showAutoReboot && gCtrls["AutoReboot"].Value
+    SetCtrlShown(gCtrls["LblHuntressRebootAt"], showHuntressRebootAt)
+    SetCtrlShown(gCtrls["HuntressRebootAt"], showHuntressRebootAt)
     SetCtrlShown(gCtrls["LblProduct"], showProduct)
     SetCtrlShown(gCtrls["Product"], showProduct)
     if showPupFamily {
@@ -1213,6 +1244,18 @@ BootstrapPs5Relaunch() {
     return "if($PSVersionTable.PSVersion.Major -lt 5){$exe=$null; foreach($c in @(`"$env:SystemRoot\SysNative\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\SysWOW64\WindowsPowerShell\v1.0\powershell.exe`")){if(Test-Path -LiteralPath $c){try{$v=& $c -NoProfile -Command '$PSVersionTable.PSVersion.Major'}catch{$v=0}; if(($v -as [int]) -ge 5){$exe=$c; break}}}; if(-not $exe){throw 'PowerShell 5.1 required (this host has only 2.0). Install WMF 5.1 or use Huntress inline install.'}; & $exe -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path; exit $LASTEXITCODE}; "
 }
 
+DefaultHuntressRebootAt() {
+    today1730 := SubStr(A_Now, 1, 8) "173000"
+    if (DateDiff(today1730, A_Now, "Minutes") >= 5)
+        return today1730
+    return DateAdd(today1730, 1, "Days")
+}
+
+FormatHuntressRebootAt() {
+    global gCtrls
+    return FormatTime(gCtrls["HuntressRebootAt"].Value, "yyyy-MM-dd HH:mm")
+}
+
 BuildHuntressBody(isCommands) {
     global gCtrls
     if (CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value)
@@ -1250,14 +1293,20 @@ BuildHuntressScheduleBody(isCommands) {
         acct := StrReplace(LoadHuntressAccountKey(), "'", "''")
     org := StrReplace(Trim(gCtrls["HuntressOrgKey"].Value), "'", "''")
     tags := StrReplace(Trim(gCtrls["HuntressTags"].Value), "'", "''")
-    force := CtrlActive(gCtrls["Force"]) && gCtrls["Force"].Value
-    forceLit := force ? "$true" : "$false"
+    ; Schedule is exclusive of the Force checkbox; the SYSTEM job always wipes.
+    forceLit := "$true"
+    rebootAt := StrReplace(FormatHuntressRebootAt(), "'", "''")
     end := isCommands ? "exit 0" : "return"
     tls := BootstrapTls()
     ; No nested double-quotes — AHK v2 treats "" as string end.
     p := tls
     p .= "; $acct='" acct "'; $org='" org "'; $tags='" tags "'; $force=" forceLit
+    p .= "; $rebootAt='" rebootAt "'"
     p .= "; if(-not $acct -or $acct.Length -ne 32){throw 'Bad Huntress account key length'}"
+    p .= "; if(-not $rebootAt){throw 'Set $rebootAt to host-local yyyy-MM-dd HH:mm'}"
+    p .= "; $when=Get-Date $rebootAt"
+    p .= "; $sec=[int][math]::Ceiling(($when-(Get-Date)).TotalSeconds)"
+    p .= "; if($sec -lt 60){throw ('Reboot time is in the past or <60s: '+$rebootAt+' host now '+(Get-Date -Format 'yyyy-MM-dd HH:mm'))}"
     p .= "; if(-not $force){ $svc=Get-Service -Name HuntressAgent -EA SilentlyContinue; if($svc){Write-Output ('Already installed: '+[string]$svc.Status); " end "} }"
     p .= "; $job='C:\Windows\Temp\Huntress-SC-Install.ps1'; $clean='C:\Windows\Temp\Huntress-SC-Cleanup.ps1'"
     p .= "; $L=@()"
@@ -1292,8 +1341,8 @@ BuildHuntressScheduleBody(isCommands) {
     p .= "; schtasks.exe /Create /TN HuntressSC-Cleanup /RU SYSTEM /RL HIGHEST /SC ONCE /ST 23:59 /F /TR $trClean"
     p .= "; schtasks.exe /Run /TN HuntressSC-Install"
     p .= "; schtasks.exe /Run /TN HuntressSC-Cleanup"
-    p .= "; shutdown.exe /r /t 12600 /c 'Huntress SC reboot 3.5h'"
-    p .= "; Write-Output 'Scheduled HuntressSC-Install + Cleanup (+30 min). Reboot in 3.5h. Abort reboot: shutdown /a. Log: C:\Windows\Temp\Huntress-SC-Install.log'; "
+    p .= "; shutdown.exe /r /t $sec /c ('Huntress SC reboot '+$rebootAt)"
+    p .= "; Write-Output ('Scheduled HuntressSC-Install + Cleanup (+30 min). Reboot at '+$rebootAt+' (in '+[string]$sec+'s). Abort: shutdown /a. Log: C:\Windows\Temp\Huntress-SC-Install.log'); "
     p .= end
     return p
 }
@@ -1387,7 +1436,7 @@ DescribeSelection(tool, isScan) {
             mode := "Silent install"
         else if ToolHasFlag(tool, "HuntressInstall") {
             if (CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value)
-                mode := "Scheduled install + 3.5h reboot"
+                mode := "Scheduled install + reboot " FormatHuntressRebootAt()
             else if (CtrlActive(gCtrls["Force"]) && gCtrls["Force"].Value)
                 mode := "Rip and replace"
             else
@@ -1442,7 +1491,7 @@ DescribeSelection(tool, isScan) {
         parts.Push("Only if not running")
     if CtrlActive(gCtrls["ResetPlatform"]) && gCtrls["ResetPlatform"].Value
         parts.Push("ResetPlatform")
-    if CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value
+    if CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value && !ToolHasFlag(tool, "HuntressInstall")
         parts.Push("Auto reboot")
     if ToolHasFlag(tool, "BackupsOnlyDefault") {
         if CtrlActive(gCtrls["ClearAllBackupContent"]) && gCtrls["ClearAllBackupContent"].Value
@@ -1509,6 +1558,10 @@ DoCopy(*) {
             acct := LoadHuntressAccountKey()
         if (acct = "" || StrLen(acct) != 32 || Trim(gCtrls["HuntressOrgKey"].Value) = "") {
             MsgBox("Needs a 32-character Huntress Account Key and an Organization Key.`nAccount key is built in; set the org key (client short name).", AppName, "Icon!")
+            return
+        }
+        if (CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value && DateDiff(gCtrls["HuntressRebootAt"].Value, A_Now, "Seconds") < 60) {
+            MsgBox("Pick a reboot date/time at least 1 minute in the future (endpoint local time).", AppName, "Icon!")
             return
         }
     }

@@ -3,7 +3,7 @@
 #maxlength=200000
 # Huntress silent install. #!ps + #timeout must be first or SC defaults to 60s.
 # $force=$true = in-session rip and replace (no reboot).
-# $schedule=$true = SYSTEM tasks + cleanup in 30 min + reboot in 3.5h.
+# $schedule=$true = SYSTEM tasks + cleanup in 30 min + reboot at $rebootAt (host local).
 # Official /ACCT_KEY= (not /ACCOUNT_KEY=).
 try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{try{[Net.ServicePointManager]::SecurityProtocol=3072}catch{}}
 $acct='fddd1009b6541feb66431b905f6fc870'
@@ -11,10 +11,15 @@ $org='YOUR_ORG_KEY'
 $tags=''
 $force=$false
 $schedule=$false
+$rebootAt='' # required when $schedule; host-local e.g. '2026-09-18 17:30'
 if(-not $acct -or $acct.Length -ne 32 -or $acct -eq 'YOUR_ACCOUNT_KEY'){throw ('Bad Huntress account key length '+[string]$acct.Length+' (need 32).')}
 if(-not $org -or $org -eq 'YOUR_ORG_KEY'){throw 'Set $org to the Huntress organization key (client short name).'}
 $svc=Get-Service -Name HuntressAgent -EA SilentlyContinue
 if($schedule){
+  if(-not $rebootAt){throw 'Set $rebootAt to host-local yyyy-MM-dd HH:mm'}
+  $when=Get-Date $rebootAt
+  $sec=[int][math]::Ceiling(($when-(Get-Date)).TotalSeconds)
+  if($sec -lt 60){throw ('Reboot time is in the past or <60s: '+$rebootAt+' host now '+(Get-Date -Format 'yyyy-MM-dd HH:mm'))}
   if(-not $force -and $svc){Write-Output ('Service HuntressAgent: '+[string]$svc.Status); Write-Output 'Already installed. Set $force=$true to wipe in the scheduled job.'; exit 0}
   $dir='C:\Windows\Temp'
   $job=Join-Path $dir 'Huntress-SC-Install.ps1'
@@ -62,8 +67,8 @@ if($schedule){
   schtasks.exe /Create /TN HuntressSC-Cleanup /RU SYSTEM /RL HIGHEST /SC ONCE /ST 23:59 /F /TR $trClean
   schtasks.exe /Run /TN HuntressSC-Install
   schtasks.exe /Run /TN HuntressSC-Cleanup
-  shutdown.exe /r /t 12600 /c "Huntress SC reboot 3.5h"
-  Write-Output 'Scheduled HuntressSC-Install + HuntressSC-Cleanup (+30 min). Reboot in 12600s (3.5h). Abort reboot: shutdown /a'
+  shutdown.exe /r /t $sec /c ('Huntress SC reboot '+$rebootAt)
+  Write-Output ('Scheduled HuntressSC-Install + HuntressSC-Cleanup (+30 min). Reboot at '+$rebootAt+' (in '+[string]$sec+'s). Abort reboot: shutdown /a')
   Write-Output 'Log: C:\Windows\Temp\Huntress-SC-Install.log'
   exit 0
 }

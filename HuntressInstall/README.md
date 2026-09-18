@@ -29,10 +29,11 @@ observed to end with a non-zero exit such as **53**. This script uses `/ACCT_KEY
 Skip only if the `HuntressAgent` service exists, unless `-Force` / launcher
 **Rip and replace** (wipe leftovers, then install in-session; no reboot).
 
-Launcher **Schedule SYSTEM install + cleanup + reboot in 3.5h** is a separate
-option (`$schedule=$true` in `ScreenConnect-Commands.ps1`). It creates
-`HuntressSC-Install` + `HuntressSC-Cleanup` and `shutdown /r /t 12600`.
-Abort that reboot with `shutdown /a`.
+Launcher **Schedule SYSTEM install + cleanup + reboot at chosen time** is a
+separate option (`$schedule=$true` in `ScreenConnect-Commands.ps1`). It creates
+`HuntressSC-Install` + `HuntressSC-Cleanup` and arms `shutdown /r /t` for the
+date/time in the launcher picker (`$rebootAt`, endpoint local). Abort that
+reboot with `shutdown /a`.
 
 ## Safety
 
