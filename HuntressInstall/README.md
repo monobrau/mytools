@@ -23,10 +23,16 @@ observed to end with a non-zero exit such as **53**. This script uses `/ACCT_KEY
 | `-AccountKey` | 32-char account key (also used in download URL) |
 | `-OrgKey` | Organization key |
 | `-Tags` | Optional |
+| `-Force` | Rip and replace: wipe leftovers, then install |
 | `-Exit` | ScreenConnect Commands exit code |
 
-Already-installed agents are detected via the `HuntressAgent` service or
-`%ProgramFiles%\Huntress\HuntressAgent.exe` (also x86). No download in that case.
+Skip only if the `HuntressAgent` service exists, unless `-Force` / launcher
+**Rip and replace** (wipe leftovers, then install in-session; no reboot).
+
+Launcher **Schedule SYSTEM install + cleanup + reboot in 3.5h** is a separate
+option (`$schedule=$true` in `ScreenConnect-Commands.ps1`). It creates
+`HuntressSC-Install` + `HuntressSC-Cleanup` and `shutdown /r /t 12600`.
+Abort that reboot with `shutdown /a`.
 
 ## Safety
 
@@ -35,11 +41,19 @@ Already-installed agents are detected via the `HuntressAgent` service or
 - Do not paste live org keys into tickets.
 - Prefer elevated ScreenConnect **Backstage** / SYSTEM.
 - Troubleshoot with `C:\Windows\Temp\HuntressInstaller.log` if exit ≠ 0.
+- Commands install prints a heartbeat every 10s and stops waiting after 240s
+  without killing the installer (a silent `/S` run can take minutes).
+- Tamper Protection can block wipe. If `Uninstall.exe` or file delete fails,
+  create a Huntress TP exclusion and retry Force.
 
 ## ScreenConnect
 
 See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Or use ScToolLauncher
 (**Agents** → Huntress silent install).
+
+`#!ps` and `#timeout=900000` must be the **first lines** in Commands. Anything
+above them makes ScreenConnect ignore the timeout and default to **60 seconds**,
+which kills a slow `HuntressInstaller.exe` mid-install.
 
 ScreenConnect `#!ps` is often the **32-bit PowerShell 2.0** engine (`<<<<`
 errors, `Ssl3, Tls` only). The Commands snippet does **not** pull this 5.1

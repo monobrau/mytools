@@ -9,8 +9,8 @@
     /ACCOUNT_KEY — the latter is ignored and commonly yields a non-zero exit such
     as 53).
 
-    Skips download and install when HuntressAgent is already present (service
-    or HuntressAgent.exe under Program Files). Never hardcode real keys.
+    Skips when HuntressAgent service exists unless -Force (rip and replace).
+    Never hardcode real keys.
 
 .PARAMETER AccountKey
     Huntress account key (32 chars). Used for download URL and /ACCT_KEY=.
@@ -30,6 +30,10 @@
 .PARAMETER InstallTimeoutSec
     Max seconds to wait for installer (default 180).
 
+.PARAMETER Force
+    Rip and replace: Uninstall.exe /S, kill leftovers, delete Huntress
+    folders/services/registry, then install.
+
 .PARAMETER Exit
     Call exit with a status code (ScreenConnect Commands). Omit in Backstage.
 #>
@@ -48,6 +52,8 @@ param(
     [int]$DownloadTimeoutSec = 120,
 
     [int]$InstallTimeoutSec = 180,
+
+    [switch]$Force,
 
     [switch]$Exit
 )
@@ -72,6 +78,61 @@ function Get-HuntressInstallState {
         # Service is the install; leftover EXE after a timed-out SC command is not.
         IsPresent   = [bool]$svc
     }
+}
+
+function Remove-HuntressRemnants {
+    Write-Section 'Rip and replace'
+    foreach ($n in @('HuntressRio', 'HuntressUpdater', 'HuntressAgent', 'Huntmon')) {
+        Stop-Service -Name $n -Force -ErrorAction SilentlyContinue
+    }
+    $tk = if (Test-Path -LiteralPath "$env:SystemRoot\SysNative\taskkill.exe") {
+        "$env:SystemRoot\SysNative\taskkill.exe"
+    } else {
+        "$env:SystemRoot\System32\taskkill.exe"
+    }
+    foreach ($im in @('HuntressInstaller.exe', 'HuntressAgent.exe', 'HuntressUpdater.exe', 'HuntressRio.exe', 'Huntmon.exe')) {
+        Write-Output ("{0} /F /T /IM {1}" -f $tk, $im)
+        & $tk /F /T /IM $im
+    }
+    $dirs = @(
+        (Join-Path ${env:ProgramFiles} 'Huntress')
+        (Join-Path ${env:ProgramFiles(x86)} 'Huntress')
+    ) | Where-Object { $_ }
+    foreach ($d in $dirs) {
+        $u = Join-Path $d 'Uninstall.exe'
+        if (Test-Path -LiteralPath $u) {
+            Write-Output ("Running {0} /S" -f $u)
+            $up = Start-Process -FilePath $u -ArgumentList '/S' -PassThru
+            if ($up -and -not $up.WaitForExit(45000)) {
+                Write-Output 'Uninstall.exe still running after 45s; continuing wipe.'
+            }
+        }
+    }
+    Start-Sleep -Seconds 2
+    foreach ($im in @('HuntressInstaller.exe', 'HuntressAgent.exe', 'HuntressUpdater.exe', 'HuntressRio.exe')) {
+        & $tk /F /T /IM $im | Out-Null
+    }
+    $left = @(Get-Process | Where-Object { $_.Name -like '*Huntress*' -and -not $_.HasExited })
+    if ($left.Count -gt 0) {
+        foreach ($p in $left) { Write-Output ("STILL ALIVE {0} PID {1}" -f $p.Name, $p.Id) }
+        throw 'Huntress processes still running after taskkill. Do not install yet (Tamper Protection?).'
+    }
+    foreach ($d in $dirs) {
+        if (Test-Path -LiteralPath $d) {
+            Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Output ("Removed {0}" -f $d)
+        }
+    }
+    foreach ($k in @('HKLM:\SOFTWARE\Huntress Labs', 'HKLM:\SOFTWARE\WOW6432Node\Huntress Labs')) {
+        if (Test-Path $k) {
+            Remove-Item $k -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Output ("Removed {0}" -f $k)
+        }
+    }
+    foreach ($n in @('HuntressRio', 'HuntressUpdater', 'HuntressAgent', 'Huntmon')) {
+        & "$env:SystemRoot\System32\sc.exe" delete $n | Out-Null
+    }
+    Write-Output 'Wipe done; installing fresh'
 }
 
 $AccountKey = $AccountKey.Trim()
@@ -112,8 +173,10 @@ if ($existing.ExePaths.Count -gt 0 -and -not $existing.Service) {
     Write-Output 'Leftover HuntressAgent.exe without HuntressAgent service. Continuing install.'
 }
 
-if ($existing.IsPresent) {
-    Write-Output 'Huntress agent already present. Skipping download and install.'
+if ($Force) {
+    Remove-HuntressRemnants
+} elseif ($existing.IsPresent) {
+    Write-Output 'Huntress agent already present. Skipping download and install. Use -Force to rip and replace.'
     $script:ExitCode = 0
     if ($Exit) { exit $script:ExitCode }
     return
