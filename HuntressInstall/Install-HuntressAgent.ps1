@@ -69,7 +69,8 @@ function Get-HuntressInstallState {
     [pscustomobject]@{
         Service     = $svc
         ExePaths    = @($exePaths)
-        IsPresent   = [bool]($svc -or $exePaths.Count -gt 0)
+        # Service is the install; leftover EXE after a timed-out SC command is not.
+        IsPresent   = [bool]$svc
     }
 }
 
@@ -105,6 +106,10 @@ if ($existing.ExePaths.Count -gt 0) {
     }
 } else {
     Write-Output 'HuntressAgent.exe: not found under Program Files'
+}
+
+if ($existing.ExePaths.Count -gt 0 -and -not $existing.Service) {
+    Write-Output 'Leftover HuntressAgent.exe without HuntressAgent service. Continuing install.'
 }
 
 if ($existing.IsPresent) {

@@ -8,6 +8,7 @@ Desktop.ini
 .idea/
 
 # Secrets and local config
+ScToolLauncher/local-defaults.ini
 .env
 .env.*
 !.env.example
@@ -28,7 +29,7 @@ exceptions.json
 !tsconfig.json
 !*.schema.json
 
-# Ticket / investigation artifacts (often contain PII)
+# Ticket / investigation artifacts
 Ticket-*.txt
 *-Ticket-*.zip
 ClientExceptions-*.txt

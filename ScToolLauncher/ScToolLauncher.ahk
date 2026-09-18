@@ -19,6 +19,9 @@ DefaultOwner := "monobrau"
 DefaultRepo := "mytools"
 DefaultRef := "main"
 MaxLength := "200000"
+; Huntress account key is permanent for this tenant. local-defaults.ini can override.
+LocalDefaultsPath := A_ScriptDir "\local-defaults.ini"
+HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 
 ; Fetch: Contents (api.github.com + Accept raw) | Raw (raw.githubusercontent.com?v=)
 ;        IrmOutFile (Process Bypass + irm -OutFile + & run — for unsigned remote .ps1)
@@ -327,7 +330,7 @@ Tools := [
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
         "Name", "Huntress silent install",
-        "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Paste keys at copy time — never stored. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
+        "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Account key is built in. Org key is per-client. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/HuntressInstall",
         "Fetch", "Contents",
         "Path", "HuntressInstall",
@@ -337,8 +340,8 @@ Tools := [
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly HuntressInstall AlwaysNote",
-        "Note", "Account key + org key below are not saved. Official flag is /ACCT_KEY= ( /ACCOUNT_KEY= is wrong and often exits 53 ). Commands snippet is PS2-safe (downloads Huntress EXE directly, no GitHub / no 5.1). Prefer elevated / Backstage. Check C:\Windows\Temp\HuntressInstaller.log on failure.",
-        "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=. PS2-safe inline download."
+        "Note", "Account key is built in. Set the org key (client short name). Official flag is /ACCT_KEY= ( /ACCOUNT_KEY= is wrong and often exits 53 ). Commands snippet is PS2-safe (downloads Huntress EXE directly, no GitHub / no 5.1). Prefer elevated / Backstage. Check C:\Windows\Temp\HuntressInstaller.log on failure.",
+        "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=. PS2-safe inline download."
     ),
     ; --- IR / forensics ---
     Map(
@@ -634,8 +637,10 @@ ShowGui(*) {
     gCtrls["S1InstallerUrl"] := gGui.Add("Edit", "w" UiContentW " vS1InstallerUrl", "")
     gCtrls["S1Quiet"] := gGui.Add("Checkbox", "Checked vS1Quiet", "Quiet (-q) for EXE installers (older agents)")
 
-    gCtrls["LblHuntressAcct"] := gGui.Add("Text", "Section", "Huntress account key — not saved; paste each time")
-    gCtrls["HuntressAccountKey"] := gGui.Add("Edit", "w" UiContentW " Password vHuntressAccountKey", "")
+    huntressAcctDefault := LoadHuntressAccountKey()
+    huntressAcctLabel := "Huntress account key (built in; rarely change)"
+    gCtrls["LblHuntressAcct"] := gGui.Add("Text", "Section", huntressAcctLabel)
+    gCtrls["HuntressAccountKey"] := gGui.Add("Edit", "w" UiContentW " Password vHuntressAccountKey", huntressAcctDefault)
     gCtrls["LblHuntressOrg"] := gGui.Add("Text", , "Huntress organization key (client short name)")
     gCtrls["HuntressOrgKey"] := gGui.Add("Edit", "w" UiContentW " vHuntressOrgKey", "")
     gCtrls["LblHuntressTags"] := gGui.Add("Text", , "Optional tags (comma-separated)")
@@ -782,6 +787,16 @@ ReflowGui() {
     try DllCall("SendMessage", "ptr", gGui.Hwnd, "uint", 0x000B, "ptr", 1, "ptr", 0) ; WM_SETREDRAW true
     try DllCall("RedrawWindow", "ptr", gGui.Hwnd, "ptr", 0, "ptr", 0, "uint", 0x0585)
     ; RDW_INVALIDATE|RDW_ERASE|RDW_FRAME|RDW_ALLCHILDREN|RDW_UPDATENOW
+}
+
+LoadHuntressAccountKey() {
+    global LocalDefaultsPath, HuntressAccountKeyDefault
+    if FileExist(LocalDefaultsPath) {
+        ini := Trim(IniRead(LocalDefaultsPath, "Huntress", "AccountKey", ""))
+        if (ini != "")
+            return ini
+    }
+    return HuntressAccountKeyDefault
 }
 
 ToolHasFlag(tool, flag) {
@@ -1200,11 +1215,13 @@ BuildSnippet(tool, isScan, isCommands) {
     ; WebClient so ScreenConnect's v2 engine can still install the agent.
     if ToolHasFlag(tool, "HuntressInstall") {
         acct := StrReplace(Trim(gCtrls["HuntressAccountKey"].Value), "'", "''")
+        if (acct = "")
+            acct := StrReplace(LoadHuntressAccountKey(), "'", "''")
         org := StrReplace(Trim(gCtrls["HuntressOrgKey"].Value), "'", "''")
         tags := StrReplace(Trim(gCtrls["HuntressTags"].Value), "'", "''")
         endSkip := isCommands ? "exit 0" : "return"
         endOk := isCommands ? "exit $p.ExitCode" : ""
-        body := tls "; $acct='" acct "'; $org='" org "'; $tags='" tags "'; $svc=Get-Service -Name HuntressAgent -EA SilentlyContinue; $exes=@((Join-Path $env:ProgramFiles 'Huntress\HuntressAgent.exe'),(Join-Path ${env:ProgramFiles(x86)} 'Huntress\HuntressAgent.exe')); $hit=$false; if($svc){$hit=$true; Write-Output ('Service HuntressAgent: '+[string]$svc.Status)}; foreach($e in $exes){if($e -and (Test-Path -LiteralPath $e)){$hit=$true; Write-Output ('Found '+$e)}}; if($hit){Write-Output 'Huntress agent already present. Skipping.'; " endSkip "}; $out=Join-Path $env:TEMP 'HuntressInstaller.exe'; Write-Output 'Downloading Huntress installer (update.huntress.io)'; $wc=New-Object Net.WebClient; $wc.DownloadFile(('https://update.huntress.io/download/'+$acct+'/HuntressInstaller.exe'),$out); if(-not(Test-Path -LiteralPath $out) -or ((Get-Item -LiteralPath $out).Length -eq 0)){throw 'Huntress download failed or 0 bytes'}; $a='/ACCT_KEY='+$acct+' /ORG_KEY='+$org; if($tags){$a+=' /TAGS='+$tags}; $a+=' /S'; Write-Output 'Installing with official /ACCT_KEY='; $p=Start-Process -FilePath $out -ArgumentList $a -Wait -PassThru; Write-Output ('Installer exit '+$p.ExitCode); Remove-Item -LiteralPath $out -Force -EA SilentlyContinue; " endOk
+        body := tls "; $acct='" acct "'; $org='" org "'; $tags='" tags "'; if(-not $acct -or $acct.Length -ne 32){throw ('Bad Huntress account key length '+[string]$acct.Length+' (need 32). Placeholder/empty keys 404.')}; $svc=Get-Service -Name HuntressAgent -EA SilentlyContinue; $exes=@((Join-Path $env:ProgramFiles 'Huntress\HuntressAgent.exe'),(Join-Path ${env:ProgramFiles(x86)} 'Huntress\HuntressAgent.exe')); if($svc){Write-Output ('Service HuntressAgent: '+[string]$svc.Status); Write-Output 'Huntress agent already present. Skipping.'; " endSkip "}; Write-Output 'Service HuntressAgent: not found'; foreach($e in $exes){if($e -and (Test-Path -LiteralPath $e)){Write-Output ('Leftover '+$e+' (no service; continuing install)')}}; $out=Join-Path $env:TEMP 'HuntressInstaller.exe'; Write-Output ('Downloading Huntress installer (update.huntress.io, key length '+[string]$acct.Length+')'); $wc=New-Object Net.WebClient; $wc.DownloadFile(('https://update.huntress.io/download/'+$acct+'/HuntressInstaller.exe'),$out); if(-not(Test-Path -LiteralPath $out) -or ((Get-Item -LiteralPath $out).Length -eq 0)){throw 'Huntress download failed or 0 bytes'}; $a='/ACCT_KEY='+$acct+' /ORG_KEY='+$org; if($tags){$a+=' /TAGS='+$tags}; $a+=' /S'; Write-Output 'Installing with official /ACCT_KEY='; $p=Start-Process -FilePath $out -ArgumentList $a -Wait -PassThru; Write-Output ('Installer exit '+$p.ExitCode); Remove-Item -LiteralPath $out -Force -EA SilentlyContinue; " endOk
     } else if (fetch = "DownloadExe") {
         url := ToolGet(tool, "Url", "")
         outFile := ToolGet(tool, "OutFile", "C:\Windows\Temp\tool.exe")
@@ -1394,8 +1411,11 @@ DoCopy(*) {
         }
     }
     if ToolHasFlag(tool, "HuntressInstall") {
-        if (Trim(gCtrls["HuntressAccountKey"].Value) = "" || Trim(gCtrls["HuntressOrgKey"].Value) = "") {
-            MsgBox("Needs Huntress Account Key and Organization Key.`nFill the fields (nothing is saved), then copy again.", AppName, "Icon!")
+        acct := Trim(gCtrls["HuntressAccountKey"].Value)
+        if (acct = "")
+            acct := LoadHuntressAccountKey()
+        if (acct = "" || StrLen(acct) != 32 || Trim(gCtrls["HuntressOrgKey"].Value) = "") {
+            MsgBox("Needs a 32-character Huntress Account Key and an Organization Key.`nAccount key is built in; set the org key (client short name).", AppName, "Icon!")
             return
         }
     }

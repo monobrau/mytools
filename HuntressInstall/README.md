@@ -30,7 +30,9 @@ Already-installed agents are detected via the `HuntressAgent` service or
 
 ## Safety
 
-- **Never commit** real account or org keys. Paste in ScToolLauncher at copy time.
+- Account key is baked into `ScreenConnect-Commands.ps1` and ScToolLauncher
+  (this tenant key does not rotate). Org key is still pasted per client.
+- Do not paste live org keys into tickets.
 - Prefer elevated ScreenConnect **Backstage** / SYSTEM.
 - Troubleshoot with `C:\Windows\Temp\HuntressInstaller.log` if exit ≠ 0.
 

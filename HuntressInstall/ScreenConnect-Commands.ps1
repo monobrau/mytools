@@ -1,5 +1,5 @@
 # Huntress silent install for ScreenConnect.
-# Paste real -AccountKey / -OrgKey at run time (ScToolLauncher). Never commit keys.
+# Account key is permanent for this tenant. Set $org per client (short name).
 # Uses official /ACCT_KEY= (not /ACCOUNT_KEY=).
 # PS2-safe: download the vendor EXE directly (no GitHub, no #Requires 5.1).
 
@@ -7,17 +7,18 @@
 #timeout=600000
 #maxlength=200000
 try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{try{[Net.ServicePointManager]::SecurityProtocol=3072}catch{}}
-$acct='YOUR_ACCOUNT_KEY'
+$acct='fddd1009b6541feb66431b905f6fc870'
 $org='YOUR_ORG_KEY'
 $tags=''
+if(-not $acct -or $acct.Length -ne 32 -or $acct -eq 'YOUR_ACCOUNT_KEY'){throw ('Bad Huntress account key length '+[string]$acct.Length+' (need 32). Placeholder/empty keys 404.')}
+if(-not $org -or $org -eq 'YOUR_ORG_KEY'){throw 'Set $org to the Huntress organization key (client short name).'}
 $svc=Get-Service -Name HuntressAgent -EA SilentlyContinue
 $exes=@((Join-Path $env:ProgramFiles 'Huntress\HuntressAgent.exe'),(Join-Path ${env:ProgramFiles(x86)} 'Huntress\HuntressAgent.exe'))
-$hit=$false
-if($svc){$hit=$true; Write-Output ('Service HuntressAgent: '+[string]$svc.Status)}
-foreach($e in $exes){if($e -and (Test-Path -LiteralPath $e)){$hit=$true; Write-Output ('Found '+$e)}}
-if($hit){Write-Output 'Huntress agent already present. Skipping.'; exit 0}
+if($svc){Write-Output ('Service HuntressAgent: '+[string]$svc.Status); Write-Output 'Huntress agent already present. Skipping.'; exit 0}
+Write-Output 'Service HuntressAgent: not found'
+foreach($e in $exes){if($e -and (Test-Path -LiteralPath $e)){Write-Output ('Leftover '+$e+' (no service; continuing install)')}}
 $out=Join-Path $env:TEMP 'HuntressInstaller.exe'
-Write-Output 'Downloading Huntress installer (update.huntress.io)'
+Write-Output ('Downloading Huntress installer (update.huntress.io, key length '+[string]$acct.Length+')')
 $wc=New-Object Net.WebClient
 $wc.DownloadFile(('https://update.huntress.io/download/'+$acct+'/HuntressInstaller.exe'),$out)
 if(-not(Test-Path -LiteralPath $out) -or ((Get-Item -LiteralPath $out).Length -eq 0)){throw 'Huntress download failed or 0 bytes'}

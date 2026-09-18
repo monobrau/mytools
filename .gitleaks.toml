@@ -1,0 +1,7 @@
+title = "mytools"
+
+[allowlist]
+description = "Huntress tenant account key used in the public installer download URL"
+regexes = [
+  '''fddd1009b6541feb66431b905f6fc870''',
+]

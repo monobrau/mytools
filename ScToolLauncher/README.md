@@ -63,9 +63,9 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | SentinelOne silent install | mytools `SentinelOneInstall` — paste site/group token in GUI; optional URL or on-disk EXE/MSI |
 | ConnectSecure silent install | mytools `ConnectSecureInstall` — company/env/install token in GUI; agentlink download then `-c/-e/-j/-i`. Default option: skip if agent is Running (fleet / scan-prep) |
 | ConnectSecure agent repair + reinstall | mytools — wipe then reinstall (same GUI secrets). Default option: skip if agent is Running; uncheck to force wipe |
-| Huntress silent install | mytools `HuntressInstall` — account + org key in GUI; uses official `/ACCT_KEY=` (not `/ACCOUNT_KEY=`) |
+| Huntress silent install | mytools `HuntressInstall` — account key built in; org key in GUI; official `/ACCT_KEY=` (not `/ACCOUNT_KEY=`) |
 
-Tokens/IDs are only embedded in the clipboard snippet when you copy — nothing is stored in the AHK file. Do not paste them into tickets or git.
+Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, and SentinelOne tokens stay GUI-only. Do not paste live org keys into tickets or git.
 
 ### IR / forensics — event logs, Sysinternals, ADWCleaner, PUP remnants
 
