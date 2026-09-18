@@ -862,7 +862,9 @@ RefreshOptionEnable(*) {
     showResetPlatform := ToolHasFlag(t, "ResetPlatform")
     if InStr(ToolGet(t, "Path", ""), "WindowsDefender") && gCtrls["ModeScan"].Value
         showResetPlatform := false
-    showAutoReboot := ToolHasFlag(t, "AutoReboot") && !gCtrls["ModeScan"].Value
+    ; RunOnly tools (Huntress) keep ModeScan checked until later in this function,
+    ; so do not require Apply mode to show the schedule/reboot checkbox.
+    showAutoReboot := ToolHasFlag(t, "AutoReboot") && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
     scanOnly := ToolHasFlag(t, "ScanOnly")
