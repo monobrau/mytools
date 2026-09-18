@@ -24,6 +24,7 @@ LocalDefaultsPath := A_ScriptDir "\local-defaults.ini"
 HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 
 ; Fetch: Contents (api.github.com + Accept raw) | Raw (raw.githubusercontent.com?v=)
+;        Inline (Body is the snippet; no GitHub download)
 ;        IrmOutFile (Process Bypass + irm -OutFile + & run — for unsigned remote .ps1)
 ;        DownloadExe (IWR vendor EXE + Start-Process -Wait)
 ;        Url (optional) overrides the constructed GitHub raw URL — use for gists
@@ -340,8 +341,32 @@ Tools := [
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "RunOnly HuntressInstall Force AutoReboot AlwaysNote",
-        "Note", "Account key is built in. Set the org key. Pick one: Rip and replace = wipe + install now (no reboot). Schedule = wipe via SYSTEM + cleanup in 30 min + reboot at the date/time you pick (endpoint local). Official /ACCT_KEY=. Prefer Backstage.",
+        "Note", "Prefer elevated Backstage. Cancel a scheduled reboot if needed.",
         "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=. PS2-safe inline download."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Name", "Verify scheduled reboot",
+        "Parent", "Huntress silent install",
+        "Summary", "Read-only: host time, recent User32 1074 shutdown initiations, and HuntressSC task status.",
+        "Fetch", "Inline",
+        "Body", "Write-Output ('Host now '+(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')); Write-Output '--- Recent shutdown initiations (User32 1074) ---'; $logs=@(Get-EventLog -LogName System -Source User32 -Newest 40 -EA SilentlyContinue | Where-Object { $_.EventID -eq 1074 } | Select-Object -First 5); if(-not $logs){ Write-Output 'None found' } else { foreach($e in $logs){ Write-Output '---'; Write-Output ($e.TimeGenerated.ToString('yyyy-MM-dd HH:mm:ss')+' '+(($e.Message -replace '\r?\n',' | '))) } }; Write-Output '--- Huntress SC tasks ---'; foreach($tn in @('HuntressSC-Install','HuntressSC-Cleanup')){ Write-Output ('Query '+$tn); schtasks.exe /Query /TN $tn /FO LIST }",
+        "TimeoutScan", 120000,
+        "TimeoutUpdate", 120000,
+        "Flags", "ScanOnly",
+        "Note", "Read-only. Prefer elevated Backstage."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Name", "Cancel scheduled reboot",
+        "Parent", "Huntress silent install",
+        "Summary", "Aborts a pending shutdown.exe reboot countdown on the endpoint.",
+        "Fetch", "Inline",
+        "Body", "shutdown.exe /a",
+        "TimeoutScan", 30000,
+        "TimeoutUpdate", 30000,
+        "Flags", "RunOnly",
+        "Note", "Prefer elevated Backstage if the reboot was armed as SYSTEM."
     ),
     ; --- IR / forensics ---
     Map(
@@ -502,6 +527,8 @@ PopulateToolTree(tv) {
         catNodes[cat] := tv.Add(cat, 0, "Bold")
 
     clientNodes := Map()
+    parentByName := Map()
+    childParents := Map()
     agentsNode := 0
     clientCatNode := 0
     firstCatNode := 0
@@ -517,8 +544,14 @@ PopulateToolTree(tv) {
                 clientNodes[ck] := tv.Add(client, parent)
             parent := clientNodes[ck]
         }
+        parentName := ToolGet(t, "Parent", "")
+        if (parentName != "" && parentByName.Has(parentName)) {
+            parent := parentByName[parentName]
+            childParents[parentName] := true
+        }
         node := tv.Add(t["Name"], parent)
         gToolByNode[node] := i
+        parentByName[t["Name"]] := node
         if !firstCatNode && catNodes.Has(cat)
             firstCatNode := catNodes[cat]
         if (cat = "Agents — SentinelOne, ConnectSecure, Huntress" && !agentsNode)
@@ -532,6 +565,10 @@ PopulateToolTree(tv) {
     }
     for ck, node in clientNodes {
         if InStr(ck, "Client-specific|") = 1
+            tv.Modify(node, "Expand")
+    }
+    for name, node in parentByName {
+        if childParents.Has(name)
             tv.Modify(node, "Expand")
     }
     gLastToolIndex := 1
@@ -991,12 +1028,16 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Silent install (token)"
     } else if runOnly && ToolHasFlag(t, "HuntressInstall") {
         gCtrls["ModeUpdate"].Text := "Silent install (/ACCT_KEY)"
+    } else if runOnly && (ToolGet(t, "Fetch", "") = "Inline") {
+        gCtrls["ModeUpdate"].Text := "Run command"
     } else if runOnly && showConnectSecure {
         gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
     } else if runOnly && InStr(ToolGet(t, "TempName", ""), "HPbloatware") {
         gCtrls["ModeUpdate"].Text := "Remove HP bloat / Wolf"
     } else if runOnly {
         gCtrls["ModeUpdate"].Text := "Download and run"
+    } else if scanOnly && (ToolGet(t, "Fetch", "") = "Inline") {
+        gCtrls["ModeScan"].Text := "Check pending reboot"
     } else if scanOnly {
         gCtrls["ModeScan"].Text := "Find / report"
     } else {
@@ -1358,6 +1399,8 @@ BuildSnippet(tool, isScan, isCommands) {
     ; WebClient so ScreenConnect's v2 engine can still install the agent.
     if ToolHasFlag(tool, "HuntressInstall") {
         body := BuildHuntressBody(isCommands)
+    } else if (fetch = "Inline") {
+        body := ToolGet(tool, "Body", "")
     } else if (fetch = "DownloadExe") {
         url := ToolGet(tool, "Url", "")
         outFile := ToolGet(tool, "OutFile", "C:\Windows\Temp\tool.exe")
@@ -1444,11 +1487,15 @@ DescribeSelection(tool, isScan) {
         }
         else if ToolHasFlag(tool, "ConnectSecure")
             mode := "Silent install"
+        else if (ToolGet(tool, "Fetch", "") = "Inline")
+            mode := "Run command"
         else if InStr(ToolGet(tool, "TempName", ""), "HPbloatware")
             mode := "Remove HP bloat"
         else
             mode := "Download and run"
-    } else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "IrmOutFile")
+    } else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "Inline")
+        mode := "Check pending reboot"
+    else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "IrmOutFile")
         mode := "Collect / run"
     if !isScan && !ToolHasFlag(tool, "RunOnly") {
         if ToolHasFlag(tool, "Delete") || ToolHasFlag(tool, "PositionalDry")
