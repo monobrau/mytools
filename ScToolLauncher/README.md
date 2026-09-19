@@ -24,6 +24,7 @@ Categories start **collapsed**. Labels list what is under each group:
 | Vulnerable software updater (catalog) | mytools |
 | Microsoft 365 Apps (Click-to-Run) | mytools |
 | .NET runtime / SDK patches | mytools |
+| Visual C++ 2005-2013 redistributables | mytools `VisualCppUpdate` — last security build per installed year |
 | HP Support Assistant | mytools |
 | Classic Teams remnants | mytools |
 | Windows Update (quality) | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |

@@ -56,13 +56,13 @@ Tools := [
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
         "Name", "Vulnerable software updater (catalog)",
-        "Summary", "Checks/updates common third-party apps (winget + M365/HPSA/.NET delegates). Browsers are opt-in.",
+        "Summary", "Checks/updates common third-party apps (winget + M365/HPSA/.NET/VC++ 2005-2013 delegates). Browsers are opt-in.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/VulnSoftwareUpdate",
         "Fetch", "Contents",
         "Path", "VulnSoftwareUpdate",
         "Script", "Update-VulnSoftware.ps1",
         "UaPrefix", "VulnSoftwareUpdate-bootstrap",
-        "UaVer", "1.4.3",
+        "UaVer", "1.4.4",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers Product NoExit"
@@ -91,6 +91,20 @@ Tools := [
         "Script", "Update-DotNetRuntimes.ps1",
         "UaPrefix", "DotNetUpdate-bootstrap",
         "UaVer", "1.0.1",
+        "TimeoutScan", 900000,
+        "TimeoutUpdate", 1800000,
+        "Flags", "CheckOnly Force NoExit"
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "Visual C++ 2005-2013 redistributables",
+        "Summary", "Patches installed VC++ 2005/2008/2010/2012/2013 to the last security build. Does not add missing years. 2015+ stays on the vuln catalog winget IDs.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/VisualCppUpdate",
+        "Fetch", "Contents",
+        "Path", "VisualCppUpdate",
+        "Script", "Update-VisualCppRedistributables.ps1",
+        "UaPrefix", "VisualCppUpdate-bootstrap",
+        "UaVer", "1.0.0",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force NoExit"

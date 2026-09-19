@@ -13,7 +13,8 @@ Public collection of work tools and scripts.
 | [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep (Ask Toolbar, MediaArena/PDF converters, AppSuite, Wave, OneLaunch). Dry-run by default; `-Remove` deletes remnants |
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
-| [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet delegates + winget; ScreenConnect `#!ps`) |
+| [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet/VC++ 2005-2013 delegates + winget; ScreenConnect `#!ps`) |
+| [VisualCppUpdate](VisualCppUpdate/) | Patch installed Visual C++ 2005-2013 redistributables to the last security build for that year |
 | [WindowsDefenderRepair](WindowsDefenderRepair/) | Re-enable Defender real-time protection and start WinDefend / WdNisSvc |
 | [WindowsUpdate](WindowsUpdate/) | Scan/install quality or feature Windows Updates; pre-check for disk, WinRE, WU policy; default no reboot |
 | [ClientSpecific](ClientSpecific/) | Per-client campaign tools (ScToolLauncher: Client-specific → client name) |

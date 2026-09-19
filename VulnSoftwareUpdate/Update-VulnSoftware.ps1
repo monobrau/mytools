@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.3'
+$ScriptVersion = '1.4.4'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -140,6 +140,17 @@ function Get-VulnCatalog {
             ResultVariable = 'DotNetUpdateResultCode'
             AlwaysRun = $true
             Notes = 'Same-major security patches only; never jumps majors'
+        }
+        [pscustomobject]@{
+            Id = 'VcRedistLegacy'; Name = 'Visual C++ 2005-2013 Redistributable'
+            Method = 'Delegate'
+            DelegatePath = 'VisualCppUpdate/Update-VisualCppRedistributables.ps1'
+            ResultVariable = 'VisualCppUpdateResultCode'
+            Match = @(
+                'Microsoft Visual C\+\+ 200[5-9].*Redistributable'
+                'Microsoft Visual C\+\+ 201[0-3].*Redistributable'
+            )
+            Notes = 'Final security builds only; does not install missing years. 2015+ stays on VcRedistX64/X86 winget'
         }
         [pscustomobject]@{
             Id = 'ShareX'; Name = 'ShareX'; Method = 'Winget'; WingetId = 'ShareX.ShareX'

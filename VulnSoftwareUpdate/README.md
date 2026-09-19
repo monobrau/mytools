@@ -11,6 +11,7 @@ Built for endpoints that may **not** have RMM patch management or Intune — Scr
 | Microsoft 365 Apps for business / enterprise | `M365Apps` | Delegates to [M365AppsUpdate](../M365AppsUpdate/) (Click-to-Run, not winget) |
 | HP Support Assistant (extra) | `HpSupportAssistant` | Win10: **uninstall by default** (EOL/vulnerable SoftPaqs); Win11: update. `-CheckOnly` to assess only |
 | .NET 6+ Runtime / Desktop / ASP.NET / SDK | `DotNet` | Delegates to [DotNetUpdate](../DotNetUpdate/) (same-major security patches only) |
+| Visual C++ 2005-2013 Redistributable | `VcRedistLegacy` | Delegates to [VisualCppUpdate](../VisualCppUpdate/) (final security build per installed year) |
 | ShareX | `ShareX` | winget `ShareX.ShareX` |
 | Adobe Acrobat (64-bit) / Reader | `AdobeAcrobat` | winget Reader 64-bit or Acrobat Pro (auto-picked) |
 | Visual Studio Code (User) | `VSCode` | winget `Microsoft.VisualStudioCode` (user-scope may need a logged-on user) |
@@ -81,6 +82,7 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 - Requires **winget** on the endpoint for most third-party apps (SYSTEM context can be flaky; machine-scope installs work best).
 - **M365 Apps** stays on Click-to-Run (same non-disruptive defaults as M365AppsUpdate).
 - **.NET** stays on the installed major (e.g. 8.0.x → latest 8.0.y); it will not jump to a newer major.
+- **Visual C++ 2005-2013** (`VcRedistLegacy`) patches only years already installed. 2015+ stays on winget (`VcRedistX64` / `VcRedistX86`).
 - **Browsers** are opt-in (`-IncludeBrowsers`) because upgrades can close open sessions — still a primary remediation path when there is no browser policy ring.
 - **HPSA on Windows 10** is uninstalled by default (SoftPaqs remain below patched builds / EOL). Windows 11 updates HPSA instead. Use `-CheckOnly` if you only want status.
 - Winget upgrades use `--silent --disable-interactivity` (and `--scope machine` when possible).
