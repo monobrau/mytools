@@ -498,7 +498,7 @@ Tools := [
         "Repo", "mytools",
         "Script", "ForensicInvestigator/Invoke-ForensicAnalysis.ps1",
         "TempName", "Invoke-ForensicAnalysis.ps1",
-        "UaVer", "3.1.1",
+        "UaVer", "3.1.2",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "ScanOnly CacheBust AlwaysNote",

@@ -98,7 +98,7 @@ param(
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch { }
 
 # Script version - for verification
-$script:Version = "3.1.1"
+$script:Version = "3.1.2"
 $script:AdditionalCsvPaths = New-Object 'System.Collections.Generic.List[string]'
 $script:EventLogFolder = $null
 $script:ArtifactRoot = $null
@@ -843,19 +843,37 @@ function Get-RunningProcesses {
 
 function Write-ReportCsv {
     param(
-        [AllowNull()][object]$Data,
+        [AllowNull()][AllowEmptyCollection()][object]$Data,
         [string]$Name,
         [string]$Timestamp
     )
 
-    $rows = @($Data)
+    # Do not use @($genericList): PS 5.1 throws "Argument types do not match".
+    # return [object[]]@() also unrolls to $null for the caller.
+    $rows = New-Object System.Collections.Generic.List[object]
+    if ($null -ne $Data) {
+        if ($Data -is [string]) {
+            [void]$rows.Add($Data)
+        }
+        elseif ($Data -is [System.Collections.IEnumerable]) {
+            foreach ($item in $Data) {
+                if ($null -ne $item) {
+                    [void]$rows.Add($item)
+                }
+            }
+        }
+        else {
+            [void]$rows.Add($Data)
+        }
+    }
+
     if ($rows.Count -eq 0) {
         Write-ColoredMessage "[*] $Name : no rows" -Color Gray
         return $null
     }
 
     $path = Join-Path $OutputPath ("{0}_{1}_{2}.csv" -f $env:COMPUTERNAME, $Name, $Timestamp)
-    $rows | Export-Csv -Path $path -NoTypeInformation -Encoding UTF8
+    $rows.ToArray() | Export-Csv -Path $path -NoTypeInformation -Encoding UTF8
     Write-ColoredMessage "[+] $Name CSV saved: $path ($($rows.Count) rows)" -Color Green
     [void]$script:AdditionalCsvPaths.Add($path)
     return $path
@@ -892,23 +910,8 @@ function Get-UserDownloadScanRoots {
         }
     }
 
-    $publicRoot = Join-Path $env:SystemDrive 'Users\Public'
-    foreach ($pair in @(
-            @{ Location = 'Downloads'; Sub = 'Downloads' },
-            @{ Location = 'Desktop'; Sub = 'Desktop' }
-        )) {
-        $path = Join-Path $publicRoot $pair.Sub
-        if (Test-Path -LiteralPath $path) {
-            [void]$roots.Add([pscustomobject]@{
-                    User     = 'Public'
-                    Location = $pair.Location
-                    Path     = $path
-                })
-        }
-    }
-
-    # PS 5.1: @($List[object]) throws "Argument types do not match"
-    return $roots.ToArray()
+    # Public is already included when C:\Users\Public exists (Get-UserProfileRoots).
+    return , $roots.ToArray()
 }
 
 function Get-ZoneIdentifierInfo {
@@ -1047,7 +1050,7 @@ function Get-UserDownloadEntries {
     }
 
     Write-ColoredMessage "[+] User Downloads/Desktop files: $($entries.Count) (enumerated $scanned)" -Color Green
-    return $entries.ToArray()
+    return , $entries.ToArray()
 }
 
 function Get-PrefetchEntries {
@@ -1157,7 +1160,7 @@ function Get-LocalAccountEntries {
         }
     }
 
-    return $rows.ToArray()
+    return , $rows.ToArray()
 }
 
 function Get-LoggedOnUserEntries {
@@ -1178,7 +1181,7 @@ function Get-LoggedOnUserEntries {
             })
     }
 
-    return $rows.ToArray()
+    return , $rows.ToArray()
 }
 
 function Get-DnsCacheEntries {
@@ -1216,7 +1219,7 @@ function Get-ArpEntries {
     catch {
     }
 
-    return $rows.ToArray()
+    return , $rows.ToArray()
 }
 
 function Get-LocalAdminEntries {
@@ -1245,7 +1248,7 @@ function Get-LocalAdminEntries {
         }
     }
 
-    return $rows.ToArray()
+    return , $rows.ToArray()
 }
 
 function Get-RmmInventoryEntries {
@@ -1300,14 +1303,22 @@ function Get-RmmInventoryEntries {
         }
     }
 
-    return $rows.ToArray()
+    return , $rows.ToArray()
 }
 
 function Get-DefenderDetectionEntries {
     $rows = New-Object System.Collections.Generic.List[object]
     try {
         Get-MpThreatDetection -ErrorAction Stop | ForEach-Object {
-            $resources = @($_.Resources) -join '; '
+            $resourceItems = New-Object System.Collections.Generic.List[string]
+            if ($null -ne $_.Resources) {
+                foreach ($res in $_.Resources) {
+                    if ($null -ne $res -and "$res" -ne '') {
+                        [void]$resourceItems.Add([string]$res)
+                    }
+                }
+            }
+            $resources = $resourceItems -join '; '
             [void]$rows.Add([pscustomobject]@{
                     InitialDetectionTime       = $_.InitialDetectionTime
                     LastThreatStatusChangeTime = $_.LastThreatStatusChangeTime
@@ -1324,7 +1335,7 @@ function Get-DefenderDetectionEntries {
         Write-ColoredMessage "[!] Get-MpThreatDetection unavailable" -Color Yellow
     }
 
-    return $rows.ToArray()
+    return , $rows.ToArray()
 }
 
 function Copy-PowerShellHistory {
@@ -1499,7 +1510,7 @@ function Write-CollectionManifest {
     $scanRoots = New-Object System.Collections.Generic.List[string]
     if ($script:EventLogFolder) { [void]$scanRoots.Add($script:EventLogFolder) }
     if ($script:ArtifactRoot) { [void]$scanRoots.Add($script:ArtifactRoot) }
-    foreach ($csv in @($script:AdditionalCsvPaths)) {
+    foreach ($csv in $script:AdditionalCsvPaths) {
         if ($csv -and (Test-Path -LiteralPath $csv)) {
             [void]$scanRoots.Add($csv)
         }
@@ -1546,7 +1557,7 @@ function Write-CollectionManifest {
         EventLogFolder = $script:EventLogFolder
         VirusTotal    = [bool]$script:VTEnabled
         FileCount     = $fileRows.Count
-        Files         = @($fileRows)
+        Files         = $fileRows.ToArray()
     }
 
     $jsonPath = Join-Path $OutputPath ("{0}_CollectionSummary_{1}.json" -f $env:COMPUTERNAME, $Timestamp)
@@ -1574,13 +1585,23 @@ function Export-PriorityEvidence {
     param([string]$Timestamp)
 
     Write-ColoredMessage "`n=== Priority evidence (Zone.ID / PS history / hives / browser / admins / RMM / Defender) ===" -Color Cyan
-    Write-ReportCsv -Data (Get-LocalAdminEntries) -Name 'LocalAdministrators' -Timestamp $Timestamp | Out-Null
-    Write-ReportCsv -Data (Get-RmmInventoryEntries) -Name 'RmmInventory' -Timestamp $Timestamp | Out-Null
-    Write-ReportCsv -Data (Get-DefenderDetectionEntries) -Name 'DefenderDetections' -Timestamp $Timestamp | Out-Null
-    Copy-PowerShellHistory -Timestamp $Timestamp
-    Copy-ExecutionHives -Timestamp $Timestamp
-    Copy-BrowserHistoryDatabases -Timestamp $Timestamp
-    Copy-DefenderDetectionHistory -Timestamp $Timestamp
+    $steps = @(
+        { Write-ReportCsv -Data (Get-LocalAdminEntries) -Name 'LocalAdministrators' -Timestamp $Timestamp | Out-Null },
+        { Write-ReportCsv -Data (Get-RmmInventoryEntries) -Name 'RmmInventory' -Timestamp $Timestamp | Out-Null },
+        { Write-ReportCsv -Data (Get-DefenderDetectionEntries) -Name 'DefenderDetections' -Timestamp $Timestamp | Out-Null },
+        { Copy-PowerShellHistory -Timestamp $Timestamp },
+        { Copy-ExecutionHives -Timestamp $Timestamp },
+        { Copy-BrowserHistoryDatabases -Timestamp $Timestamp },
+        { Copy-DefenderDetectionHistory -Timestamp $Timestamp }
+    )
+    foreach ($step in $steps) {
+        try {
+            & $step
+        }
+        catch {
+            Write-ColoredMessage "[!] Priority evidence step failed: $_" -Color Yellow
+        }
+    }
 }
 
 function Export-HostArtifactReports {
@@ -2066,7 +2087,7 @@ function Export-Results {
             $csvPaths += $csvPath
         }
 
-        foreach ($extra in @($script:AdditionalCsvPaths)) {
+        foreach ($extra in $script:AdditionalCsvPaths) {
             if ($extra -and (Test-Path -LiteralPath $extra) -and ($csvPaths -notcontains $extra)) {
                 $csvPaths += $extra
             }
@@ -2088,7 +2109,7 @@ function Export-Results {
         }
 
         Write-CollectionManifest -Timestamp $timestamp | Out-Null
-        foreach ($extra in @($script:AdditionalCsvPaths)) {
+        foreach ($extra in $script:AdditionalCsvPaths) {
             if ($extra -and (Test-Path -LiteralPath $extra) -and ($zipSources -notcontains $extra)) {
                 $zipSources += $extra
             }
