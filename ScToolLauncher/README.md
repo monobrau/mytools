@@ -55,6 +55,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Windows Defender repair | mytools `WindowsDefenderRepair` — PowerShell only. Scan: services + RTP + tamper. Apply: full RTP repair (services + policy + PassiveMode + preferences). Optional nuclear: `MpCmdRun -ResetPlatform` |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration, not day-to-day AV management |
 | Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT: Immediate Task optional `/autouninstall` plus leftover sweep (services/folders/registry/drivers). Optional site key is written to SYSVOL |
+| Webroot fleet status | mytools `Get-WebrootFleetStatus.ps1` — DC/RSAT: AD computer list + C$ check for WRSA / WRData / GPO log. CSV in Temp |
 | McAfee remnant cleanup | mytools — AppX + `Program Files\McAfee` leftovers |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.

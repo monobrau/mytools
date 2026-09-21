@@ -31,3 +31,18 @@ $wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.1.0')
 $wc.Headers.Add('Accept','application/vnd.github.raw')
 $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WebrootUninstallGpo/New-WebrootUninstallGpo.ps1?ref=main')
 & ([scriptblock]::Create($script)) -Domain 'contoso.com' -DryRun
+
+# Fleet status via AD + C$ admin shares (run on DC / RSAT)
+#!ps
+#timeout=900000
+#maxlength=200000
+$ProgressPreference='SilentlyContinue'
+try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}
+$domain=''
+$wc=New-Object Net.WebClient
+$wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.1.0')
+$wc.Headers.Add('Accept','application/vnd.github.raw')
+$script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WebrootUninstallGpo/Get-WebrootFleetStatus.ps1?ref=main')
+$params=@{}
+if($domain){ $params.Domain=$domain }
+& ([scriptblock]::Create($script)) @params

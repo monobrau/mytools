@@ -12,6 +12,12 @@ originally assigned by GPO. Cloud and EXE installs have no matching package.
 
 One machine right now (no GPO): ScToolLauncher **AV → Cylance / Webroot cleanup**.
 
+Fleet check from the DC (no ScreenConnect on the PCs): **AV → Webroot fleet status**
+or `Get-WebrootFleetStatus.ps1`. It pulls AD computer names and probes `C$`
+for `WRSA.exe`, `ProgramData\WRData`, and the GPO log. CSV:
+`C:\Windows\Temp\Webroot-Fleet-Status.csv`. Unreachable / no admin$ is not
+proof Webroot is gone.
+
 ## ScreenConnect (client DC)
 
 Prefer **ScToolLauncher → AV → Webroot uninstall GPO**. Set the AD DNS name
