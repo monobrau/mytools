@@ -7,6 +7,8 @@ Copies a ready-to-paste Commands `#!ps` (or PowerShell one-liner) bootstrap onto
 - Hotkey: **Ctrl+Shift+Alt+S** (edit `HotkeySpec` / `HotkeyLabel` at the top of the script; Win+Alt combos are often reserved by Windows/OEM)
 - Tray: default AutoHotkey v2 icon and menu (includes **Reload Script**); plus **Open SC Tool Launcher**
 - After editing `ScToolLauncher.ahk`, use GUI **Reload**, tray **Reload Script**, or exit and re-run. The hotkey alone does **not** reload the catalog from disk.
+- Starts in the tray (window stays hidden until **Open** or the hotkey)
+- First open selects **Help** (root item) with intro / how-to on the right; categories stay collapsed
 - Layout: **two columns** — tool tree on the left, mode/options/actions on the right (fits shorter screens)
 - Formats: Commands tab `#!ps` (default) or PowerShell one-liner
 - Modes/options depend on the tool (Scan, Update/Remediate/Delete, Force, etc.)

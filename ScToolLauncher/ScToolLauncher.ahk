@@ -34,7 +34,25 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall AutomateGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
-;        BackstageOnly AutoReboot
+;        BackstageOnly AutoReboot Help
+HelpIntroText := "
+(
+SC Tool Launcher copies a ScreenConnect-ready snippet to the clipboard.
+
+How to use
+1. Expand a category (and any subfolder) on the left.
+2. Select a tool.
+3. Choose Scan vs Apply, options, and paste format.
+4. Copy to clipboard.
+5. Paste into ScreenConnect Commands (recommended) or PowerShell.
+
+Tips
+- The hotkey toggles this window.
+- Commands uses #!ps. Prefer that over a one-liner.
+- Untested means the tool has not been validated yet.
+- After you edit this script, use Reload. The hotkey does not reload the catalog.
+- Tokens and keys are only in the snippet you copy — they are not saved here.
+)"
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
@@ -54,6 +72,15 @@ UiColGap := 16
 UiTreeRows := 24
 
 Tools := [
+    Map(
+        "Category", "Help",
+        "Name", "Help",
+        "Summary", "Intro and basic instructions for this launcher.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScToolLauncher",
+        "Fetch", "Inline",
+        "Body", "",
+        "Flags", "Help"
+    ),
     ; --- Software updates ---
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
@@ -584,8 +611,6 @@ Hotkey(HotkeySpec, (*) => ToggleGui())
 gGui := 0
 gCtrls := Map()
 
-ShowGui()
-
 ; Restart this script in-place (avoids a second tray icon from a naive Reload + leftover instance).
 ReloadScToolLauncher(*) {
     Run(Format('"{1}" /restart "{2}"', A_AhkPath, A_ScriptFullPath))
@@ -610,21 +635,25 @@ PopulateToolTree(tv) {
     global Tools, CategoryOrder, gToolByNode, gLastToolIndex
     gToolByNode := Map()
     catNodes := Map()
-    ; Bold category headers. Expand Agents so install tools are visible without hunting.
-    expandCats := Map()
-    expandCats["Agents — SentinelOne, ConnectSecure, Huntress"] := true
-    expandCats["Untested"] := true
-    expandCats["Client-specific"] := true
+    folderNodes := Map()
+    parentByName := Map()
+    helpLeaf := 0
+    firstCatNode := 0
+    ; Help is a root leaf so first open shows the intro with every category collapsed.
+    for i, t in Tools {
+        if !ToolHasFlag(t, "Help")
+            continue
+        node := tv.Add(t["Name"], 0)
+        gToolByNode[node] := i
+        parentByName[t["Name"]] := node
+        helpLeaf := node
+    }
     for cat in CategoryOrder
         catNodes[cat] := tv.Add(cat, 0, "Bold")
 
-    folderNodes := Map()
-    parentByName := Map()
-    childParents := Map()
-    agentsNode := 0
-    clientCatNode := 0
-    firstCatNode := 0
     for i, t in Tools {
+        if ToolHasFlag(t, "Help")
+            continue
         cat := ToolGet(t, "Category", "Other")
         if !catNodes.Has(cat)
             catNodes[cat] := tv.Add(cat, 0, "Bold")
@@ -639,37 +668,19 @@ PopulateToolTree(tv) {
             parent := folderNodes[fk]
         }
         parentName := ToolGet(t, "Parent", "")
-        if (parentName != "" && parentByName.Has(parentName)) {
+        if (parentName != "" && parentByName.Has(parentName))
             parent := parentByName[parentName]
-            childParents[parentName] := true
-        }
         node := tv.Add(t["Name"], parent)
         gToolByNode[node] := i
         parentByName[t["Name"]] := node
         if !firstCatNode && catNodes.Has(cat)
             firstCatNode := catNodes[cat]
-        if (cat = "Agents — SentinelOne, ConnectSecure, Huntress" && !agentsNode)
-            agentsNode := catNodes[cat]
-        if (cat = "Client-specific" && !clientCatNode)
-            clientCatNode := catNodes[cat]
-    }
-    for cat, node in catNodes {
-        if expandCats.Has(cat)
-            tv.Modify(node, "Expand")
-    }
-    for fk, node in folderNodes
-        tv.Modify(node, "Expand")
-    for name, node in parentByName {
-        if childParents.Has(name)
-            tv.Modify(node, "Expand")
     }
     gLastToolIndex := 1
-    ; Prefer Agents category selected/expanded so new install tools are obvious
-    if agentsNode {
-        tv.Modify(agentsNode, "Expand Select Vis")
-    } else if firstCatNode {
+    if helpLeaf
+        tv.Modify(helpLeaf, "Select Vis")
+    else if firstCatNode
         tv.Modify(firstCatNode, "Select")
-    }
 }
 
 ; Only refresh when a tool leaf is selected. Category collapse moves selection to the
@@ -710,6 +721,7 @@ ShowGui(*) {
 
     gCtrls["LblAbout"] := gGui.Add("Text", "Section", "About this tool")
     gCtrls["Summary"] := gGui.Add("Text", "w" UiContentW " h52 vToolSummary", "")
+    gCtrls["HelpBody"] := gGui.Add("Edit", "w" UiContentW " r16 ReadOnly vHelpBody", HelpIntroText)
     gCtrls["BtnDocs"] := gGui.Add("Button", "w200", "Open docs in browser")
     gCtrls["BtnDocs"].OnEvent("Click", (*) => OpenSelectedToolDocs())
 
@@ -815,7 +827,7 @@ ShowGui(*) {
 
     ; Right-column stack order (only Visible controls advance Y). Left = tool tree.
     gFlowKeys := [
-        "LblAbout", "Summary", "BtnDocs",
+        "LblAbout", "Summary", "HelpBody", "BtnDocs",
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
@@ -882,6 +894,8 @@ ReflowGui() {
         cw := contentW
         if (key = "Summary")
             ch := 52
+        else if (key = "HelpBody")
+            ch := 280
         else if (key = "Note")
             ch := 48
         else if (key = "Status")
@@ -1028,8 +1042,46 @@ OnAutoRebootOptClick(*) {
 }
 
 RefreshOptionEnable(*) {
-    global gGui, gCtrls
+    global gGui, gCtrls, HelpIntroText, HotkeyLabel
     t := SelectedTool()
+
+    if ToolHasFlag(t, "Help") {
+        gCtrls["LblAbout"].Text := "SC Tool Launcher"
+        gCtrls["HelpBody"].Value := HelpIntroText
+        SetCtrlShown(gCtrls["LblAbout"], true)
+        SetCtrlShown(gCtrls["HelpBody"], true)
+        SetCtrlShown(gCtrls["Summary"], false)
+        SetCtrlShown(gCtrls["BtnDocs"], ToolDocsUrl(t) != "")
+        gCtrls["BtnDocs"].Text := "Open launcher docs"
+        hideKeys := [
+            "LblMode", "ModeScan", "ModeUpdate", "LblOptions",
+            "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
+            "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning",
+            "ResetPlatform", "AutoReboot", "LblHuntressRebootAt", "HuntressRebootAt",
+            "LblProduct", "Product", "LblPupFamily", "PupFamily",
+            "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
+            "LblDomainController", "DomainController", "LblDomain", "Domain",
+            "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
+            "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
+            "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
+            "LblAutomateServer", "AutomateServer", "LblAutomateLocationId", "AutomateLocationId",
+            "LblAutomateToken", "AutomateToken", "LblAutomateClient", "AutomateClientName",
+            "LblAutomateLocation", "AutomateLocationName", "LblAutomateDomain", "AutomateDomain",
+            "LblAutomateOu", "AutomateTargetOu", "AutomateLinkToDomain", "LblWebrootKeyCode", "WebrootKeyCode",
+            "LblPaste", "FmtCommands", "FmtBackstage", "Note"
+        ]
+        for key in hideKeys
+            SetCtrlShown(gCtrls[key], false)
+        SetCtrlShown(gCtrls["BtnCopy"], false)
+        gCtrls["Status"].Value := HotkeyLabel " toggles this window. Expand a category, select a tool, then Copy."
+        ReflowGui()
+        return
+    }
+
+    gCtrls["LblAbout"].Text := "About this tool"
+    gCtrls["BtnDocs"].Text := "Open docs in browser"
+    SetCtrlShown(gCtrls["HelpBody"], false)
+    SetCtrlShown(gCtrls["BtnCopy"], true)
 
     showForce := ToolHasFlag(t, "Force")
     showForceApp := ToolHasFlag(t, "ForceAppShutdown")
@@ -1796,6 +1848,10 @@ DescribeSelection(tool, isScan) {
 DoCopy(*) {
     global gCtrls, AppName
     tool := SelectedTool()
+    if ToolHasFlag(tool, "Help") {
+        gCtrls["Status"].Value := "Select a tool from a category, then Copy."
+        return
+    }
     if ToolHasFlag(tool, "ScanOnly")
         gCtrls["ModeScan"].Value := 1
     if ToolHasFlag(tool, "RunOnly")
