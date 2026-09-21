@@ -125,7 +125,7 @@ if exist "%WRSA%" (
     return @"
 @echo off
 set LOG=%SystemRoot%\Temp\Webroot-GPO-Uninstall.log
-echo %DATE% %TIME% startup script began>>"%LOG%"
+echo %DATE% %TIME% immediate task began>>"%LOG%"
 
 set WRSA=
 if exist "%ProgramFiles(x86)%\Webroot\WRSA.exe" set WRSA=%ProgramFiles(x86)%\Webroot\WRSA.exe
