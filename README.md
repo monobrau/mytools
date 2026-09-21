@@ -6,6 +6,7 @@ Public collection of work tools and scripts.
 
 | Tool | Description |
 | --- | --- |
+| [AutomateGpoDeploy](AutomateGpoDeploy/) | Download Automate MSI+MST, bake transform, stage on NETLOGON, create a startup-script GPO |
 | [DellTechHubCleanup](DellTechHubCleanup/) | Scan/remove Dell TechHub (`DellTechHub` service, `techhub.dll`) — common SentinelOne false positive |
 | [DotNetUpdate](DotNetUpdate/) | Patch installed .NET 6+ Runtime/Desktop/ASP.NET/SDK to latest same-major security release |
 | [ForensicInvestigator](ForensicInvestigator/) | Sysinternals + Harkins EVTX + all-user Downloads (Zone.ID), PS history, hives, browser History, admins/RMM, Defender; `C:\SecurityReports` |
