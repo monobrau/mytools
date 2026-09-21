@@ -10,12 +10,12 @@ Copies a ready-to-paste Commands `#!ps` (or PowerShell one-liner) bootstrap onto
 - Layout: **two columns** — tool tree on the left, mode/options/actions on the right (fits shorter screens)
 - Formats: Commands tab `#!ps` (default) or PowerShell one-liner
 - Modes/options depend on the tool (Scan, Update/Remediate/Delete, Force, etc.)
-- Tool list is a **TreeView** grouped by category
+- Tool list is a **TreeView** grouped by category, with subfolders (Webroot, Huntress, HP, Dell, …)
 - Each selection shows a short **About** blurb and **Open docs in browser** (GitHub README / folder)
 
 ## Catalog (GUI groups)
 
-Categories start **collapsed**. Labels list what is under each group:
+Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Huntress, ConnectSecure, HP, Dell, Windows Update). Labels list what is under each group:
 
 ### Software updates — vuln catalog, M365, .NET, HPSA, Teams
 
@@ -27,8 +27,8 @@ Categories start **collapsed**. Labels list what is under each group:
 | Visual C++ 2005-2013 redistributables | mytools `VisualCppUpdate` — last security build per installed year |
 | HP Support Assistant | mytools |
 | Classic Teams remnants | mytools |
-| Windows Update (quality) | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
-| Windows Update (feature) | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot |
+| Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
+| Windows Update → feature | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot |
 
 ### ScreenConnect — GPO/MSI finder, temp cleanup
 
@@ -41,10 +41,10 @@ Categories start **collapsed**. Labels list what is under each group:
 
 | Tool | Repo |
 | --- | --- |
-| HP Touchpoint Analytics | [hp-touchpointanalytics-cleanup](https://github.com/monobrau/hp-touchpointanalytics-cleanup) |
-| HP bloat / Wolf (mark05e gist) | [gist](https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388) — downloads `Remove-HPbloatware.ps1` and runs it (no dry-run; Wolf / Sure Click / HP AppX) |
-| Dell SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.4** — EnumerateFiles + skip VersionInfo-identified non-CW PEs; 60 min timeout; reload AHK for `?v=1.4.4` |
-| Dell TechHub | mytools `DellTechHubCleanup` — scan/remove TechHub, DTP, and SupportAssist (S1 false positive on `techhub.dll`). Dell Update stays |
+| HP → Touchpoint Analytics | [hp-touchpointanalytics-cleanup](https://github.com/monobrau/hp-touchpointanalytics-cleanup) |
+| HP → bloat / Wolf (mark05e gist) | [gist](https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388) — downloads `Remove-HPbloatware.ps1` and runs it (no dry-run; Wolf / Sure Click / HP AppX) |
+| Dell → SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.4** — EnumerateFiles + skip VersionInfo-identified non-CW PEs; 60 min timeout; reload AHK for `?v=1.4.4` |
+| Dell → TechHub | mytools `DellTechHubCleanup` — scan/remove TechHub, DTP, and SupportAssist (S1 false positive on `techhub.dll`). Dell Update stays |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
@@ -53,9 +53,8 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Tool | Repo |
 | --- | --- |
 | Windows Defender repair | mytools `WindowsDefenderRepair` — PowerShell only. Scan: services + RTP + tamper. Apply: full RTP repair (services + policy + PassiveMode + preferences). Optional nuclear: `MpCmdRun -ResetPlatform` |
-| Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration, not day-to-day AV management |
-| Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT: Immediate Task optional `/autouninstall` plus leftover sweep (services/folders/registry/drivers). Optional site key is written to SYSVOL |
-| Webroot fleet status | mytools `Get-WebrootFleetStatus.ps1` — DC/RSAT: AD computer list + C$ check for WRSA / WRData / GPO log. CSV in Temp |
+| Webroot → uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT: Immediate Task optional `/autouninstall` plus leftover sweep (services/folders/registry/drivers). Optional site key is written to SYSVOL |
+| Webroot → fleet status | mytools `Get-WebrootFleetStatus.ps1` — DC/RSAT: AD computer list + C$ check for WRSA / WRData / GPO log. CSV in Temp |
 | McAfee remnant cleanup | mytools — AppX + `Program Files\McAfee` leftovers |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
@@ -65,11 +64,11 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Tool | Source |
 | --- | --- |
 | SentinelOne silent install | mytools `SentinelOneInstall` — paste site/group token in GUI; optional URL or on-disk EXE/MSI |
-| ConnectSecure silent install | mytools `ConnectSecureInstall` — company/env/install token in GUI; agentlink download then `-c/-e/-j/-i`. Default option: skip if agent is Running (fleet / scan-prep) |
-| ConnectSecure agent repair + reinstall | mytools — wipe then reinstall (same GUI secrets). Default option: skip if agent is Running; uncheck to force wipe |
-| Huntress silent install | mytools `HuntressInstall` — account key built in; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
-| Verify scheduled reboot | Inline — host time, recent User32 1074 shutdown events, HuntressSC task query |
-| Cancel scheduled reboot | Inline `shutdown.exe /a` — aborts a pending shutdown.exe countdown (use if Huntress schedule armed a reboot) |
+| ConnectSecure → silent install | mytools `ConnectSecureInstall` — company/env/install token in GUI; agentlink download then `-c/-e/-j/-i`. Default option: skip if agent is Running (fleet / scan-prep) |
+| ConnectSecure → agent repair + reinstall | mytools — wipe then reinstall (same GUI secrets). Default option: skip if agent is Running; uncheck to force wipe |
+| Huntress → silent install | mytools `HuntressInstall` — account key built in; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
+| Huntress → Verify scheduled reboot | Inline — host time, recent User32 1074 shutdown events, HuntressSC task query |
+| Huntress → Cancel scheduled reboot | Inline `shutdown.exe /a` — aborts a pending shutdown.exe countdown (use if Huntress schedule armed a reboot) |
 | Automate GPO deploy | mytools `AutomateGpoDeploy` — paste location token on a DC/RSAT box; dry-run bakes MSI only; Apply stages NETLOGON + startup GPO |
 
 Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, SentinelOne tokens, and Automate installer tokens stay GUI-only. Do not paste live tokens into tickets or git.
@@ -90,6 +89,14 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | Tool | Source |
 | --- | --- |
 | Inky / IPW transport rules | mytools — requires `Connect-ExchangeOnline` on an admin workstation; Scan lists, Delete removes (no `Read-Host`) |
+
+### Untested
+
+Park tools here until they have been validated on a host. Add `"Category", "Untested"` on the tool Map.
+
+| Tool | Source |
+| --- | --- |
+| Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration |
 
 ### Client-specific
 

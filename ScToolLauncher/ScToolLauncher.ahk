@@ -29,6 +29,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        DownloadExe (IWR vendor EXE + Start-Process -Wait)
 ;        Url (optional) overrides the constructed GitHub raw URL — use for gists
 ; Category: groups tools in the TreeView (order = CategoryOrder below)
+; Folder: optional subfolder under Category (same as Client= for Client-specific)
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product ProductList
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
@@ -42,6 +43,7 @@ CategoryOrder := [
     "Agents — SentinelOne, ConnectSecure, Huntress",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — Inky/IPW transport rules (EXO admin)",
+    "Untested",
     "Client-specific"
 ]
 
@@ -150,11 +152,13 @@ Tools := [
         "TimeoutScan", 600000,
         "TimeoutUpdate", 3600000,
         "DefaultArgs", "-Quality",
+        "Folder", "Windows Update",
         "Flags", "CheckOnly Force AutoReboot NoExit",
         "Note", "Pre-check: disk, WinRE/recovery size, WU services/policy, pending reboot. Feature updates are a separate tool. Reload launcher after pull."
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Folder", "Windows Update",
         "Name", "Windows Update (feature)",
         "Summary", "Pre-check then scan/install feature updates / enablement packages. Hours. Default does not reboot.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsUpdate",
@@ -201,6 +205,7 @@ Tools := [
     ; --- OEM cleanup ---
     Map(
         "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Folder", "HP",
         "Name", "HP Touchpoint Analytics",
         "Summary", "Detects/removes HP Touchpoint (Insights) Analytics service, tasks, and driver package. Dry-run first.",
         "DocsUrl", "https://github.com/monobrau/hp-touchpointanalytics-cleanup",
@@ -215,6 +220,7 @@ Tools := [
     ),
     Map(
         "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Folder", "HP",
         "Name", "HP bloat / Wolf (mark05e gist)",
         "Summary", "Downloads mark05e's Remove-HPbloatware.ps1 from GitHub gist and runs it. Removes HP AppX + Wolf / Sure Click / Sure Run / HPSA AppX. No dry-run.",
         "DocsUrl", "https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388",
@@ -231,6 +237,7 @@ Tools := [
     ),
     Map(
         "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Folder", "Dell",
         "Name", "Dell SARemediation Backup (CW/SC)",
         "Summary", "Scan/remove ScreenConnect/ConnectWise-like files from Dell Snapshots\\Backup (S1 revoked-cert hygiene). Pair with SC temp cleanup. Does not uninstall Dell software.",
         "DocsUrl", "https://github.com/monobrau/dell-saremediation-cleanup",
@@ -247,6 +254,7 @@ Tools := [
     ),
     Map(
         "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Folder", "Dell",
         "Name", "Dell TechHub",
         "Summary", "Scan or remove Dell TechHub, DTP, and SupportAssist. Common SentinelOne false positive on techhub.dll. Dell Update stays.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DellTechHubCleanup",
@@ -279,22 +287,7 @@ Tools := [
     ),
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
-        "Name", "Cylance / Webroot cleanup",
-        "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
-        "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
-        "Fetch", "Contents",
-        "Owner", "monobrau",
-        "Repo", "windows-av-cleanup",
-        "Script", "Remove-Antivirus.ps1",
-        "UaPrefix", "windows-av-cleanup-bootstrap",
-        "UaVer", "1.1.1",
-        "TimeoutScan", 300000,
-        "TimeoutUpdate", 300000,
-        "Flags", "Delete Force Vendor",
-        "Note", "Use when offboarding the vendor or cleaning remnants after cutover — not for managing an active AV install. Prefer deactivate in the vendor console first. Delete needs elevation (PowerShell/SYSTEM). Password/keycode only if Vendor is Cylance or Webroot (not All). Reboot if drivers stay locked."
-    ),
-    Map(
-        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Folder", "Webroot",
         "Name", "Webroot uninstall GPO",
         "Summary", "Create a GPO Immediate Task: optional silent WRSA /autouninstall, then leftover sweep (services, folders, registry, drivers). Run on the client DC or RSAT box.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WebrootUninstallGpo",
@@ -311,6 +304,7 @@ Tools := [
     ),
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Folder", "Webroot",
         "Name", "Webroot fleet status",
         "Summary", "From a DC/RSAT box: load AD computers (lastLogonTimestamp), query WRSVC via SCM, and check C$ in parallel (20 threads, 400ms ping) for WRSA.exe, WRData, and the GPO log.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WebrootUninstallGpo",
@@ -359,6 +353,7 @@ Tools := [
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Folder", "ConnectSecure",
         "Name", "ConnectSecure silent install",
         "Summary", "Download Windows agent from ConnectSecure agentlink API, then silent install with -c/-e/-j/-i. Paste IDs/token at copy time — never stored.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureInstall",
@@ -375,6 +370,7 @@ Tools := [
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Folder", "ConnectSecure",
         "Name", "ConnectSecure agent repair + reinstall",
         "Summary", "Wipe leftover agent (uninstall.bat + service registry), then reinstall. Paste company/env/token at copy time — never stored.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureAgentRepair",
@@ -391,6 +387,7 @@ Tools := [
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Folder", "Huntress",
         "Name", "Huntress silent install",
         "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Account key is built in. Org key is per-client. Force = rip and replace. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/HuntressInstall",
@@ -407,8 +404,8 @@ Tools := [
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Folder", "Huntress",
         "Name", "Verify scheduled reboot",
-        "Parent", "Huntress silent install",
         "Summary", "Read-only: host time, recent User32 1074 shutdown initiations, and HuntressSC task status.",
         "Fetch", "Inline",
         "Body", "Write-Output ('Host now '+(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')); Write-Output '--- Recent shutdown initiations (User32 1074) ---'; $logs=@(Get-EventLog -LogName System -Source User32 -Newest 40 -EA SilentlyContinue | Where-Object { $_.EventID -eq 1074 } | Select-Object -First 5); if(-not $logs){ Write-Output 'None found' } else { foreach($e in $logs){ Write-Output '---'; Write-Output ($e.TimeGenerated.ToString('yyyy-MM-dd HH:mm:ss')+' '+(($e.Message -replace '\r?\n',' | '))) } }; Write-Output '--- Huntress SC tasks ---'; foreach($tn in @('HuntressSC-Install','HuntressSC-Cleanup')){ Write-Output ('Query '+$tn); schtasks.exe /Query /TN $tn /FO LIST }",
@@ -419,8 +416,8 @@ Tools := [
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Folder", "Huntress",
         "Name", "Cancel scheduled reboot",
-        "Parent", "Huntress silent install",
         "Summary", "Aborts a pending shutdown.exe reboot countdown on the endpoint.",
         "Fetch", "Inline",
         "Body", "shutdown.exe /a",
@@ -530,6 +527,23 @@ Tools := [
         "Note", "Run after Connect-ExchangeOnline on an admin workstation. Scan lists; Delete removes with no Read-Host prompt.",
         "ClipboardNote", "NOTE: Requires Connect-ExchangeOnline in this session. Delete has no interactive confirm — Scan first."
     ),
+    ; --- Untested (move here until validated) ---
+    Map(
+        "Category", "Untested",
+        "Name", "Cylance / Webroot cleanup",
+        "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
+        "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
+        "Fetch", "Contents",
+        "Owner", "monobrau",
+        "Repo", "windows-av-cleanup",
+        "Script", "Remove-Antivirus.ps1",
+        "UaPrefix", "windows-av-cleanup-bootstrap",
+        "UaVer", "1.1.1",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 300000,
+        "Flags", "Delete Force Vendor",
+        "Note", "Use when offboarding the vendor or cleaning remnants after cutover — not for managing an active AV install. Prefer deactivate in the vendor console first. Delete needs elevation (PowerShell/SYSTEM). Password/keycode only if Vendor is Cylance or Webroot (not All). Reboot if drivers stay locked."
+    ),
     ; --- Client-specific campaigns ---
     Map(
         "Category", "Client-specific",
@@ -599,11 +613,12 @@ PopulateToolTree(tv) {
     ; Bold category headers. Expand Agents so install tools are visible without hunting.
     expandCats := Map()
     expandCats["Agents — SentinelOne, ConnectSecure, Huntress"] := true
+    expandCats["Untested"] := true
     expandCats["Client-specific"] := true
     for cat in CategoryOrder
         catNodes[cat] := tv.Add(cat, 0, "Bold")
 
-    clientNodes := Map()
+    folderNodes := Map()
     parentByName := Map()
     childParents := Map()
     agentsNode := 0
@@ -614,12 +629,14 @@ PopulateToolTree(tv) {
         if !catNodes.Has(cat)
             catNodes[cat] := tv.Add(cat, 0, "Bold")
         parent := catNodes[cat]
-        client := ToolGet(t, "Client", "")
-        if (client != "") {
-            ck := cat "|" client
-            if !clientNodes.Has(ck)
-                clientNodes[ck] := tv.Add(client, parent)
-            parent := clientNodes[ck]
+        folder := ToolGet(t, "Folder", "")
+        if (folder = "")
+            folder := ToolGet(t, "Client", "")
+        if (folder != "") {
+            fk := cat "|" folder
+            if !folderNodes.Has(fk)
+                folderNodes[fk] := tv.Add(folder, parent)
+            parent := folderNodes[fk]
         }
         parentName := ToolGet(t, "Parent", "")
         if (parentName != "" && parentByName.Has(parentName)) {
@@ -640,10 +657,8 @@ PopulateToolTree(tv) {
         if expandCats.Has(cat)
             tv.Modify(node, "Expand")
     }
-    for ck, node in clientNodes {
-        if InStr(ck, "Client-specific|") = 1
-            tv.Modify(node, "Expand")
-    }
+    for fk, node in folderNodes
+        tv.Modify(node, "Expand")
     for name, node in parentByName {
         if childParents.Has(name)
             tv.Modify(node, "Expand")
