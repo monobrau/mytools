@@ -8,6 +8,8 @@
     share for WRSA.exe, ProgramData\WRData, and the GPO uninstall log.
     WRSVC status is queried via the Service Control Manager (same admin
     rights as C$), not from the share itself. File presence is not "running."
+    LastLogon is AD lastLogonTimestamp (replicated; can lag 9-14 days).
+    Do not disable computer accounts from a no-ping row alone.
 
     Unreachable or admin$-blocked hosts are reported; that is not proof Webroot
     is gone. Do not commit live client names or site keys.
@@ -80,6 +82,20 @@ $null = $NoExit
 
 $names = New-Object System.Collections.Generic.List[string]
 $osByName = @{}
+$logonByName = @{}
+
+function Format-AdLastLogon {
+    param($Value)
+    if ($null -eq $Value) { return '' }
+    try {
+        $dt = [datetime]$Value
+        if ($dt -le [datetime]::MinValue -or $dt.Year -lt 1990) { return '' }
+        return $dt.ToString('yyyy-MM-dd HH:mm')
+    }
+    catch {
+        return ''
+    }
+}
 
 if ($ComputerName) {
     foreach ($n in $ComputerName) {
@@ -107,7 +123,7 @@ if ($names.Count -eq 0) {
         $Domain = ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()).Name
     }
     Write-Output ("Loading computers from AD domain $Domain ...")
-    $comps = @(Get-ADComputer -Server $Domain -Filter { Enabled -eq $true } -Properties DNSHostName, OperatingSystem)
+    $comps = @(Get-ADComputer -Server $Domain -Filter { Enabled -eq $true } -Properties DNSHostName, OperatingSystem, lastLogonTimestamp)
     foreach ($c in $comps) {
         $os = [string]$c.OperatingSystem
         if (-not $IncludeServers -and $os -and $os -match 'Server') { continue }
@@ -116,6 +132,7 @@ if ($names.Count -eq 0) {
         if (-not $n) { continue }
         [void]$names.Add($n)
         $osByName[$n] = $os
+        $logonByName[$n] = Format-AdLastLogon $c.lastLogonTimestamp
     }
 }
 
@@ -125,7 +142,7 @@ if ($ThrottleLimit -lt 1) { $ThrottleLimit = 1 }
 Write-Output ("Checking $total host(s) via C`$ (parallel $ThrottleLimit, ping ${PingMs}ms) ...")
 
 $work = {
-    param($HostName, $OperatingSystem, $SkipPing, $PingMs)
+    param($HostName, $OperatingSystem, $LastLogon, $SkipPing, $PingMs)
 
     function Test-FastPing {
         param([string]$Name, [int]$TimeoutMs)
@@ -171,6 +188,7 @@ $work = {
             return [pscustomobject]@{
                 Computer        = $HostName
                 OperatingSystem = $OperatingSystem
+                LastLogon       = $LastLogon
                 Reachable       = $false
                 AdminShare      = $false
                 WrsvcStatus     = ''
@@ -189,6 +207,7 @@ $work = {
         return [pscustomobject]@{
             Computer        = $HostName
             OperatingSystem = $OperatingSystem
+            LastLogon       = $LastLogon
             Reachable       = $true
             AdminShare      = $false
             WrsvcStatus     = $wrsvc
@@ -207,6 +226,7 @@ $work = {
     return [pscustomobject]@{
         Computer        = $HostName
         OperatingSystem = $OperatingSystem
+        LastLogon       = $LastLogon
         Reachable       = $true
         AdminShare      = $true
         WrsvcStatus     = $wrsvc
@@ -222,8 +242,10 @@ $pool.Open()
 $jobs = New-Object System.Collections.Generic.List[object]
 foreach ($hostName in $unique) {
     $os = ''
+    $ll = ''
     if ($osByName.ContainsKey($hostName)) { $os = $osByName[$hostName] }
-    $ps = [powershell]::Create().AddScript($work).AddArgument($hostName).AddArgument($os).AddArgument([bool]$SkipPing).AddArgument($PingMs)
+    if ($logonByName.ContainsKey($hostName)) { $ll = $logonByName[$hostName] }
+    $ps = [powershell]::Create().AddScript($work).AddArgument($hostName).AddArgument($os).AddArgument($ll).AddArgument([bool]$SkipPing).AddArgument($PingMs)
     $ps.RunspacePool = $pool
     $jobs.Add([pscustomobject]@{ Pipe = $ps; Handle = $ps.BeginInvoke() })
 }
@@ -246,6 +268,7 @@ while ($jobs.Count -gt 0) {
                 $rows.Add([pscustomobject]@{
                         Computer        = '?'
                         OperatingSystem = ''
+                        LastLogon       = ''
                         Reachable       = $false
                         AdminShare      = $false
                         WrsvcStatus     = ''
@@ -285,10 +308,14 @@ $clear = @($out | Where-Object { $_.AdminShare -and -not $_.WrsaPresent -and -no
 $down = @($out | Where-Object { -not $_.AdminShare }).Count
 $running = @($out | Where-Object { $_.WrsvcStatus -eq 'Running' }).Count
 $stopped = @($out | Where-Object { $_.WrsvcStatus -eq 'Stopped' }).Count
+$cutoff = (Get-Date).AddDays(-90)
+$stale = @($out | Where-Object {
+        $_.LastLogon -and ([datetime]$_.LastLogon -lt $cutoff)
+    }).Count
 
 Write-Output ''
 Write-Output "=== Webroot fleet status ==="
-Write-Output ("Hosts: $total  WRSVC running: $running  stopped: $stopped  Files leftover: $present  Clear (share OK): $clear  Unreachable/no share: $down")
+Write-Output ("Hosts: $total  WRSVC running: $running  stopped: $stopped  Files leftover: $present  Clear (share OK): $clear  Unreachable/no share: $down  LastLogon >90d: $stale")
 if ($out.Count -gt 0) {
     $out | Sort-Object WrsvcStatus, WrsaPresent, AdminShare, Computer -Descending | Format-Table -AutoSize
 }

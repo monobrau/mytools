@@ -312,17 +312,17 @@ Tools := [
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
         "Name", "Webroot fleet status",
-        "Summary", "From a DC/RSAT box: load AD computers, query WRSVC via SCM, and check C$ in parallel (20 threads, 400ms ping) for WRSA.exe, WRData, and the GPO log.",
+        "Summary", "From a DC/RSAT box: load AD computers (lastLogonTimestamp), query WRSVC via SCM, and check C$ in parallel (20 threads, 400ms ping) for WRSA.exe, WRData, and the GPO log.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WebrootUninstallGpo",
         "Fetch", "Contents",
         "Path", "WebrootUninstallGpo",
         "Script", "Get-WebrootFleetStatus.ps1",
         "UaPrefix", "WebrootUninstallGpo-bootstrap",
-        "UaVer", "1.1.2",
+        "UaVer", "1.1.3",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "ScanOnly Domain AlwaysNote",
-        "Note", "Run on the DC or RSAT box as Domain Admin. Optional AD DNS name. CSV: C:\\Windows\\Temp\\Webroot-Fleet-Status.csv. WrsvcStatus is SCM (Running/Stopped/none), not C$. Unreachable or no admin$ is not proof Webroot is gone.",
+        "Note", "Run on the DC or RSAT box as Domain Admin. Optional AD DNS name. CSV: C:\\Windows\\Temp\\Webroot-Fleet-Status.csv. LastLogon is AD lastLogonTimestamp (can lag 9-14 days). WrsvcStatus is SCM, not C$. Do not delete computer accounts from no-ping alone.",
         "ClipboardNote", "NOTE: Run on a DC/RSAT box. Writes C:\\Windows\\Temp\\Webroot-Fleet-Status.csv. Admin share access required."
     ),
     Map(
