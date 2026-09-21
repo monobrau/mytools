@@ -111,18 +111,23 @@ function Test-IsAdministrator {
 function New-WebrootUninstallScript {
     param([string]$UninstallKeyCode)
 
-    # -uninstall [-silent] shows a GUI. Silent removal is /autouninstall=keycode /silent.
+    # -uninstall shows a GUI. Silent WRSA is /autouninstall=keycode /silent when a
+    # key exists. Leftover sweep always runs (services, folders, registry, drivers).
     $baked = if ($UninstallKeyCode) { $UninstallKeyCode.Replace("'", "''").Trim() } else { '' }
     $script = @'
 $ErrorActionPreference = 'Continue'
 $log = Join-Path $env:SystemRoot 'Temp\Webroot-GPO-Uninstall.log'
 function W([string]$m) { Add-Content -LiteralPath $log -Value (('{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $m)) }
-W 'immediate task began'
+function Rm-Tree([string]$p) {
+    if (-not $p -or -not (Test-Path -LiteralPath $p)) { return }
+    Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $p) { W ('LOCKED ' + $p) } else { W ('removed ' + $p) }
+}
+W 'immediate task began (uninstall + leftover sweep)'
 $wrsa = @(
     (Join-Path ${env:ProgramFiles(x86)} 'Webroot\WRSA.exe'),
     (Join-Path $env:ProgramFiles 'Webroot\WRSA.exe')
 ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-if (-not $wrsa) { W 'WRSA.exe not found. Nothing to do.'; exit 0 }
 $key = '__BAKED_KEY__'
 if (-not $key) {
     $pat = '^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){4}$'
@@ -142,26 +147,117 @@ if (-not $key) {
         if ($key) { break }
     }
 }
-if (-not $key) {
-    W 'No keycode in registry. WRSA -uninstall shows a UI; refusing. Use windows-av-cleanup or pass -KeyCode.'
-    exit 2
+if ($wrsa -and $key) {
+    W ('Silent /autouninstall ' + $key.Substring(0, 4) + '-****')
+    $p = Start-Process -FilePath $wrsa -ArgumentList @(('/autouninstall=' + $key), '/silent') -Wait -PassThru -WindowStyle Hidden
+    $code = 1
+    if ($p) { $code = [int]$p.ExitCode }
+    W ('autouninstall exit ' + [string]$code)
 }
-W ('Silent /autouninstall ' + $key.Substring(0, 4) + '-****')
-$p = Start-Process -FilePath $wrsa -ArgumentList @(('/autouninstall=' + $key), '/silent') -Wait -PassThru -WindowStyle Hidden
-$code = 1
-if ($p) { $code = [int]$p.ExitCode }
-W ('autouninstall exit ' + [string]$code)
-if (Test-Path -LiteralPath $wrsa) {
-    W 'WRSA.exe still present. Reboot and/or run windows-av-cleanup.'
-    exit 1
+elseif ($wrsa) {
+    W 'No keycode. Skipping WRSA GUI uninstall; sweeping leftovers.'
 }
-foreach ($d in @((Join-Path $env:ProgramData 'WRData'), (Join-Path $env:ProgramData 'WRCore'))) {
-    if (Test-Path -LiteralPath $d) {
-        Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
-        W ('removed ' + $d)
+else {
+    W 'WRSA.exe not found. Sweeping leftovers.'
+}
+
+foreach ($n in @('WRSA', 'WRSVC', 'WRCore', 'WRSkyClient', 'WRConsumerService')) {
+    Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            Stop-Process -Id $_.Id -Force -ErrorAction Stop
+            W ('stopped process ' + $n + ' PID ' + [string]$_.Id)
+        }
+        catch {
+            W ('process lock ' + $n + ' PID ' + [string]$_.Id + ' ' + $_.Exception.Message)
+        }
     }
 }
-W 'Webroot uninstalled. Reboot recommended.'
+
+foreach ($n in @('WRSVC', 'WRCoreService', 'WRkrn', 'WRBoot', 'wrUrlFlt', 'WRSkyClient')) {
+    $svc = Get-Service -Name $n -ErrorAction SilentlyContinue
+    if (-not $svc) { continue }
+    Stop-Service -Name $n -Force -ErrorAction SilentlyContinue
+    sc.exe stop $n | Out-Null
+    sc.exe delete $n | Out-Null
+    W ('service ' + $n + ' stop/delete')
+}
+
+Get-ScheduledTask -ErrorAction SilentlyContinue |
+    Where-Object { $_.TaskName -match '(?i)Webroot|WRSA|OpenText' } |
+    ForEach-Object {
+        Unregister-ScheduledTask -TaskName $_.TaskName -TaskPath $_.TaskPath -Confirm:$false -ErrorAction SilentlyContinue
+        W ('removed task ' + $_.TaskPath + $_.TaskName)
+    }
+
+foreach ($runRoot in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run')) {
+    if (-not (Test-Path -LiteralPath $runRoot)) { continue }
+    $item = Get-ItemProperty -LiteralPath $runRoot -ErrorAction SilentlyContinue
+    if (-not $item) { continue }
+    foreach ($prop in $item.PSObject.Properties) {
+        if ($prop.Name -match '^PS') { continue }
+        if (([string]$prop.Value) -match '(?i)Webroot|WRSA') {
+            Remove-ItemProperty -LiteralPath $runRoot -Name $prop.Name -Force -ErrorAction SilentlyContinue
+            W ('removed Run ' + $prop.Name)
+        }
+    }
+}
+
+foreach ($un in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall')) {
+    if (-not (Test-Path -LiteralPath $un)) { continue }
+    Get-ChildItem -LiteralPath $un -ErrorAction SilentlyContinue | ForEach-Object {
+        $p = Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue
+        $name = [string]$p.DisplayName
+        if ($name -match '(?i)Webroot|OpenText\s*Core\s*Endpoint') {
+            Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+            W ('removed ARP ' + $name)
+        }
+    }
+}
+
+foreach ($k in @(
+        'HKLM:\SOFTWARE\WRData', 'HKLM:\SOFTWARE\WRMIDData', 'HKLM:\SOFTWARE\WRCore', 'HKLM:\SOFTWARE\webroot',
+        'HKLM:\SOFTWARE\WOW6432Node\WRData', 'HKLM:\SOFTWARE\WOW6432Node\WRMIDData', 'HKLM:\SOFTWARE\WOW6432Node\WRCore', 'HKLM:\SOFTWARE\WOW6432Node\webroot',
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\WRUNINST',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\WRUNINST'
+    )) {
+    if (Test-Path -LiteralPath $k) {
+        Remove-Item -LiteralPath $k -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $k) { W ('LOCKED ' + $k) } else { W ('removed ' + $k) }
+    }
+}
+
+foreach ($d in @(
+        (Join-Path ${env:ProgramFiles(x86)} 'Webroot'),
+        (Join-Path $env:ProgramFiles 'Webroot'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Common Files\Webroot'),
+        (Join-Path $env:ProgramFiles 'Common Files\Webroot'),
+        (Join-Path $env:ProgramData 'WRData'),
+        (Join-Path $env:ProgramData 'WRCore'),
+        (Join-Path $env:ProgramData 'Webroot'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Webroot SecureAnywhere'),
+        (Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\OpenText Core Endpoint Protection')
+    )) {
+    Rm-Tree $d
+}
+
+foreach ($drv in @('WRkrn.sys', 'WRCore.sys', 'wrUrlFlt.sys', 'WRBoot.sys')) {
+    $dp = Join-Path $env:SystemRoot ('System32\drivers\' + $drv)
+    if (Test-Path -LiteralPath $dp) {
+        Remove-Item -LiteralPath $dp -Force -ErrorAction SilentlyContinue
+        if (Test-Path -LiteralPath $dp) { W ('LOCKED driver ' + $dp + ' (reboot)') } else { W ('removed ' + $dp) }
+    }
+}
+
+$leftExe = @(
+    (Join-Path ${env:ProgramFiles(x86)} 'Webroot\WRSA.exe'),
+    (Join-Path $env:ProgramFiles 'Webroot\WRSA.exe')
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+$leftSvc = Get-Service -Name WRSVC -ErrorAction SilentlyContinue
+if ($leftExe -or $leftSvc) {
+    W ('still present WRSA=' + $(if ($leftExe) { $leftExe -join ';' } else { 'no' }) + ' WRSVC=' + $(if ($leftSvc) { [string]$leftSvc.Status } else { 'no' }) + '. Reboot and gpupdate again.')
+    exit 1
+}
+W 'Webroot gone or leftovers cleared. Reboot if a driver was locked.'
 exit 0
 '@
     return $script.Replace('__BAKED_KEY__', $baked)
@@ -362,7 +458,7 @@ if ($DryRun) {
 Write-Step "[1/3] Creating or updating GPO '$GpoName'..."
 $gpo = Get-GPO -Name $GpoName -Domain $dnsRoot -ErrorAction SilentlyContinue
 if (-not $gpo) {
-    $gpo = New-GPO -Name $GpoName -Domain $dnsRoot -Comment 'Silent Webroot / OpenText CEP uninstall (WRSA.exe -uninstall -silent) when present'
+    $gpo = New-GPO -Name $GpoName -Domain $dnsRoot -Comment 'Silent Webroot / OpenText CEP uninstall (WRSA /autouninstall /silent) when present'
 }
 
 Set-GPRegistryValue -Name $GpoName -Domain $dnsRoot -Key 'HKLM\Software\Policies\Microsoft\Windows NT\CurrentVersion\Winlogon' -ValueName 'SyncForegroundPolicy' -Type DWord -Value 1 | Out-Null
@@ -413,8 +509,7 @@ else {
 Write-Step '[3/3] Done'
 Write-Step ''
 Write-Step "[OK] $GpoName"
-Write-Step '     Immediate Task runs WRSA.exe /autouninstall=<keycode> /silent when present (SYSTEM, next gpupdate).'
-Write-Step '     On a test PC: gpupdate /force — no reboot required to start. Webroot may still need a reboot to finish.'
+Write-Step '     Immediate Task: optional /autouninstall, then leftover sweep (services, folders, registry, drivers).'
+Write-Step '     On a test PC: gpupdate /force. Reboot if a driver is locked, then gpupdate again.'
 Write-Step '     Log: C:\Windows\Temp\Webroot-GPO-Uninstall.log'
 Write-Step '     Pilot: security-filter the GPO to a test computer group before a wide link.'
-Write-Step '     Leftovers: windows-av-cleanup -Delete -Vendor Webroot'

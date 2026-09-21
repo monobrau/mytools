@@ -12,7 +12,7 @@ $domain='contoso.com'
 $linkToDomain=$true
 $keyCode=''
 $wc=New-Object Net.WebClient
-$wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.0.0')
+$wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.1.0')
 $wc.Headers.Add('Accept','application/vnd.github.raw')
 $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WebrootUninstallGpo/New-WebrootUninstallGpo.ps1?ref=main')
 $params=@{ Domain=$domain }
@@ -27,7 +27,7 @@ if($keyCode){ $params.KeyCode=$keyCode }
 $ProgressPreference='SilentlyContinue'
 try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}
 $wc=New-Object Net.WebClient
-$wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.0.0')
+$wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.1.0')
 $wc.Headers.Add('Accept','application/vnd.github.raw')
 $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WebrootUninstallGpo/New-WebrootUninstallGpo.ps1?ref=main')
 & ([scriptblock]::Create($script)) -Domain 'contoso.com' -DryRun

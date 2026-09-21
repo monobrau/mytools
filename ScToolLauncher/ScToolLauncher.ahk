@@ -296,18 +296,18 @@ Tools := [
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
         "Name", "Webroot uninstall GPO",
-        "Summary", "Create a GPO Immediate Task that runs WRSA.exe -uninstall -silent as SYSTEM at the next gpupdate. No reboot required to start. Run on the client DC or RSAT box.",
+        "Summary", "Create a GPO Immediate Task: optional silent WRSA /autouninstall, then leftover sweep (services, folders, registry, drivers). Run on the client DC or RSAT box.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WebrootUninstallGpo",
         "Fetch", "Contents",
         "Path", "WebrootUninstallGpo",
         "Script", "New-WebrootUninstallGpo.ps1",
         "UaPrefix", "WebrootUninstallGpo-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.1.0",
         "TimeoutScan", 180000,
         "TimeoutUpdate", 900000,
         "Flags", "WebrootUninstallGpo AlwaysNote",
-        "Note", "Run elevated as Domain Admin on the client DC or RSAT box. Set the AD DNS name (or leave blank for the current domain). Keycode is optional and would be written to SYSVOL. Immediate Task runs at gpupdate. Prefer elevated PowerShell.",
-        "ClipboardNote", "NOTE: Run on a DC/RSAT box as Domain Admin, not on a workstation. Dry-run first. On a test PC: gpupdate /force. Webroot may still need a reboot to finish. Do not paste a keycode into tickets/git."
+        "Note", "Run elevated as Domain Admin on the client DC or RSAT box. Optional site key is written into SYSVOL (domain computers can read it). Immediate Task also sweeps leftovers. Prefer elevated PowerShell.",
+        "ClipboardNote", "NOTE: Run on a DC/RSAT box as Domain Admin. Dry-run first. Apply updates the existing Uninstall Webroot GPO. On a test PC: gpupdate /force. Reboot if a driver is locked."
     ),
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",

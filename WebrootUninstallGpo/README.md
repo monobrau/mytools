@@ -29,23 +29,21 @@ Domain Admin on a DC or RSAT box. Do not commit a live client domain or keycode.
 2. Enables **Always wait for the network**
 3. Publishes `Uninstall-Webroot.ps1` in the GPO SYSVOL folder
 4. Registers a computer **Immediate Task** that runs that script as SYSTEM
-   - Exit if `WRSA.exe` is missing
-   - Read the machine keycode from `HKLM\SOFTWARE\WR*` (or `-KeyCode`)
-   - `"...\Webroot\WRSA.exe" /autouninstall=<keycode> /silent` (hidden).
-     `WRSA.exe -uninstall` is **not** silent — it opens a GUI
-   - After WRSA is gone, delete `%ProgramData%\WRData` and `WRCore`
+   - If a keycode is available (endpoint registry or `-KeyCode`), run
+     `WRSA.exe /autouninstall=<keycode> /silent`. `WRSA.exe -uninstall` opens a GUI
+     and is not used
+   - Always sweep leftovers: WRSA/WRSVC processes, WR* services, scheduled
+     tasks, Run keys, ARP, `HKLM\SOFTWARE\WR*`, `Program Files*\Webroot`,
+     `ProgramData\WRData` / `WRCore`, and `WRkrn.sys` / related drivers
 5. Optional `-LinkToDomain` plus a workstation-only WMI filter (`ProductType = 1`)
 
 On a test PC: `gpupdate /force`, then check
 `C:\Windows\Temp\Webroot-GPO-Uninstall.log`. Background refresh is up to ~90
-minutes if you do not force.
+minutes if you do not force. Reboot if a driver is locked, then gpupdate again.
 
-This GPO does **not** reboot the PC and does **not** do a full remnant sweep.
-Leftovers (drivers, `WRSVC`): [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup)
-`-Delete -Vendor Webroot`.
-
-A `-KeyCode` value is written into SYSVOL and is readable by domain computers.
-Leave it blank unless uninstall fails without it.
+`-KeyCode` is written into the script on SYSVOL (readable by domain computers).
+That is OK for a site uninstall key if you choose to pass it at apply time.
+Do not commit the key to git.
 
 ## Parameters
 
