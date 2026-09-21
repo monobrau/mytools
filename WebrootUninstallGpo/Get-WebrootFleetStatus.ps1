@@ -220,7 +220,11 @@ while ($jobs.Count -gt 0) {
         if ($j.Handle.IsCompleted) {
             try {
                 $result = $j.Pipe.EndInvoke($j.Handle)
-                foreach ($r in @($result)) { $rows.Add($r) }
+                if ($null -ne $result) {
+                    foreach ($r in $result) {
+                        if ($null -ne $r) { [void]$rows.Add($r) }
+                    }
+                }
             }
             catch {
                 $rows.Add([pscustomobject]@{
@@ -252,7 +256,13 @@ $pool.Close()
 $pool.Dispose()
 Write-Progress -Activity 'Webroot fleet check' -Completed
 
-$out = @($rows)
+# PS 5.1: @($List[object] of PSCustomObject) throws "Argument types do not match"
+if ($rows.Count -gt 0) {
+    $out = $rows.ToArray()
+}
+else {
+    $out = @()
+}
 $present = @($out | Where-Object { $_.WrsaPresent -or $_.WrDataPresent }).Count
 $clear = @($out | Where-Object { $_.AdminShare -and -not $_.WrsaPresent -and -not $_.WrDataPresent }).Count
 $down = @($out | Where-Object { -not $_.AdminShare }).Count
@@ -260,14 +270,21 @@ $down = @($out | Where-Object { -not $_.AdminShare }).Count
 Write-Output ''
 Write-Output "=== Webroot fleet status ==="
 Write-Output ("Hosts: $total  Present: $present  Clear (share OK): $clear  Unreachable/no share: $down")
-$out | Sort-Object WrsaPresent, AdminShare, Computer -Descending | Format-Table -AutoSize
+if ($out.Count -gt 0) {
+    $out | Sort-Object WrsaPresent, AdminShare, Computer -Descending | Format-Table -AutoSize
+}
 try {
     $dir = Split-Path -Parent $OutputPath
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
-    $out | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding UTF8
-    Write-Output ("CSV: $OutputPath")
+    if ($out.Count -gt 0) {
+        $out | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding UTF8
+        Write-Output ("CSV: $OutputPath")
+    }
+    else {
+        Write-Warning 'No host results to export.'
+    }
 }
 catch {
     Write-Warning ("CSV not written: $($_.Exception.Message)")
