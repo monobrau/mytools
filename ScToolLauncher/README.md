@@ -54,6 +54,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | --- | --- |
 | Windows Defender repair | mytools `WindowsDefenderRepair` — PowerShell only. Scan: services + RTP + tamper. Apply: full RTP repair (services + policy + PassiveMode + preferences). Optional nuclear: `MpCmdRun -ResetPlatform` |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration, not day-to-day AV management |
+| Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT: GPO Immediate Task runs `WRSA.exe -uninstall -silent` at next gpupdate (no reboot to start). Dry-run first. Optional keycode is written to SYSVOL |
 | McAfee remnant cleanup | mytools — AppX + `Program Files\McAfee` leftovers |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
@@ -68,8 +69,9 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Huntress silent install | mytools `HuntressInstall` — account key built in; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
 | Verify scheduled reboot | Inline — host time, recent User32 1074 shutdown events, HuntressSC task query |
 | Cancel scheduled reboot | Inline `shutdown.exe /a` — aborts a pending shutdown.exe countdown (use if Huntress schedule armed a reboot) |
+| Automate GPO deploy | mytools `AutomateGpoDeploy` — paste location token on a DC/RSAT box; dry-run bakes MSI only; Apply stages NETLOGON + startup GPO |
 
-Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, and SentinelOne tokens stay GUI-only. Do not paste live org keys into tickets or git.
+Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, SentinelOne tokens, and Automate installer tokens stay GUI-only. Do not paste live tokens into tickets or git.
 
 ### IR / forensics — event logs, Sysinternals, ADWCleaner, PUP remnants
 

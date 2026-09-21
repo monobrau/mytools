@@ -15,9 +15,14 @@ script** that runs `msiexec` on the baked MSI when `LTService` is missing.
 
 ## ScreenConnect (client DC)
 
-See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Run elevated as
-Domain Admin on a DC or RSAT box. Set `$token`, `$locationId`, `$clientName`,
-and `$domain` from the location deployment ticket. Do not commit tokens.
+Prefer **ScToolLauncher → Agents → Automate GPO deploy**. Paste the location
+token, Location ID, and client name. Dry-run bakes the MSI in `%TEMP%` only;
+Apply stages NETLOGON and creates the GPO.
+
+See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1) for a hand-built
+snippet. Run elevated as Domain Admin on a DC or RSAT box. Set `$token`,
+`$locationId`, `$clientName`, and `$domain` from the location deployment ticket.
+Do not commit tokens.
 
 `#!ps` and `#timeout=900000` must be the first lines in Commands.
 

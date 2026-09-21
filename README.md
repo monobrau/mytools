@@ -16,6 +16,7 @@ Public collection of work tools and scripts.
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet/VC++ 2005-2013 delegates + winget; ScreenConnect `#!ps`) |
+| [WebrootUninstallGpo](WebrootUninstallGpo/) | Create a GPO Immediate Task that silently uninstalls Webroot (`WRSA.exe -uninstall`) at next gpupdate |
 | [VisualCppUpdate](VisualCppUpdate/) | Patch installed Visual C++ 2005-2013 redistributables to the last security build for that year |
 | [WindowsDefenderRepair](WindowsDefenderRepair/) | Re-enable Defender real-time protection and start WinDefend / WdNisSvc |
 | [WindowsUpdate](WindowsUpdate/) | Scan/install quality or feature Windows Updates; pre-check for disk, WinRE, WU policy; default no reboot |

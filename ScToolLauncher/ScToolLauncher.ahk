@@ -32,7 +32,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product ProductList
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
-;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall BackupsOnlyDefault ClearAllBackupContent
+;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall AutomateGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
 ;        BackstageOnly AutoReboot
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
@@ -295,6 +295,22 @@ Tools := [
     ),
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Name", "Webroot uninstall GPO",
+        "Summary", "Create a GPO Immediate Task that runs WRSA.exe -uninstall -silent as SYSTEM at the next gpupdate. No reboot required to start. Run on the client DC or RSAT box.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WebrootUninstallGpo",
+        "Fetch", "Contents",
+        "Path", "WebrootUninstallGpo",
+        "Script", "New-WebrootUninstallGpo.ps1",
+        "UaPrefix", "WebrootUninstallGpo-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 900000,
+        "Flags", "WebrootUninstallGpo AlwaysNote",
+        "Note", "Run elevated as Domain Admin on the client DC or RSAT box. Set the AD DNS name (or leave blank for the current domain). Keycode is optional and would be written to SYSVOL. Immediate Task runs at gpupdate. Prefer elevated PowerShell.",
+        "ClipboardNote", "NOTE: Run on a DC/RSAT box as Domain Admin, not on a workstation. Dry-run first. On a test PC: gpupdate /force. Webroot may still need a reboot to finish. Do not paste a keycode into tickets/git."
+    ),
+    Map(
+        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
         "Name", "McAfee remnant cleanup",
         "Summary", "Detects leftover McAfee AppX + Program Files\McAfee; Remediate kills processes and removes remnants.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/McAfeeRemnantCleanup",
@@ -396,6 +412,22 @@ Tools := [
         "TimeoutUpdate", 30000,
         "Flags", "RunOnly",
         "Note", "Prefer elevated PowerShell if the reboot was armed as SYSTEM."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Name", "Automate GPO deploy",
+        "Summary", "Download the location MSI+MST, bake the transform, stage on NETLOGON, and create a startup-script GPO. Run on the client DC or RSAT box.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/AutomateGpoDeploy",
+        "Fetch", "Contents",
+        "Path", "AutomateGpoDeploy",
+        "Script", "Install-AutomateGPO.ps1",
+        "UaPrefix", "AutomateGpoDeploy-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 900000,
+        "TimeoutUpdate", 900000,
+        "Flags", "AutomateGpo AlwaysNote",
+        "Note", "Run elevated as Domain Admin on the client DC or RSAT box, not on a workstation. Token is not saved. Startup scripts run at boot. Prefer elevated PowerShell.",
+        "ClipboardNote", "NOTE: Installer token is in this snippet. Do not paste into tickets/git. Run on a DC/RSAT box as Domain Admin. Dry-run first. Clients need a reboot after the GPO is linked."
     ),
     ; --- IR / forensics ---
     Map(
@@ -717,6 +749,25 @@ ShowGui(*) {
     gCtrls["LblHuntressTags"] := gGui.Add("Text", , "Optional tags (comma-separated)")
     gCtrls["HuntressTags"] := gGui.Add("Edit", "w" UiContentW " vHuntressTags", "")
 
+    automateServerDefault := LoadAutomateServer()
+    gCtrls["LblAutomateServer"] := gGui.Add("Text", "Section", "Automate server hostname")
+    gCtrls["AutomateServer"] := gGui.Add("Edit", "w" UiContentW " vAutomateServer", automateServerDefault)
+    gCtrls["LblAutomateLocationId"] := gGui.Add("Text", , "Location ID (from the deployment ticket)")
+    gCtrls["AutomateLocationId"] := gGui.Add("Edit", "w" UiContentW " vAutomateLocationId", "")
+    gCtrls["LblAutomateToken"] := gGui.Add("Text", , "Windows MSI installer token — not saved; paste each time")
+    gCtrls["AutomateToken"] := gGui.Add("Edit", "w" UiContentW " Password vAutomateToken", "")
+    gCtrls["LblAutomateClient"] := gGui.Add("Text", , "Client name (GPO / NETLOGON folder)")
+    gCtrls["AutomateClientName"] := gGui.Add("Edit", "w" UiContentW " vAutomateClientName", "")
+    gCtrls["LblAutomateLocation"] := gGui.Add("Text", , "Location name")
+    gCtrls["AutomateLocationName"] := gGui.Add("Edit", "w" UiContentW " vAutomateLocationName", "Main")
+    gCtrls["LblAutomateDomain"] := gGui.Add("Text", , "AD DNS name (blank = current domain on the DC)")
+    gCtrls["AutomateDomain"] := gGui.Add("Edit", "w" UiContentW " vAutomateDomain", "")
+    gCtrls["LblAutomateOu"] := gGui.Add("Text", , "Target OU DN (optional; overrides domain-root link)")
+    gCtrls["AutomateTargetOu"] := gGui.Add("Edit", "w" UiContentW " vAutomateTargetOu", "")
+    gCtrls["AutomateLinkToDomain"] := gGui.Add("Checkbox", "Checked vAutomateLinkToDomain", "Link at domain root + workstation WMI filter")
+    gCtrls["LblWebrootKeyCode"] := gGui.Add("Text", , "Optional Webroot keycode (written to SYSVOL if set)")
+    gCtrls["WebrootKeyCode"] := gGui.Add("Edit", "w" UiContentW " Password vWebrootKeyCode", "")
+
     gCtrls["LblPaste"] := gGui.Add("Text", "Section", "Paste format")
     gCtrls["FmtCommands"] := gGui.Add("Radio", "Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
     gCtrls["FmtBackstage"] := gGui.Add("Radio", "vFmtBackstage", "PowerShell (one line)")
@@ -745,6 +796,10 @@ ShowGui(*) {
         "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
         "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
         "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
+        "LblAutomateServer", "AutomateServer", "LblAutomateLocationId", "AutomateLocationId", "LblAutomateToken", "AutomateToken",
+        "LblAutomateClient", "AutomateClientName", "LblAutomateLocation", "AutomateLocationName",
+        "LblAutomateDomain", "AutomateDomain", "LblAutomateOu", "AutomateTargetOu", "AutomateLinkToDomain",
+        "LblWebrootKeyCode", "WebrootKeyCode",
         "LblPaste", "FmtCommands", "FmtBackstage",
         "Note", "Status"
     ]
@@ -808,7 +863,10 @@ ReflowGui() {
             || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
             || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl"
             || key = "HuntressAccountKey" || key = "HuntressOrgKey" || key = "HuntressTags"
-            || key = "HuntressRebootAt")
+            || key = "HuntressRebootAt"
+            || key = "AutomateServer" || key = "AutomateLocationId" || key = "AutomateToken"
+            || key = "AutomateClientName" || key = "AutomateLocationName" || key = "AutomateDomain"
+            || key = "AutomateTargetOu" || key = "WebrootKeyCode")
             ch := 22
         else if (InStr(key, "Lbl") = 1)
             ch := 16
@@ -816,7 +874,7 @@ ReflowGui() {
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
             || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "SkipIfRunning"
             || key = "ResetPlatform" || key = "AutoReboot"
-            || key = "S1Quiet")
+            || key = "S1Quiet" || key = "AutomateLinkToDomain")
             ch := 20
 
         ctrl.Move(rightX, y, cw, ch)
@@ -869,6 +927,17 @@ LoadHuntressAccountKey() {
             return ini
     }
     return HuntressAccountKeyDefault
+}
+
+LoadAutomateServer() {
+    global LocalDefaultsPath
+    default := "river-run.hostedrmm.com"
+    if FileExist(LocalDefaultsPath) {
+        ini := Trim(IniRead(LocalDefaultsPath, "Automate", "Server", ""))
+        if (ini != "")
+            return ini
+    }
+    return default
 }
 
 ToolHasFlag(tool, flag) {
@@ -953,6 +1022,8 @@ RefreshOptionEnable(*) {
     showAutoReboot := ToolHasFlag(t, "AutoReboot") && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
+    showAutomate := ToolHasFlag(t, "AutomateGpo")
+    showWebrootGpo := ToolHasFlag(t, "WebrootUninstallGpo")
     scanOnly := ToolHasFlag(t, "ScanOnly")
 
     if (showHuntress) {
@@ -1023,10 +1094,29 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["HuntressOrgKey"], showHuntress)
     SetCtrlShown(gCtrls["LblHuntressTags"], showHuntress)
     SetCtrlShown(gCtrls["HuntressTags"], showHuntress)
+    SetCtrlShown(gCtrls["LblAutomateServer"], showAutomate)
+    SetCtrlShown(gCtrls["AutomateServer"], showAutomate)
+    SetCtrlShown(gCtrls["LblAutomateLocationId"], showAutomate)
+    SetCtrlShown(gCtrls["AutomateLocationId"], showAutomate)
+    SetCtrlShown(gCtrls["LblAutomateToken"], showAutomate)
+    SetCtrlShown(gCtrls["AutomateToken"], showAutomate)
+    SetCtrlShown(gCtrls["LblAutomateClient"], showAutomate)
+    SetCtrlShown(gCtrls["AutomateClientName"], showAutomate)
+    SetCtrlShown(gCtrls["LblAutomateLocation"], showAutomate)
+    SetCtrlShown(gCtrls["AutomateLocationName"], showAutomate)
+    showGpoDomain := showAutomate || showWebrootGpo
+    SetCtrlShown(gCtrls["LblAutomateDomain"], showGpoDomain)
+    SetCtrlShown(gCtrls["AutomateDomain"], showGpoDomain)
+    SetCtrlShown(gCtrls["LblAutomateOu"], showGpoDomain)
+    SetCtrlShown(gCtrls["AutomateTargetOu"], showGpoDomain)
+    showGpoLink := showGpoDomain && !gCtrls["ModeScan"].Value
+    SetCtrlShown(gCtrls["AutomateLinkToDomain"], showGpoLink)
+    SetCtrlShown(gCtrls["LblWebrootKeyCode"], showWebrootGpo)
+    SetCtrlShown(gCtrls["WebrootKeyCode"], showWebrootGpo)
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning || showResetPlatform
-        || showAutoReboot
+        || showAutoReboot || showGpoLink
     SetCtrlShown(gCtrls["LblOptions"], anyOpt)
 
     ; Find-only tools: hide "Apply" mode entirely
@@ -1103,6 +1193,14 @@ RefreshOptionEnable(*) {
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
         gCtrls["ModeUpdate"].Text := "Delete matching rules"
+    }
+    if ToolHasFlag(t, "AutomateGpo") {
+        gCtrls["ModeScan"].Text := "Dry-run (transform only)"
+        gCtrls["ModeUpdate"].Text := "Stage MSI + create GPO"
+    }
+    if ToolHasFlag(t, "WebrootUninstallGpo") {
+        gCtrls["ModeScan"].Text := "Dry-run (print startup script)"
+        gCtrls["ModeUpdate"].Text := "Create uninstall GPO"
     }
 
     summary := ToolGet(t, "Summary", "")
@@ -1285,6 +1383,50 @@ BuildSwitches(tool, isScan, isCommands) {
             sw.Push("-OrgKey '" StrReplace(org, "'", "''") "'")
         if (tags != "")
             sw.Push("-Tags '" StrReplace(tags, "'", "''") "'")
+    }
+
+    if ToolHasFlag(tool, "AutomateGpo") {
+        server := Trim(gCtrls["AutomateServer"].Value)
+        locId := Trim(gCtrls["AutomateLocationId"].Value)
+        token := Trim(gCtrls["AutomateToken"].Value)
+        client := Trim(gCtrls["AutomateClientName"].Value)
+        locName := Trim(gCtrls["AutomateLocationName"].Value)
+        domain := Trim(gCtrls["AutomateDomain"].Value)
+        targetOu := Trim(gCtrls["AutomateTargetOu"].Value)
+        if (server != "")
+            sw.Push("-Server '" StrReplace(server, "'", "''") "'")
+        if (locId != "")
+            sw.Push("-LocationID " locId)
+        if (token != "")
+            sw.Push("-Token '" StrReplace(token, "'", "''") "'")
+        if (client != "")
+            sw.Push("-ClientName '" StrReplace(client, "'", "''") "'")
+        if (locName != "")
+            sw.Push("-LocationName '" StrReplace(locName, "'", "''") "'")
+        if (domain != "")
+            sw.Push("-Domain '" StrReplace(domain, "'", "''") "'")
+        if isScan
+            sw.Push("-DryRun")
+        else if (targetOu != "")
+            sw.Push("-TargetOU '" StrReplace(targetOu, "'", "''") "'")
+        else if CtrlActive(gCtrls["AutomateLinkToDomain"]) && gCtrls["AutomateLinkToDomain"].Value
+            sw.Push("-LinkToDomain")
+    }
+
+    if ToolHasFlag(tool, "WebrootUninstallGpo") {
+        domain := Trim(gCtrls["AutomateDomain"].Value)
+        targetOu := Trim(gCtrls["AutomateTargetOu"].Value)
+        keyCode := Trim(gCtrls["WebrootKeyCode"].Value)
+        if (domain != "")
+            sw.Push("-Domain '" StrReplace(domain, "'", "''") "'")
+        if (keyCode != "")
+            sw.Push("-KeyCode '" StrReplace(keyCode, "'", "''") "'")
+        if isScan
+            sw.Push("-DryRun")
+        else if (targetOu != "")
+            sw.Push("-TargetOU '" StrReplace(targetOu, "'", "''") "'")
+        else if CtrlActive(gCtrls["AutomateLinkToDomain"]) && gCtrls["AutomateLinkToDomain"].Value
+            sw.Push("-LinkToDomain")
     }
 
     fetch := ToolGet(tool, "Fetch", "Contents")
@@ -1546,6 +1688,26 @@ DescribeSelection(tool, isScan) {
         else
             mode := "Install"
     }
+    if ToolHasFlag(tool, "AutomateGpo") {
+        if isScan
+            mode := "Dry-run transform"
+        else if (Trim(gCtrls["AutomateTargetOu"].Value) != "")
+            mode := "Stage + GPO to OU"
+        else if CtrlActive(gCtrls["AutomateLinkToDomain"]) && gCtrls["AutomateLinkToDomain"].Value
+            mode := "Stage + GPO (domain link)"
+        else
+            mode := "Stage + create GPO (unlinked)"
+    }
+    if ToolHasFlag(tool, "WebrootUninstallGpo") {
+        if isScan
+            mode := "Dry-run GPO script"
+        else if (Trim(gCtrls["AutomateTargetOu"].Value) != "")
+            mode := "Create GPO to OU"
+        else if CtrlActive(gCtrls["AutomateLinkToDomain"]) && gCtrls["AutomateLinkToDomain"].Value
+            mode := "Create GPO (domain link)"
+        else
+            mode := "Create GPO (unlinked)"
+    }
     parts := [tool["Name"], mode]
     if CtrlActive(gCtrls["Force"]) && gCtrls["Force"].Value
         parts.Push("Force")
@@ -1638,6 +1800,20 @@ DoCopy(*) {
         }
         if (CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value && DateDiff(gCtrls["HuntressRebootAt"].Value, A_Now, "Seconds") < 60) {
             MsgBox("Pick a reboot date/time at least 1 minute in the future (endpoint local time).", AppName, "Icon!")
+            return
+        }
+    }
+    if ToolHasFlag(tool, "AutomateGpo") {
+        server := Trim(gCtrls["AutomateServer"].Value)
+        locId := Trim(gCtrls["AutomateLocationId"].Value)
+        token := Trim(gCtrls["AutomateToken"].Value)
+        client := Trim(gCtrls["AutomateClientName"].Value)
+        if (server = "" || locId = "" || !RegExMatch(locId, "^\d+$") || token = "") {
+            MsgBox("Needs Automate server hostname, numeric Location ID, and the Windows MSI installer token.`nNothing is saved in the launcher.", AppName, "Icon!")
+            return
+        }
+        if !isScan && (client = "") {
+            MsgBox("Set the client name so the GPO and NETLOGON folder are identifiable.", AppName, "Icon!")
             return
         }
     }

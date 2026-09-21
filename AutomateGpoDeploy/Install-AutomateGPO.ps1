@@ -104,7 +104,11 @@ param(
 
     [string]$RepoPath = 'AutomateGpoDeploy',
 
-    [switch]$DryRun
+    [switch]$DryRun,
+
+    [switch]$Exit,
+
+    [switch]$NoExit
 )
 
 Set-StrictMode -Version Latest
@@ -112,6 +116,8 @@ $ErrorActionPreference = 'Stop'
 
 $script:WmiFilterName = 'Windows Workstations (ProductType=1)'
 $script:ScriptsCse = '[{42B5FAAE-6536-11D2-AE5A-0000F87571E3}{40B6664F-4972-11D1-A7CA-0000F87571E3}]'
+$null = $Exit
+$null = $NoExit
 
 function Write-Step {
     param([string]$Message)
