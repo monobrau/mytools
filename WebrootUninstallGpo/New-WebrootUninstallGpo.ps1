@@ -9,7 +9,9 @@
     Native GPO Software Installation cannot uninstall Webroot unless that same
     MSI was originally assigned by GPO. This publishes a Group Policy
     Preferences Immediate Task (Windows 7+) that runs as SYSTEM at the next
-    gpupdate — no reboot required to start. WRSA.exe -uninstall -silent.
+    gpupdate — no reboot required to start. Silent path is
+    WRSA.exe /autouninstall=<keycode> /silent (keycode from the endpoint
+    registry, or -KeyCode). WRSA.exe -uninstall is not silent.
 
     The script skips hosts that no longer have WRSA.exe. After a successful
     uninstall it removes leftover ProgramData\WRData and WRCore. It does not
@@ -40,9 +42,9 @@
     Override the GPO name. Default: Uninstall Webroot
 
 .PARAMETER KeyCode
-    Optional Webroot keycode. When set, the Immediate Task cmd also tries
-    -uninstall -silent -keycode. SYSVOL is readable by domain computers —
-    leave blank unless uninstall fails without it.
+    Optional Webroot keycode. When set, used for /autouninstall= if the
+    endpoint registry has none. SYSVOL is readable by domain computers —
+    leave blank unless the local keycode lookup fails.
 
 .PARAMETER DryRun
     Print the planned GPO and uninstall cmd. Do not write AD or SYSVOL.
@@ -106,50 +108,63 @@ function Test-IsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function New-WebrootUninstallCmd {
+function New-WebrootUninstallScript {
     param([string]$UninstallKeyCode)
 
-    $keyLine = ''
-    if ($UninstallKeyCode) {
-        $esc = $UninstallKeyCode.Replace('"', '')
-        $keyLine = @"
-if exist "%WRSA%" (
-  echo %DATE% %TIME% retry with keycode>>"%LOG%"
-  "%WRSA%" -uninstall -silent -keycode $esc
-  echo %DATE% %TIME% keycode uninstall exit %ERRORLEVEL%>>"%LOG%"
-)
-
-"@
+    # -uninstall [-silent] shows a GUI. Silent removal is /autouninstall=keycode /silent.
+    $baked = if ($UninstallKeyCode) { $UninstallKeyCode.Replace("'", "''").Trim() } else { '' }
+    $script = @'
+$ErrorActionPreference = 'Continue'
+$log = Join-Path $env:SystemRoot 'Temp\Webroot-GPO-Uninstall.log'
+function W([string]$m) { Add-Content -LiteralPath $log -Value (('{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $m)) }
+W 'immediate task began'
+$wrsa = @(
+    (Join-Path ${env:ProgramFiles(x86)} 'Webroot\WRSA.exe'),
+    (Join-Path $env:ProgramFiles 'Webroot\WRSA.exe')
+) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+if (-not $wrsa) { W 'WRSA.exe not found. Nothing to do.'; exit 0 }
+$key = '__BAKED_KEY__'
+if (-not $key) {
+    $pat = '^[A-Z0-9]{4}(?:-[A-Z0-9]{4}){4}$'
+    foreach ($root in @('HKLM:\SOFTWARE\WRData', 'HKLM:\SOFTWARE\WRCore', 'HKLM:\SOFTWARE\WRMIDData', 'HKLM:\SOFTWARE\webroot', 'HKLM:\SOFTWARE\WOW6432Node\WRData', 'HKLM:\SOFTWARE\WOW6432Node\WRCore', 'HKLM:\SOFTWARE\WOW6432Node\WRMIDData', 'HKLM:\SOFTWARE\WOW6432Node\webroot')) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        $paths = @($root) + @(Get-ChildItem -LiteralPath $root -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.PSPath })
+        foreach ($path in $paths) {
+            $item = Get-ItemProperty -LiteralPath $path -ErrorAction SilentlyContinue
+            if (-not $item) { continue }
+            foreach ($prop in $item.PSObject.Properties) {
+                if ($prop.Name -match '^PS') { continue }
+                $v = ([string]$prop.Value).Trim().ToUpperInvariant()
+                if ($v -match $pat) { $key = $v; break }
+            }
+            if ($key) { break }
+        }
+        if ($key) { break }
     }
-
-    return @"
-@echo off
-set LOG=%SystemRoot%\Temp\Webroot-GPO-Uninstall.log
-echo %DATE% %TIME% immediate task began>>"%LOG%"
-
-set WRSA=
-if exist "%ProgramFiles(x86)%\Webroot\WRSA.exe" set WRSA=%ProgramFiles(x86)%\Webroot\WRSA.exe
-if not defined WRSA if exist "%ProgramFiles%\Webroot\WRSA.exe" set WRSA=%ProgramFiles%\Webroot\WRSA.exe
-
-if not defined WRSA (
-  echo %DATE% %TIME% WRSA.exe not found. Nothing to do.>>"%LOG%"
-  exit /b 0
-)
-
-echo %DATE% %TIME% Uninstalling "%WRSA%">>"%LOG%"
-"%WRSA%" -uninstall -silent
-echo %DATE% %TIME% uninstall exit %ERRORLEVEL%>>"%LOG%"
-$keyLine
-if exist "%WRSA%" (
-  echo %DATE% %TIME% WRSA.exe still present. Reboot and/or run windows-av-cleanup.>>"%LOG%"
-  exit /b 1
-)
-
-if exist "%ProgramData%\WRData" rd /s /q "%ProgramData%\WRData"
-if exist "%ProgramData%\WRCore" rd /s /q "%ProgramData%\WRCore"
-echo %DATE% %TIME% Webroot uninstalled. Reboot recommended.>>"%LOG%"
-exit /b 0
-"@
+}
+if (-not $key) {
+    W 'No keycode in registry. WRSA -uninstall shows a UI; refusing. Use windows-av-cleanup or pass -KeyCode.'
+    exit 2
+}
+W ('Silent /autouninstall ' + $key.Substring(0, 4) + '-****')
+$p = Start-Process -FilePath $wrsa -ArgumentList @(('/autouninstall=' + $key), '/silent') -Wait -PassThru -WindowStyle Hidden
+$code = 1
+if ($p) { $code = [int]$p.ExitCode }
+W ('autouninstall exit ' + [string]$code)
+if (Test-Path -LiteralPath $wrsa) {
+    W 'WRSA.exe still present. Reboot and/or run windows-av-cleanup.'
+    exit 1
+}
+foreach ($d in @((Join-Path $env:ProgramData 'WRData'), (Join-Path $env:ProgramData 'WRCore'))) {
+    if (Test-Path -LiteralPath $d) {
+        Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
+        W ('removed ' + $d)
+    }
+}
+W 'Webroot uninstalled. Reboot recommended.'
+exit 0
+'@
+    return $script.Replace('__BAKED_KEY__', $baked)
 }
 
 function Merge-GpoExtensionNames {
@@ -168,7 +183,7 @@ function Set-GpoImmediateTask {
         [string]$DnsRoot,
         [string]$DomainDN,
         [string]$CmdName,
-        [string]$CmdText
+        [string]$ScriptText
     )
 
     $policyRoot = "\\$DnsRoot\SYSVOL\$DnsRoot\Policies\{$($Gpo.Id)}"
@@ -176,7 +191,8 @@ function Set-GpoImmediateTask {
     $prefDir = Join-Path $policyRoot 'Machine\Preferences\ScheduledTasks'
     New-Item -ItemType Directory -Path $scriptDir -Force | Out-Null
     New-Item -ItemType Directory -Path $prefDir -Force | Out-Null
-    Set-Content -Path (Join-Path $scriptDir $CmdName) -Value $CmdText -Encoding Ascii
+    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText((Join-Path $scriptDir $CmdName), $ScriptText, $utf8NoBom)
 
     $startupIni = Join-Path $scriptDir 'scripts.ini'
     if (Test-Path -LiteralPath $startupIni) {
@@ -226,8 +242,8 @@ function Set-GpoImmediateTask {
 				</Settings>
 				<Actions Context="Author">
 					<Exec>
-						<Command>cmd.exe</Command>
-						<Arguments>/c "$cmdEsc"</Arguments>
+						<Command>C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe</Command>
+						<Arguments>-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$cmdEsc"</Arguments>
 					</Exec>
 				</Actions>
 			</Task>
@@ -300,8 +316,8 @@ if (-not (Test-IsAdministrator)) {
 }
 
 $KeyCode = if ($KeyCode) { $KeyCode.Trim() } else { '' }
-$cmdName = 'Uninstall-Webroot.cmd'
-$cmdText = New-WebrootUninstallCmd -UninstallKeyCode $KeyCode
+$cmdName = 'Uninstall-Webroot.ps1'
+$cmdText = New-WebrootUninstallScript -UninstallKeyCode $KeyCode
 
 Write-Step '=== Webroot uninstall GPO ==='
 if ($DryRun) { Write-Step 'Mode: DRY-RUN (no AD/SYSVOL writes)' }
@@ -332,12 +348,12 @@ if ($KeyCode) {
     Write-Step '  Keycode: set (will be written to SYSVOL — readable by domain computers)'
 }
 else {
-    Write-Step '  Keycode: not set (SYSTEM -uninstall -silent only)'
+    Write-Step '  Keycode: not set (each PC reads its own WR* registry keycode)'
 }
 Write-Step ''
 
 if ($DryRun) {
-    Write-Step '[DRY RUN] Immediate Task cmd that would be published:'
+    Write-Step '[DRY RUN] Immediate Task script that would be published:'
     Write-Host $cmdText
     Write-Step '          Re-run without -DryRun to create the GPO.'
     return
@@ -351,7 +367,7 @@ if (-not $gpo) {
 
 Set-GPRegistryValue -Name $GpoName -Domain $dnsRoot -Key 'HKLM\Software\Policies\Microsoft\Windows NT\CurrentVersion\Winlogon' -ValueName 'SyncForegroundPolicy' -Type DWord -Value 1 | Out-Null
 
-Set-GpoImmediateTask -Gpo $gpo -DnsRoot $dnsRoot -DomainDN $domainDN -CmdName $cmdName -CmdText $cmdText
+Set-GpoImmediateTask -Gpo $gpo -DnsRoot $dnsRoot -DomainDN $domainDN -CmdName $cmdName -ScriptText $cmdText
 
 $linkTarget = $null
 if ($TargetOU) {
@@ -397,7 +413,7 @@ else {
 Write-Step '[3/3] Done'
 Write-Step ''
 Write-Step "[OK] $GpoName"
-Write-Step '     Immediate Task runs WRSA.exe -uninstall -silent when present (SYSTEM, next gpupdate).'
+Write-Step '     Immediate Task runs WRSA.exe /autouninstall=<keycode> /silent when present (SYSTEM, next gpupdate).'
 Write-Step '     On a test PC: gpupdate /force — no reboot required to start. Webroot may still need a reboot to finish.'
 Write-Step '     Log: C:\Windows\Temp\Webroot-GPO-Uninstall.log'
 Write-Step '     Pilot: security-filter the GPO to a test computer group before a wide link.'

@@ -27,11 +27,12 @@ Domain Admin on a DC or RSAT box. Do not commit a live client domain or keycode.
 
 1. Creates or updates `Uninstall Webroot`
 2. Enables **Always wait for the network**
-3. Publishes `Uninstall-Webroot.cmd` in the GPO SYSVOL folder
-4. Registers a computer **Immediate Task** that runs that cmd as SYSTEM
+3. Publishes `Uninstall-Webroot.ps1` in the GPO SYSVOL folder
+4. Registers a computer **Immediate Task** that runs that script as SYSTEM
    - Exit if `WRSA.exe` is missing
-   - `"...\Webroot\WRSA.exe" -uninstall -silent`
-   - Optional keycode retry if you passed `-KeyCode`
+   - Read the machine keycode from `HKLM\SOFTWARE\WR*` (or `-KeyCode`)
+   - `"...\Webroot\WRSA.exe" /autouninstall=<keycode> /silent` (hidden).
+     `WRSA.exe -uninstall` is **not** silent — it opens a GUI
    - After WRSA is gone, delete `%ProgramData%\WRData` and `WRCore`
 5. Optional `-LinkToDomain` plus a workstation-only WMI filter (`ProductType = 1`)
 
