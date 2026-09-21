@@ -6,6 +6,8 @@
     Run from a DC or RSAT box as Domain Admin. Imports computer objects from
     Active Directory (or a name list), then probes each host's administrative
     share for WRSA.exe, ProgramData\WRData, and the GPO uninstall log.
+    WRSVC status is queried via the Service Control Manager (same admin
+    rights as C$), not from the share itself. File presence is not "running."
 
     Unreachable or admin$-blocked hosts are reported; that is not proof Webroot
     is gone. Do not commit live client names or site keys.
@@ -145,13 +147,23 @@ $work = {
             return $false
         }
     }
-
-    $reachable = $false
-    $share = $false
-    $wrsa = $false
-    $wrdata = $false
-    $gpoLog = $false
-    $note = ''
+    function Get-WrsvcStatus {
+        param([string]$Name)
+        try {
+            $c = New-Object System.ServiceProcess.ServiceController('WRSVC', $Name)
+            try {
+                return [string]$c.Status
+            }
+            finally {
+                $c.Dispose()
+            }
+        }
+        catch {
+            $m = [string]$_.Exception.Message
+            if ($m -match '(?i)cannot find|does not exist|not found') { return 'none' }
+            return 'query failed'
+        }
+    }
 
     if (-not $SkipPing) {
         $reachable = Test-FastPing -Name $HostName -TimeoutMs $PingMs
@@ -161,6 +173,7 @@ $work = {
                 OperatingSystem = $OperatingSystem
                 Reachable       = $false
                 AdminShare      = $false
+                WrsvcStatus     = ''
                 WrsaPresent     = $false
                 WrDataPresent   = $false
                 GpoLog          = $false
@@ -169,14 +182,16 @@ $work = {
         }
     }
 
+    $wrsvc = Get-WrsvcStatus -Name $HostName
     $cRoot = "\\$HostName\C$"
     $share = Test-SharePath -Unc "$cRoot\Windows"
     if (-not $share) {
         return [pscustomobject]@{
             Computer        = $HostName
             OperatingSystem = $OperatingSystem
-            Reachable       = [bool]$SkipPing
+            Reachable       = $true
             AdminShare      = $false
+            WrsvcStatus     = $wrsvc
             WrsaPresent     = $false
             WrDataPresent   = $false
             GpoLog          = $false
@@ -194,6 +209,7 @@ $work = {
         OperatingSystem = $OperatingSystem
         Reachable       = $true
         AdminShare      = $true
+        WrsvcStatus     = $wrsvc
         WrsaPresent     = $wrsa
         WrDataPresent   = $wrdata
         GpoLog          = $gpoLog
@@ -232,6 +248,7 @@ while ($jobs.Count -gt 0) {
                         OperatingSystem = ''
                         Reachable       = $false
                         AdminShare      = $false
+                        WrsvcStatus     = ''
                         WrsaPresent     = $false
                         WrDataPresent   = $false
                         GpoLog          = $false
@@ -266,12 +283,14 @@ else {
 $present = @($out | Where-Object { $_.WrsaPresent -or $_.WrDataPresent }).Count
 $clear = @($out | Where-Object { $_.AdminShare -and -not $_.WrsaPresent -and -not $_.WrDataPresent }).Count
 $down = @($out | Where-Object { -not $_.AdminShare }).Count
+$running = @($out | Where-Object { $_.WrsvcStatus -eq 'Running' }).Count
+$stopped = @($out | Where-Object { $_.WrsvcStatus -eq 'Stopped' }).Count
 
 Write-Output ''
 Write-Output "=== Webroot fleet status ==="
-Write-Output ("Hosts: $total  Present: $present  Clear (share OK): $clear  Unreachable/no share: $down")
+Write-Output ("Hosts: $total  WRSVC running: $running  stopped: $stopped  Files leftover: $present  Clear (share OK): $clear  Unreachable/no share: $down")
 if ($out.Count -gt 0) {
-    $out | Sort-Object WrsaPresent, AdminShare, Computer -Descending | Format-Table -AutoSize
+    $out | Sort-Object WrsvcStatus, WrsaPresent, AdminShare, Computer -Descending | Format-Table -AutoSize
 }
 try {
     $dir = Split-Path -Parent $OutputPath
