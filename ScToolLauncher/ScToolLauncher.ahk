@@ -318,7 +318,7 @@ Tools := [
         "Path", "WebrootUninstallGpo",
         "Script", "Get-WebrootFleetStatus.ps1",
         "UaPrefix", "WebrootUninstallGpo-bootstrap",
-        "UaVer", "1.1.3",
+        "UaVer", "1.1.4",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "ScanOnly Domain AlwaysNote",

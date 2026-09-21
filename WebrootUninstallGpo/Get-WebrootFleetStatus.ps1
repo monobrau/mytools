@@ -84,17 +84,50 @@ $names = New-Object System.Collections.Generic.List[string]
 $osByName = @{}
 $logonByName = @{}
 
-function Format-AdLastLogon {
+function Convert-AdFileTime {
     param($Value)
-    if ($null -eq $Value) { return '' }
+    if ($null -eq $Value) { return $null }
     try {
-        $dt = [datetime]$Value
-        if ($dt -le [datetime]::MinValue -or $dt.Year -lt 1990) { return '' }
-        return $dt.ToString('yyyy-MM-dd HH:mm')
+        if ($Value -is [datetime]) {
+            if ($Value.Year -lt 1990) { return $null }
+            return $Value
+        }
+        $n = 0L
+        if ($Value -is [int] -or $Value -is [long] -or $Value -is [int64] -or $Value -is [uint64]) {
+            $n = [int64]$Value
+        }
+        elseif (-not [int64]::TryParse(([string]$Value).Trim(), [ref]$n)) {
+            $dt = [datetime]$Value
+            if ($dt.Year -lt 1990) { return $null }
+            return $dt
+        }
+        if ($n -le 0) { return $null }
+        $dt = [datetime]::FromFileTime($n)
+        if ($dt.Year -lt 1990) { return $null }
+        return $dt
     }
     catch {
-        return ''
+        return $null
     }
+}
+
+function Get-AdPropertyValue {
+    param($Object, [string[]]$Names)
+    foreach ($name in $Names) {
+        $prop = $Object.PSObject.Properties[$name]
+        if ($prop -and $null -ne $prop.Value) { return $prop.Value }
+    }
+    return $null
+}
+
+function Format-AdLastLogon {
+    param($Timestamp, $ThisDcLogon)
+    $a = Convert-AdFileTime $Timestamp
+    $b = Convert-AdFileTime $ThisDcLogon
+    $best = $a
+    if ($b -and (-not $best -or $b -gt $best)) { $best = $b }
+    if (-not $best) { return '' }
+    return $best.ToString('yyyy-MM-dd HH:mm')
 }
 
 if ($ComputerName) {
@@ -123,7 +156,7 @@ if ($names.Count -eq 0) {
         $Domain = ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()).Name
     }
     Write-Output ("Loading computers from AD domain $Domain ...")
-    $comps = @(Get-ADComputer -Server $Domain -Filter { Enabled -eq $true } -Properties DNSHostName, OperatingSystem, lastLogonTimestamp)
+    $comps = @(Get-ADComputer -Server $Domain -Filter { Enabled -eq $true } -Properties DNSHostName, OperatingSystem, lastLogonTimestamp, lastLogon)
     foreach ($c in $comps) {
         $os = [string]$c.OperatingSystem
         if (-not $IncludeServers -and $os -and $os -match 'Server') { continue }
@@ -132,7 +165,9 @@ if ($names.Count -eq 0) {
         if (-not $n) { continue }
         [void]$names.Add($n)
         $osByName[$n] = $os
-        $logonByName[$n] = Format-AdLastLogon $c.lastLogonTimestamp
+        $ts = Get-AdPropertyValue -Object $c -Names @('lastLogonTimestamp', 'LastLogonTimestamp')
+        $ll = Get-AdPropertyValue -Object $c -Names @('lastLogon', 'LastLogon')
+        $logonByName[$n] = Format-AdLastLogon $ts $ll
     }
 }
 

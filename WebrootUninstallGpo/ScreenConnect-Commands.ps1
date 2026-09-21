@@ -40,7 +40,7 @@ $ProgressPreference='SilentlyContinue'
 try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{}
 $domain=''
 $wc=New-Object Net.WebClient
-$wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.1.3')
+$wc.Headers.Add('User-Agent','WebrootUninstallGpo-bootstrap/1.1.4')
 $wc.Headers.Add('Accept','application/vnd.github.raw')
 $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WebrootUninstallGpo/Get-WebrootFleetStatus.ps1?ref=main')
 $params=@{}
