@@ -98,7 +98,7 @@ param(
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch { }
 
 # Script version - for verification
-$script:Version = "3.1.0"
+$script:Version = "3.1.1"
 $script:AdditionalCsvPaths = New-Object 'System.Collections.Generic.List[string]'
 $script:EventLogFolder = $null
 $script:ArtifactRoot = $null
@@ -907,7 +907,8 @@ function Get-UserDownloadScanRoots {
         }
     }
 
-    return @($roots)
+    # PS 5.1: @($List[object]) throws "Argument types do not match"
+    return $roots.ToArray()
 }
 
 function Get-ZoneIdentifierInfo {
@@ -1046,7 +1047,7 @@ function Get-UserDownloadEntries {
     }
 
     Write-ColoredMessage "[+] User Downloads/Desktop files: $($entries.Count) (enumerated $scanned)" -Color Green
-    return @($entries)
+    return $entries.ToArray()
 }
 
 function Get-PrefetchEntries {
@@ -1126,7 +1127,7 @@ function Get-InstalledSoftwareEntries {
         }
     }
 
-    return @($rows | Sort-Object DisplayName)
+    return @($rows.ToArray() | Sort-Object DisplayName)
 }
 
 function Get-LocalAccountEntries {
@@ -1156,7 +1157,7 @@ function Get-LocalAccountEntries {
         }
     }
 
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Get-LoggedOnUserEntries {
@@ -1177,7 +1178,7 @@ function Get-LoggedOnUserEntries {
             })
     }
 
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Get-DnsCacheEntries {
@@ -1215,7 +1216,7 @@ function Get-ArpEntries {
     catch {
     }
 
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Get-LocalAdminEntries {
@@ -1244,7 +1245,7 @@ function Get-LocalAdminEntries {
         }
     }
 
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Get-RmmInventoryEntries {
@@ -1299,7 +1300,7 @@ function Get-RmmInventoryEntries {
         }
     }
 
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Get-DefenderDetectionEntries {
@@ -1323,7 +1324,7 @@ function Get-DefenderDetectionEntries {
         Write-ColoredMessage "[!] Get-MpThreatDetection unavailable" -Color Yellow
     }
 
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Copy-PowerShellHistory {

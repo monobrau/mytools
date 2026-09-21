@@ -35,9 +35,12 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall AutomateGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
 ;        BackstageOnly AutoReboot Help
-HelpIntroText := "
+HelpIntroText := Format("
 (
 SC Tool Launcher copies a ScreenConnect-ready snippet to the clipboard.
+
+Hotkey: {1}
+Use {1} to open or hide this window. Tray Open also works.
 
 How to use
 1. Expand a category (and any subfolder) on the left.
@@ -47,12 +50,10 @@ How to use
 5. Paste into ScreenConnect Commands (recommended) or PowerShell.
 
 Tips
-- The hotkey toggles this window.
-- Commands uses #!ps. Prefer that over a one-liner.
 - Untested means the tool has not been validated yet.
-- After you edit this script, use Reload. The hotkey does not reload the catalog.
+- After you edit this script, use Reload. {1} does not reload the catalog.
 - Tokens and keys are only in the snippet you copy — they are not saved here.
-)"
+)", HotkeyLabel)
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
     "ScreenConnect — GPO/MSI finder, temp cleanup",
@@ -497,7 +498,7 @@ Tools := [
         "Repo", "mytools",
         "Script", "ForensicInvestigator/Invoke-ForensicAnalysis.ps1",
         "TempName", "Invoke-ForensicAnalysis.ps1",
-        "UaVer", "3.1.0",
+        "UaVer", "3.1.1",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "ScanOnly CacheBust AlwaysNote",
@@ -610,10 +611,17 @@ Hotkey(HotkeySpec, (*) => ToggleGui())
 
 gGui := 0
 gCtrls := Map()
+for arg in A_Args {
+    if (arg = "/show") {
+        ShowGui()
+        break
+    }
+}
 
 ; Restart this script in-place (avoids a second tray icon from a naive Reload + leftover instance).
+; /show reopens the window; a cold start stays in the tray.
 ReloadScToolLauncher(*) {
-    Run(Format('"{1}" /restart "{2}"', A_AhkPath, A_ScriptFullPath))
+    Run(Format('"{1}" /restart "{2}" /show', A_AhkPath, A_ScriptFullPath))
     ExitApp
 }
 

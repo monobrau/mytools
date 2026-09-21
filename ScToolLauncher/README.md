@@ -80,7 +80,7 @@ Huntress account key is built into the launcher and `HuntressInstall/ScreenConne
 | Tool | Repo |
 | --- | --- |
 | HarkinsCollector (event logs) | [ExceedingLife/HarkinsCollector](https://github.com/ExceedingLife/HarkinsCollector) — zip under `C:\ForensicLogs` |
-| Forensic Investigator (Sysinternals) | mytools `ForensicInvestigator` **v3.1.0** — plus Zone.ID, PS history, Amcache/SYSTEM, browser History copies, admins/RMM, Defender, hashed manifest |
+| Forensic Investigator (Sysinternals) | mytools `ForensicInvestigator` **v3.1.1** — plus Zone.ID, PS history, Amcache/SYSTEM, browser History copies, admins/RMM, Defender, hashed manifest |
 | Malwarebytes ADWCleaner | [ADWCleaner](https://www.malwarebytes.com/adwcleaner) — silent `/eula /clean /noreboot` |
 | PUP remnant cleanup | mytools `PupRemnantCleanup` — family dropdown (All on host, or one catalog id). Dry-run reports what is present; Remediate deletes those families |
 
