@@ -1,6 +1,6 @@
 #Requires AutoHotkey v2.0
 ; ScToolLauncher — hotkey picker for any ScreenConnect-ready tool shortcut (not vuln-only).
-; Copies a GitHub bootstrap #!ps / Backstage one-liner to the clipboard.
+; Copies a GitHub bootstrap #!ps / PowerShell one-liner to the clipboard.
 ; Hotkey: Ctrl+Shift+Alt+S (change HotkeySpec below). Prefer Commands tab #!ps.
 ; Commands snippets relaunch Windows PowerShell 5.1 when #!ps is the v2 engine
 ; (Tls12 enum is missing; GitHub then fails). TLS uses numeric 3072, not ::Tls12.
@@ -167,7 +167,7 @@ Tools := [
         "TimeoutUpdate", 14400000,
         "DefaultArgs", "-Feature",
         "Flags", "CheckOnly Force AutoReboot NoExit",
-        "Note", "Needs ~20+ GB free and a 750+ MB recovery/WinRE partition. Use Backstage or a 4-hour Commands timeout. Session drops if Auto reboot is checked."
+        "Note", "Needs ~20+ GB free and a 750+ MB recovery/WinRE partition. Use PowerShell or a 4-hour Commands timeout. Session drops if Auto reboot is checked."
     ),
     ; --- ScreenConnect ---
     Map(
@@ -226,8 +226,8 @@ Tools := [
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly CacheBust RebootAdvisory AlwaysNote",
-        "Note", "Third-party gist (mark05e). Runs immediately — no scan/dry-run. Prefer elevated Backstage. Reboot after Wolf uninstall, then Defender repair if Huntress still shows Defender Disabled.",
-        "ClipboardNote", "NOTE: mark05e HP bloat gist. No dry-run. Prefer elevated Backstage. Reboot after. Then Defender repair if Wolf leftovers remain."
+        "Note", "Third-party gist (mark05e). Runs immediately — no scan/dry-run. Prefer elevated PowerShell. Reboot after Wolf uninstall, then Defender repair if Huntress still shows Defender Disabled.",
+        "ClipboardNote", "NOTE: mark05e HP bloat gist. No dry-run. Prefer elevated PowerShell. Reboot after. Then Defender repair if Wolf leftovers remain."
     ),
     Map(
         "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
@@ -248,17 +248,17 @@ Tools := [
     Map(
         "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
         "Name", "Dell TechHub",
-        "Summary", "Scan or remove Dell TechHub (DellTechHub service, TechHub/DTP folders, techhub.dll). Common SentinelOne false positive. Leaves Dell Update installed.",
+        "Summary", "Scan or remove Dell TechHub, DTP, and SupportAssist. Common SentinelOne false positive on techhub.dll. Dell Update stays.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DellTechHubCleanup",
         "Fetch", "Contents",
         "Path", "DellTechHubCleanup",
         "Script", "Remove-DellTechHub.ps1",
         "UaPrefix", "DellTechHubCleanup-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.1.0",
         "TimeoutScan", 180000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly Remediate",
-        "Note", "Prefer elevated Backstage. Scan first. Apply removes TechHub / Core Services remnants. SupportAssist hardware scans will break. Dell Update stays."
+        "Note", "Prefer elevated PowerShell. Scan first. Apply removes TechHub, DTP, and SupportAssist. Dell Update stays."
     ),
     ; --- AV ---
     Map(
@@ -274,13 +274,13 @@ Tools := [
         "TimeoutScan", 120000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly ResetPlatform BackstageOnly",
-        "Note", "Backstage / SYSTEM only. Scan = services + RTP + tamper. Apply: enable disabled services, clear Disable* / PassiveMode policy, start WinDefend family, Set-MpPreference, retry once. Nuclear optional.",
-        "ClipboardNote", "NOTE: Elevated Backstage / SYSTEM only. Scan does not change anything. Apply is a full RTP repair (services + policy + preferences)."
+        "Note", "PowerShell / SYSTEM only. Scan = services + RTP + tamper. Apply: enable disabled services, clear Disable* / PassiveMode policy, start WinDefend family, Set-MpPreference, retry once. Nuclear optional.",
+        "ClipboardNote", "NOTE: Elevated PowerShell / SYSTEM only. Scan does not change anything. Apply is a full RTP repair (services + policy + preferences)."
     ),
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
         "Name", "Cylance / Webroot cleanup",
-        "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer Backstage/SYSTEM.",
+        "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
         "Fetch", "Contents",
         "Owner", "monobrau",
@@ -291,7 +291,7 @@ Tools := [
         "TimeoutScan", 300000,
         "TimeoutUpdate", 300000,
         "Flags", "Delete Force Vendor",
-        "Note", "Use when offboarding the vendor or cleaning remnants after cutover — not for managing an active AV install. Prefer deactivate in the vendor console first. Delete needs elevation (Backstage/SYSTEM). Password/keycode only if Vendor is Cylance or Webroot (not All). Reboot if drivers stay locked."
+        "Note", "Use when offboarding the vendor or cleaning remnants after cutover — not for managing an active AV install. Prefer deactivate in the vendor console first. Delete needs elevation (PowerShell/SYSTEM). Password/keycode only if Vendor is Cylance or Webroot (not All). Reboot if drivers stay locked."
     ),
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
@@ -306,13 +306,13 @@ Tools := [
         "TimeoutScan", 180000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly Remediate",
-        "Note", "Prefer elevated / Backstage. Scan first; Remediate removes AppX + folder."
+        "Note", "Prefer elevated PowerShell. Scan first; Remediate removes AppX + folder."
     ),
     ; --- Agents ---
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
         "Name", "SentinelOne silent install",
-        "Summary", "Paste site/group token → silent install for SC Commands or Backstage. Optional download URL; else installer must already be on disk.",
+        "Summary", "Paste site/group token → silent install for SC Commands or PowerShell. Optional download URL; else installer must already be on disk.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/SentinelOneInstall",
         "Fetch", "Contents",
         "Path", "SentinelOneInstall",
@@ -322,8 +322,8 @@ Tools := [
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "RunOnly SentinelOneInstall AlwaysNote",
-        "Note", "Token + path (and optional URL) below are not saved. Barracuda/XDR MSI download URLs (fileType=.msi) auto-use msiexec even if path ends in .exe. Prefer elevated / Backstage.",
-        "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage. v1.0.1 auto-detects MSI downloads."
+        "Note", "Token + path (and optional URL) below are not saved. Barracuda/XDR MSI download URLs (fileType=.msi) auto-use msiexec even if path ends in .exe. Prefer elevated PowerShell.",
+        "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell. v1.0.1 auto-detects MSI downloads."
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
@@ -338,8 +338,8 @@ Tools := [
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly ConnectSecure SkipIfRunning AlwaysNote",
-        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Prefer elevated / Backstage.",
-        "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
+        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Prefer elevated PowerShell.",
+        "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
@@ -354,8 +354,8 @@ Tools := [
         "TimeoutScan", 120000,
         "TimeoutUpdate", 600000,
         "Flags", "CheckOnly Remediate ConnectSecure SkipIfRunning AlwaysNote",
-        "Note", "Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Uncheck to always wipe + reinstall. Needs Company ID, Environment ID, and Install Token. Prefer Backstage.",
-        "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated Backstage."
+        "Note", "Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Uncheck to always wipe + reinstall. Needs Company ID, Environment ID, and Install Token. Prefer PowerShell.",
+        "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
@@ -370,8 +370,8 @@ Tools := [
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "RunOnly HuntressInstall Force AutoReboot AlwaysNote",
-        "Note", "Prefer elevated Backstage. Cancel a scheduled reboot if needed.",
-        "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet. Do not paste into tickets/git. Prefer elevated Backstage. Uses /ACCT_KEY=. PS2-safe inline download."
+        "Note", "Prefer elevated PowerShell. Cancel a scheduled reboot if needed.",
+        "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet. Do not paste into tickets/git. Prefer elevated PowerShell. Uses /ACCT_KEY=. PS2-safe inline download."
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
@@ -383,7 +383,7 @@ Tools := [
         "TimeoutScan", 120000,
         "TimeoutUpdate", 120000,
         "Flags", "ScanOnly",
-        "Note", "Read-only. Prefer elevated Backstage."
+        "Note", "Read-only. Prefer elevated PowerShell."
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
@@ -395,7 +395,7 @@ Tools := [
         "TimeoutScan", 30000,
         "TimeoutUpdate", 30000,
         "Flags", "RunOnly",
-        "Note", "Prefer elevated Backstage if the reboot was armed as SYSTEM."
+        "Note", "Prefer elevated PowerShell if the reboot was armed as SYSTEM."
     ),
     ; --- IR / forensics ---
     Map(
@@ -412,7 +412,7 @@ Tools := [
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "ScanOnly CacheBust AlwaysNote",
-        "Note", "Collects EVTX + artifacts to C:\ForensicLogs\<host>_<stamp>.zip. Prefer elevated / Backstage. Long-running.",
+        "Note", "Collects EVTX + artifacts to C:\ForensicLogs\<host>_<stamp>.zip. Prefer elevated PowerShell. Long-running.",
         "ClipboardNote", "NOTE: Output zip under C:\ForensicLogs\. Prefer elevated session. Collection can take several minutes."
     ),
     Map(
@@ -436,7 +436,7 @@ Tools := [
     Map(
         "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
         "Name", "Malwarebytes ADWCleaner",
-        "Summary", "Downloads ADWCleaner and runs a silent clean (/eula /clean /noreboot). Prefer elevated / Backstage.",
+        "Summary", "Downloads ADWCleaner and runs a silent clean (/eula /clean /noreboot). Prefer elevated PowerShell.",
         "DocsUrl", "https://www.malwarebytes.com/adwcleaner",
         "Fetch", "DownloadExe",
         "Url", "https://downloads.malwarebytes.com/file/adwcleaner",
@@ -462,7 +462,7 @@ Tools := [
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly Remediate ProductList NoExit",
         "ProductList", "All on host|AskToolbar|MediaArena|AppSuitePdf|WaveBrowser|OneLaunch|FakePdfConverter",
-        "Note", "Prefer elevated / Backstage. Scan first. Family list is the catalog. All on host = every family that is actually present.",
+        "Note", "Prefer elevated PowerShell. Scan first. Family list is the catalog. All on host = every family that is actually present.",
         "ClipboardNote", "NOTE: Family dropdown — All on host scans the whole catalog. Pick one id to limit. Scan is dry-run. Remove deletes folders/tasks/registry; browser prefs stay report-only."
     ),
     ; --- M365 / Exchange ---
@@ -497,8 +497,8 @@ Tools := [
         "TimeoutScan", 180000,
         "TimeoutUpdate", 1200000,
         "Flags", "CheckOnly Remediate Force AlwaysNote",
-        "Note", "Client campaign. Scan first. Apply uninstalls XI only (10+ min). Waits for MSI mutex; retries 1618. Force = uninstall even if Foxit is missing. Prefer elevated / Backstage. Do not rerun or Force while msiexec is running.",
-        "ClipboardNote", "NOTE: Scan first. Uninstall can take 10+ minutes — do not rerun or Force while it runs. Default skips hosts with no Foxit. Prefer elevated Backstage. Log: C:\\Windows\\Temp\\AcrobatXi-uninstall.log"
+        "Note", "Client campaign. Scan first. Apply uninstalls XI only (10+ min). Waits for MSI mutex; retries 1618. Force = uninstall even if Foxit is missing. Prefer elevated PowerShell. Do not rerun or Force while msiexec is running.",
+        "ClipboardNote", "NOTE: Scan first. Uninstall can take 10+ minutes — do not rerun or Force while it runs. Default skips hosts with no Foxit. Prefer elevated PowerShell. Log: C:\\Windows\\Temp\\AcrobatXi-uninstall.log"
     ),
 ]
 
@@ -719,7 +719,7 @@ ShowGui(*) {
 
     gCtrls["LblPaste"] := gGui.Add("Text", "Section", "Paste format")
     gCtrls["FmtCommands"] := gGui.Add("Radio", "Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
-    gCtrls["FmtBackstage"] := gGui.Add("Radio", "vFmtBackstage", "ScreenConnect Backstage (one line)")
+    gCtrls["FmtBackstage"] := gGui.Add("Radio", "vFmtBackstage", "PowerShell (one line)")
 
     gCtrls["Note"] := gGui.Add("Text", "w" UiContentW " h48 cBlue vToolNote", "")
     gCtrls["Status"] := gGui.Add("Text", "w" UiContentW " h36 vStatus", HotkeyLabel " toggles this window. Expand a category, select a tool, then Copy.")
@@ -1082,7 +1082,7 @@ RefreshOptionEnable(*) {
         gCtrls["FmtBackstage"].Value := 1
         gCtrls["FmtCommands"].Value := 0
         gCtrls["FmtCommands"].Enabled := false
-        gCtrls["LblPaste"].Text := "Paste format (Backstage only)"
+        gCtrls["LblPaste"].Text := "Paste format (PowerShell only)"
     } else {
         gCtrls["FmtCommands"].Enabled := true
         gCtrls["LblPaste"].Text := "Paste format"
@@ -1486,7 +1486,7 @@ BuildSnippet(tool, isScan, isCommands) {
 
     noteLine := ""
     clipNote := ToolGet(tool, "ClipboardNote", "")
-    ; Commands #!ps can take a trailing # comment. Backstage is a single PS
+    ; Commands #!ps can take a trailing # comment. The PowerShell one-liner is a single PS
     ; line — a long NOTE wraps in the console and gets mashed into the prompt.
     if isCommands && (clipNote != "") {
         if ToolHasFlag(tool, "AlwaysNote")

@@ -2,13 +2,13 @@
 
 AutoHotkey v2 hotkey picker for **any** ScreenConnect-ready tool shortcut — remediation, cleanup, discovery, IR helpers, and more — not limited to vulnerability tools.
 
-Copies a ready-to-paste Commands `#!ps` (or Backstage one-liner) bootstrap onto the clipboard. The remote host downloads/runs the script from GitHub.
+Copies a ready-to-paste Commands `#!ps` (or PowerShell one-liner) bootstrap onto the clipboard. The remote host downloads/runs the script from GitHub.
 
 - Hotkey: **Ctrl+Shift+Alt+S** (edit `HotkeySpec` / `HotkeyLabel` at the top of the script; Win+Alt combos are often reserved by Windows/OEM)
 - Tray: default AutoHotkey v2 icon and menu (includes **Reload Script**); plus **Open SC Tool Launcher**
 - After editing `ScToolLauncher.ahk`, use GUI **Reload**, tray **Reload Script**, or exit and re-run. The hotkey alone does **not** reload the catalog from disk.
 - Layout: **two columns** — tool tree on the left, mode/options/actions on the right (fits shorter screens)
-- Formats: Commands tab `#!ps` (default) or Backstage one-liner
+- Formats: Commands tab `#!ps` (default) or PowerShell one-liner
 - Modes/options depend on the tool (Scan, Update/Remediate/Delete, Force, etc.)
 - Tool list is a **TreeView** grouped by category
 - Each selection shows a short **About** blurb and **Open docs in browser** (GitHub README / folder)
@@ -44,7 +44,7 @@ Categories start **collapsed**. Labels list what is under each group:
 | HP Touchpoint Analytics | [hp-touchpointanalytics-cleanup](https://github.com/monobrau/hp-touchpointanalytics-cleanup) |
 | HP bloat / Wolf (mark05e gist) | [gist](https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388) — downloads `Remove-HPbloatware.ps1` and runs it (no dry-run; Wolf / Sure Click / HP AppX) |
 | Dell SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.4** — EnumerateFiles + skip VersionInfo-identified non-CW PEs; 60 min timeout; reload AHK for `?v=1.4.4` |
-| Dell TechHub | mytools `DellTechHubCleanup` — scan/remove `DellTechHub` + `techhub.dll` (S1 false positive). Leaves Dell Update; SupportAssist hardware scans break |
+| Dell TechHub | mytools `DellTechHubCleanup` — scan/remove TechHub, DTP, and SupportAssist (S1 false positive on `techhub.dll`). Dell Update stays |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
@@ -52,7 +52,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 | Tool | Repo |
 | --- | --- |
-| Windows Defender repair | mytools `WindowsDefenderRepair` — Backstage only. Scan: services + RTP + tamper. Apply: full RTP repair (services + policy + PassiveMode + preferences). Optional nuclear: `MpCmdRun -ResetPlatform` |
+| Windows Defender repair | mytools `WindowsDefenderRepair` — PowerShell only. Scan: services + RTP + tamper. Apply: full RTP repair (services + policy + PassiveMode + preferences). Optional nuclear: `MpCmdRun -ResetPlatform` |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration, not day-to-day AV management |
 | McAfee remnant cleanup | mytools — AppX + `Program Files\McAfee` leftovers |
 
@@ -80,7 +80,7 @@ Huntress account key is built into the launcher and `HuntressInstall/ScreenConne
 | Malwarebytes ADWCleaner | [ADWCleaner](https://www.malwarebytes.com/adwcleaner) — silent `/eula /clean /noreboot` |
 | PUP remnant cleanup | mytools `PupRemnantCleanup` — family dropdown (All on host, or one catalog id). Dry-run reports what is present; Remediate deletes those families |
 
-Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypass` plus `Invoke-RestMethod -OutFile` then `&` run. ADWCleaner downloads the vendor EXE and runs `Start-Process -Wait`. Prefer elevated / Backstage.
+Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypass` plus `Invoke-RestMethod -OutFile` then `&` run. ADWCleaner downloads the vendor EXE and runs `Start-Process -Wait`. Prefer elevated PowerShell.
 
 ### M365 / Exchange — Inky/IPW transport rules (EXO admin)
 
@@ -102,7 +102,7 @@ Launcher exposes **Backup hygiene only** (no SupportAssist / full SARemediation 
 
 - **Default:** `-Delete -BackupsOnly` — remove ScreenConnect/ConnectWise-like files under `Snapshots\Backup`
 - **Optional:** clear entire Backup folder contents
-- Prefer **Backstage**; then run **ScreenConnect temp cleanup**
+- Prefer **PowerShell**; then run **ScreenConnect temp cleanup**
 - `PENDING_REBOOT` = reboot to finish locked deletes
 
 Upstream script still supports full uninstall switches for rare manual use; they are not offered in this launcher.
@@ -124,7 +124,7 @@ Double-click the script, or create a shortcut / Startup entry.
 1. Press **Ctrl+Shift+Alt+S** (or use the tray menu).
 2. Select a tool, mode, and options.
 3. **Copy to clipboard**.
-4. Paste into ScreenConnect **Commands** (`#!ps`) or **Backstage** (one-liner format).
+4. Paste into ScreenConnect **Commands** (`#!ps`) or **PowerShell** (one-liner format).
    Commands snippets set TLS 1.2 via numeric `3072` (not `::Tls12`) and re-launch
    a probed 5.1 host (`SysNative` first — 32-bit SC often Wow64-redirects
    `System32\powershell.exe` back to v2). Huntress is an exception: it downloads

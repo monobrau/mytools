@@ -1,23 +1,23 @@
-# Dell TechHub cleanup
+# Dell TechHub / SupportAssist cleanup
 
-Scan or remove **Dell TechHub** and **DTP** (the diagnostics plugin host).
-SentinelOne often flags `techhub.dll` under `Program Files\Dell\TechHub`.
+Scan or remove **Dell TechHub**, **DTP**, and **SupportAssist**. SentinelOne
+often flags `techhub.dll`; TechHub/DTP are SupportAssist’s diagnostics stack,
+so Apply removes the app too.
 
-Dell Update / SupportAssist stay installed, including their own
-`Dell.TechHub.*.dll` copies. SupportAssist hardware scans will stop working.
+Dell Command | Update and the SupportAssist **OS Recovery plugin** stay
+installed.
 
 ## What it touches
 
 | Item | Action |
 | --- | --- |
-| Services whose image is under TechHub/DTP (including `DellTechHub`) | Stop + delete |
-| Processes under TechHub/DTP (Instrumentation / Analytics / DataManager / Diagnostics) | Kill |
-| ARP `Dell TechHub`, `Dell Core Services` | Silent uninstall when a string exists |
-| `Program Files\Dell\TechHub`, `Dell\DTP`, `ProgramData\Dell\TechHub` | Delete |
+| Services under TechHub/DTP/SupportAssist | Stop + delete |
+| Processes under those trees | Kill |
+| ARP `Dell TechHub`, `Dell Core Services`, `Dell SupportAssist` | Silent uninstall |
+| `Program Files\Dell\TechHub`, `Dell\DTP`, `Dell\SupportAssist`, `Dell\SupportAssistAgent` | Delete |
 
-Does **not** delete files under SupportAssist, Dell Update, SARemediation, or
-Dell Remediation. If a target folder stays `LOCKED`, a DTP process or S1 still
-holds it — reboot and Apply again.
+Does **not** uninstall Dell Update, Command | Update, or the OS Recovery
+plugin. Does not delete SARemediation / Dell Remediation.
 
 ## ScreenConnect
 
