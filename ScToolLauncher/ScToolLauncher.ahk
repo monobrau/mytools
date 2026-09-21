@@ -245,6 +245,21 @@ Tools := [
         "Note", "Always -BackupsOnly. v1.4.4: EnumerateFiles + skip any VersionInfo-identified non-CW PE; 64KB IndexOf peek. Banner must say v1.4.4. 60 min timeout. Huge trees: optional Clear all Backup content.",
         "ClipboardNote", "NOTE: Backup cleanup only. Must show v1.4.4. 60 min timeout. PENDING_REBOOT = reboot to finish. Then SC temp cleanup."
     ),
+    Map(
+        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Name", "Dell TechHub",
+        "Summary", "Scan or remove Dell TechHub (DellTechHub service, TechHub/DTP folders, techhub.dll). Common SentinelOne false positive. Leaves Dell Update installed.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DellTechHubCleanup",
+        "Fetch", "Contents",
+        "Path", "DellTechHubCleanup",
+        "Script", "Remove-DellTechHub.ps1",
+        "UaPrefix", "DellTechHubCleanup-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 300000,
+        "Flags", "CheckOnly Remediate",
+        "Note", "Prefer elevated Backstage. Scan first. Apply removes TechHub / Core Services remnants. SupportAssist hardware scans will break. Dell Update stays."
+    ),
     ; --- AV ---
     Map(
         "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",

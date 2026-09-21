@@ -44,6 +44,7 @@ Categories start **collapsed**. Labels list what is under each group:
 | HP Touchpoint Analytics | [hp-touchpointanalytics-cleanup](https://github.com/monobrau/hp-touchpointanalytics-cleanup) |
 | HP bloat / Wolf (mark05e gist) | [gist](https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388) — downloads `Remove-HPbloatware.ps1` and runs it (no dry-run; Wolf / Sure Click / HP AppX) |
 | Dell SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.4** — EnumerateFiles + skip VersionInfo-identified non-CW PEs; 60 min timeout; reload AHK for `?v=1.4.4` |
+| Dell TechHub | mytools `DellTechHubCleanup` — scan/remove `DellTechHub` + `techhub.dll` (S1 false positive). Leaves Dell Update; SupportAssist hardware scans break |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
