@@ -1,25 +1,25 @@
 # Dell TechHub cleanup
 
-Scan or remove **Dell TechHub** — the shared `DellTechHub` service and
-`*TechHub*.dll` files (including `techhub.dll`) that SentinelOne often flags.
+Scan or remove **Dell TechHub** and **DTP** (the diagnostics plugin host).
+SentinelOne often flags `techhub.dll` under `Program Files\Dell\TechHub`.
 
-Dell Command | Update / Dell Update stay installed. SupportAssist hardware
-diagnostics use TechHub and will stop working after removal.
+Dell Update / SupportAssist stay installed, including their own
+`Dell.TechHub.*.dll` copies. SupportAssist hardware scans will stop working.
 
 ## What it touches
 
 | Item | Action |
 | --- | --- |
-| Service `DellTechHub` | Stop + delete |
+| Services whose image is under TechHub/DTP (including `DellTechHub`) | Stop + delete |
+| Processes under TechHub/DTP (Instrumentation / Analytics / DataManager / Diagnostics) | Kill |
 | ARP `Dell TechHub`, `Dell Core Services` | Silent uninstall when a string exists |
 | `Program Files\Dell\TechHub`, `Dell\DTP`, `ProgramData\Dell\TechHub` | Delete |
-| `*TechHub*.dll` under those Dell trees | Delete |
 
-Does **not** uninstall SupportAssist or Dell Update. If a DLL stays
-`LOCKED`, S1 likely still has the file; rerun after it releases, or disable
-the service so it stops loading.
+Does **not** delete files under SupportAssist, Dell Update, SARemediation, or
+Dell Remediation. If a target folder stays `LOCKED`, a DTP process or S1 still
+holds it — reboot and Apply again.
 
 ## ScreenConnect
 
 See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Prefer elevated
-Backstage. Or use ScToolLauncher (**OEM cleanup** → Dell TechHub). Scan first.
+PowerShell. Or use ScToolLauncher (**OEM cleanup** → Dell TechHub). Scan first.

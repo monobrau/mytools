@@ -1,19 +1,20 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Scan or remove Dell TechHub (DellTechHub service, TechHub/DTP folders, *TechHub*.dll).
+    Scan or remove Dell TechHub (DellTechHub service, TechHub and DTP folders).
 
 .DESCRIPTION
-    SentinelOne often flags techhub.dll. This removes the shared TechHub component
-    Dell Update / SupportAssist use for hardware diagnostics. Dell Command | Update
-    is left installed. SupportAssist hardware scans will stop working.
+    SentinelOne often flags techhub.dll under Program Files\Dell\TechHub.
+    This removes the TechHub service and the TechHub / DTP trees only.
+    SupportAssist, Dell Update, SARemediation, and Dell Remediation stay
+    installed, including their own Dell.TechHub.*.dll copies.
 
 .PARAMETER CheckOnly
     Report only.
 
 .PARAMETER Remediate
-    Stop TechHub, run ARP uninstall for TechHub / Dell Core Services, delete the
-    service and leftover folders/DLLs.
+    Stop TechHub/DTP processes and services, run ARP uninstall for TechHub /
+    Dell Core Services, delete leftover TechHub and DTP folders.
 
 .PARAMETER Exit
     Call exit with a status code (ScreenConnect Commands).
@@ -32,6 +33,28 @@ $script:ExitCode = 0
 function Test-IsAdmin {
     $p = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
     return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Get-TechHubTargetRoots {
+    @(
+        (Join-Path $env:ProgramFiles 'Dell\TechHub')
+        (Join-Path ${env:ProgramFiles(x86)} 'Dell\TechHub')
+        (Join-Path $env:ProgramFiles 'Dell\DTP')
+        (Join-Path ${env:ProgramFiles(x86)} 'Dell\DTP')
+        (Join-Path $env:ProgramData 'Dell\TechHub')
+    )
+}
+
+function Test-UnderTechHubRoot {
+    param([string]$Path)
+    if (-not $Path) { return $false }
+    $clean = ($Path -replace '^"', '' -replace '"$', '')
+    foreach ($root in Get-TechHubTargetRoots) {
+        if ($clean.Length -ge $root.Length -and $clean.Substring(0, $root.Length) -ieq $root) {
+            return $true
+        }
+    }
+    return $false
 }
 
 function Get-UninstallEntries {
@@ -55,25 +78,27 @@ function Get-RelatedDellArp {
 }
 
 function Get-TechHubFolders {
-    @(
-        (Join-Path $env:ProgramFiles 'Dell\TechHub')
-        (Join-Path ${env:ProgramFiles(x86)} 'Dell\TechHub')
-        (Join-Path $env:ProgramFiles 'Dell\DTP')
-        (Join-Path ${env:ProgramFiles(x86)} 'Dell\DTP')
-        (Join-Path $env:ProgramData 'Dell\TechHub')
-    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+    Get-TechHubTargetRoots | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
 }
 
 function Get-TechHubDlls {
-    $roots = @(
-        (Join-Path $env:ProgramFiles 'Dell')
-        (Join-Path ${env:ProgramFiles(x86)} 'Dell')
-        (Join-Path $env:ProgramData 'Dell')
-    )
-    foreach ($root in $roots) {
-        if (-not (Test-Path -LiteralPath $root)) { continue }
+    foreach ($root in @(Get-TechHubFolders)) {
         Get-ChildItem -LiteralPath $root -Recurse -Filter '*TechHub*.dll' -ErrorAction SilentlyContinue
     }
+}
+
+function Get-TechHubProcesses {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Name -match '(?i)TechHub|Dell\.CoreServices' -or (Test-UnderTechHubRoot $_.ExecutablePath)
+    }
+}
+
+function Get-TechHubServices {
+    @(Get-Service -Name '*TechHub*' -ErrorAction SilentlyContinue) + @(
+        Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {
+            Test-UnderTechHubRoot $_.PathName
+        } | ForEach-Object { Get-Service -Name $_.Name -ErrorAction SilentlyContinue }
+    ) | Where-Object { $_ } | Sort-Object Name -Unique
 }
 
 function Invoke-ArpUninstall {
@@ -113,22 +138,47 @@ function Invoke-ArpUninstall {
     if ($p) { Write-Output ("Uninstall exit " + [string]$p.ExitCode + " " + $name) }
 }
 
-Write-Output '=== Dell TechHub ==='
-if (-not (Test-IsAdmin)) {
-    Write-Output 'WARNING: Not elevated. Scan may be incomplete; Apply needs Backstage/SYSTEM.'
+function Stop-TechHubHolders {
+    foreach ($s in @(Get-TechHubServices)) {
+        Write-Output ("Stop-Service " + $s.Name)
+        Stop-Service -Name $s.Name -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($p in @(Get-TechHubProcesses)) {
+        Write-Output ("taskkill PID " + [string]$p.ProcessId + " " + $p.Name)
+        & "$env:SystemRoot\System32\taskkill.exe" /F /T /PID $p.ProcessId 2>$null | Out-Null
+    }
+    foreach ($im in @(
+            'Dell.TechHub.exe',
+            'Dell.CoreServices.Client.exe',
+            'Dell.TechHub.Instrumentation.SubAgent.exe',
+            'Dell.TechHub.Instrumentation.UserProcess.exe',
+            'Dell.TechHub.Analytics.SubAgent.exe',
+            'Dell.TechHub.DataManager.SubAgent.exe',
+            'Dell.TechHub.Diagnostics.SubAgent.exe'
+        )) {
+        & "$env:SystemRoot\System32\taskkill.exe" /F /T /IM $im 2>$null | Out-Null
+    }
 }
 
-$svc = Get-Service -Name DellTechHub -ErrorAction SilentlyContinue
+Write-Output '=== Dell TechHub ==='
+if (-not (Test-IsAdmin)) {
+    Write-Output 'WARNING: Not elevated. Scan may be incomplete; Apply needs elevated PowerShell/SYSTEM.'
+}
+
+$svcList = @(Get-TechHubServices)
 $folders = @(Get-TechHubFolders)
-$dlls = @(Get-TechHubDlls | Sort-Object FullName -Unique)
+$dlls = @(Get-TechHubDlls)
 $arp = @(Get-TechHubArp)
 $related = @(Get-RelatedDellArp)
-$procs = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '(?i)TechHub|Dell\.CoreServices' })
+$procs = @(Get-TechHubProcesses)
 
-if ($svc) {
-    Write-Output ("Service DellTechHub: " + [string]$svc.Status + " StartType=" + [string]$svc.StartType)
+if ($svcList.Count -eq 0) {
+    Write-Output 'TechHub services: none'
 } else {
-    Write-Output 'Service DellTechHub: not found'
+    Write-Output ("TechHub services: " + [string]$svcList.Count)
+    foreach ($s in $svcList) {
+        Write-Output ("  " + $s.Name + " " + [string]$s.Status)
+    }
 }
 
 Write-Output ("ARP TechHub/Core Services: " + [string]$arp.Count)
@@ -141,87 +191,68 @@ foreach ($e in $related) {
     Write-Output ("  " + $e.DisplayName + " " + [string]$e.DisplayVersion)
 }
 
-Write-Output ("Folders: " + [string]$folders.Count)
+Write-Output ("Target folders: " + [string]$folders.Count)
 foreach ($d in $folders) { Write-Output ("  " + $d) }
 
-Write-Output ("*TechHub*.dll: " + [string]$dlls.Count)
-foreach ($f in $dlls) {
-    Write-Output ("  " + $f.FullName + " " + [string]$f.Length + " bytes")
-}
+Write-Output ("DLLs in TechHub/DTP only: " + [string]$dlls.Count + " (SupportAssist/Update copies ignored)")
 
 if ($procs.Count -gt 0) {
-    Write-Output 'Processes:'
-    $procs | ForEach-Object { Write-Output ("  " + $_.Name + " PID " + [string]$_.Id) }
+    Write-Output ("Processes: " + [string]$procs.Count)
+    $procs | ForEach-Object { Write-Output ("  " + $_.Name + " PID " + [string]$_.ProcessId) }
 }
 
-$present = [bool]($svc -or $folders.Count -gt 0 -or $dlls.Count -gt 0 -or $arp.Count -gt 0)
+$present = [bool]($svcList.Count -gt 0 -or $folders.Count -gt 0 -or $dlls.Count -gt 0 -or $arp.Count -gt 0)
 if (-not $present) {
-    Write-Output 'Dell TechHub not found.'
+    Write-Output 'Dell TechHub / DTP not found.'
     if ($Exit) { exit 0 }
     return
 }
 
 if ($CheckOnly -or -not $Remediate) {
-    Write-Output 'Re-run with -Remediate to remove TechHub (SupportAssist hardware scans will break).'
+    Write-Output 'Re-run with -Remediate to remove TechHub/DTP (SupportAssist hardware scans will break).'
     $script:ExitCode = 1
     if ($Exit) { exit $script:ExitCode }
     return
 }
 
-Write-Output '=== Removing TechHub ==='
-foreach ($p in $procs) {
-    Write-Output ("Stop-Process " + $p.Name + " PID " + [string]$p.Id)
-    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-}
-if ($svc) {
-    Write-Output 'Stop-Service DellTechHub'
-    Stop-Service -Name DellTechHub -Force -ErrorAction SilentlyContinue
-}
-
+Write-Output '=== Removing TechHub / DTP ==='
+Stop-TechHubHolders
 foreach ($e in $arp) { Invoke-ArpUninstall -Entry $e }
+Stop-TechHubHolders
 
-$svc2 = Get-Service -Name DellTechHub -ErrorAction SilentlyContinue
-if ($svc2) {
-    Stop-Service -Name DellTechHub -Force -ErrorAction SilentlyContinue
-    Write-Output 'sc.exe delete DellTechHub'
-    & "$env:SystemRoot\System32\sc.exe" delete DellTechHub | Out-Null
-}
-
-foreach ($im in @('Dell.TechHub.exe', 'Dell.CoreServices.Client.exe')) {
-    & "$env:SystemRoot\System32\taskkill.exe" /F /T /IM $im 2>$null | Out-Null
+foreach ($s in @(Get-TechHubServices)) {
+    Write-Output ("sc.exe delete " + $s.Name)
+    & "$env:SystemRoot\System32\sc.exe" delete $s.Name | Out-Null
 }
 
 foreach ($d in @(Get-TechHubFolders)) {
     Write-Output ("Remove " + $d)
     Remove-Item -LiteralPath $d -Recurse -Force -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $d) {
-        Write-Output ("LOCKED " + $d + " (S1 may have quarantined/locked techhub.dll; rerun after S1 releases it)")
+        $left = @(Get-TechHubProcesses | Where-Object { Test-UnderTechHubRoot $_.ExecutablePath })
+        Write-Output ("LOCKED " + $d)
+        if ($left.Count -gt 0) {
+            $left | ForEach-Object { Write-Output ("  still running " + $_.Name + " PID " + [string]$_.ProcessId) }
+            Write-Output 'Reboot, then Apply again. Do not delete SupportAssist or Dell Update DLLs.'
+        }
     }
 }
 
-foreach ($f in @(Get-TechHubDlls)) {
-    Write-Output ("Remove " + $f.FullName)
-    Remove-Item -LiteralPath $f.FullName -Force -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $f.FullName) {
-        Write-Output ("LOCKED " + $f.FullName)
-    }
-}
-
-$svc3 = Get-Service -Name DellTechHub -ErrorAction SilentlyContinue
+$svc3 = @(Get-TechHubServices)
 $folders2 = @(Get-TechHubFolders)
 $dlls2 = @(Get-TechHubDlls)
 $arp2 = @(Get-TechHubArp)
-Write-Output ("Service DellTechHub: " + $(if ($svc3) { [string]$svc3.Status } else { 'gone' }))
+Write-Output ("Services left: " + [string]$svc3.Count)
 Write-Output ("Folders left: " + [string]$folders2.Count)
-Write-Output ("DLLs left: " + [string]$dlls2.Count)
+foreach ($d in $folders2) { Write-Output ("  " + $d) }
+Write-Output ("DLLs left in TechHub/DTP: " + [string]$dlls2.Count)
 Write-Output ("ARP left: " + [string]$arp2.Count)
-foreach ($f in $dlls2) { Write-Output ("  " + $f.FullName) }
 
-if ($svc3 -or $folders2.Count -gt 0 -or $dlls2.Count -gt 0 -or $arp2.Count -gt 0) {
+if ($svc3.Count -gt 0 -or $folders2.Count -gt 0 -or $dlls2.Count -gt 0 -or $arp2.Count -gt 0) {
     $script:ExitCode = 2
 } else {
     $script:ExitCode = 0
-    Write-Output 'Dell TechHub removed.'
+    Write-Output 'Dell TechHub / DTP removed. SupportAssist and Dell Update were left installed.'
 }
 
 if ($Exit) { exit $script:ExitCode }
