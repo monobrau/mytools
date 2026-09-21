@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Scan and remove leftover PUP remnants. Catalog covers Ask Toolbar, MediaArena converters, AppSuite PDF Editor, Wave/OneLaunch, and fake PDF installers.
+    Scan and remove leftover PUP remnants. Catalog covers Ask Toolbar, MediaArena converters, AppSuite PDF Editor, Wave/OneLaunch, fake PDF installers, and Browser Assistant.
 
 .DESCRIPTION
     Definition-driven remnant sweep for toolbars / search hijackers. Default is a dry-run report.
@@ -66,7 +66,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.2.0'
+$ScriptVersion = '1.3.0'
 $script:ExitCode = 0
 $script:Findings = New-Object System.Collections.Generic.List[object]
 $script:Seen = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -268,6 +268,34 @@ function Get-PupCatalog {
             RunValueMatch             = '(?i)ConvertMate|Easy2Convert|UpdateRetriever|\\ConvertMate\\'
             BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(conmateapp|convertyfileapp|ez2convertapp|powerdocapp|infinitedocsapp|convertmasterapp|pdfskillsapp|pdfclickapp|zappdfapp|onezipapp|crystalpdf|pdfsparkware|zipmatepro|notawordapp)\.com'
             ProcessMatch              = '(?i)^ConvertMate$|^Easy2Convert$|^UpdateRetriever$|^InfiniteDocs$|^PowerDoc$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        BrowserAssistant = @{
+            Id          = 'BrowserAssistant'
+            DisplayName = 'Browser Assistant (Blaze Media / browser-helper PUP)'
+            Notes       = 'Per-user AppData\Roaming\Browser Assistant leftover. Huntress/Defender often flag it as PUA and leave the folder. Related: Browser Extension (Blaze Media), Browser Assistant Updater, NetTwoUpdater, BAv*.msi. Do not match a bare Browser or Assistant.'
+            UserFolders = @(
+                'AppData\Roaming\Browser Assistant'
+                'AppData\Local\Browser Assistant'
+                'AppData\Roaming\Browser Extension'
+                'AppData\Local\Browser Extension'
+            )
+            FolderNameMatch = '(?i)^Browser Assistant$|^Browser Assistant Updater$|^Browser Extension$'
+            LooseFileMatch  = '(?i)^(Browser Assistant( Updater)?|BAv\d+)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\Browser Assistant'
+                'HKLM:\SOFTWARE\WOW6432Node\Browser Assistant'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\Browser Assistant'
+            )
+            TaskMatch                 = '(?i)Browser Assistant|BrowserAssistant|NetTwoUpdater|Browser Extension'
+            ServiceMatch              = '(?i)Browser Assistant|BrowserAssistant'
+            UninstallDisplayNameMatch = '(?i)^Browser Assistant( Updater)?$|^Browser Extension$'
+            UninstallPublisherMatch   = '(?i)^Blaze Media$'
+            RunValueMatch             = '(?i)Browser Assistant|BrowserAssistant|\\Browser Assistant\\'
+            ProcessMatch              = '(?i)^Browser Assistant$|^BrowserAssistant$|^Browser Assistant Updater$'
             SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
         }
     }
