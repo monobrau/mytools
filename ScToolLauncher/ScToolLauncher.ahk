@@ -1090,6 +1090,10 @@ RefreshOptionEnable(*) {
     gCtrls["BtnDocs"].Text := "Open docs in browser"
     SetCtrlShown(gCtrls["HelpBody"], false)
     SetCtrlShown(gCtrls["BtnCopy"], true)
+    SetCtrlShown(gCtrls["LblMode"], true)
+    SetCtrlShown(gCtrls["LblPaste"], true)
+    SetCtrlShown(gCtrls["FmtCommands"], true)
+    SetCtrlShown(gCtrls["FmtBackstage"], true)
 
     showForce := ToolHasFlag(t, "Force")
     showForceApp := ToolHasFlag(t, "ForceAppShutdown")
