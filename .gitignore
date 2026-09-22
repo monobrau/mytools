@@ -28,6 +28,7 @@ exceptions.json
 !package.json
 !tsconfig.json
 !*.schema.json
+!BarracudaOffboarding/config/default.json
 
 # Ticket / investigation artifacts
 Ticket-*.txt

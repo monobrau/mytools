@@ -1,0 +1,13 @@
+{
+  "vendorPatterns": [
+    "barracuda",
+    "skout",
+    "cudamail",
+    "cudasvc",
+    "ess\\.barracuda",
+    "barracudanetworks"
+  ],
+  "knownGoodServicePrincipals": [],
+  "knownGoodTransportRules": [],
+  "clientNotes": ""
+}
