@@ -32,14 +32,12 @@ Do not commit tokens.
 2. Bakes the MST with `msi_transform.ps1` (local copy, or fetched from this folder)
 3. Copies the MSI to `\\<domain>\NETLOGON\Automate\<client>-<location>-<id>\`
 4. Creates `Deploy Automate - <client> <location> (<id>)`
-5. Enables **Always wait for the network** and a 900-second script wait
-6. Startup `Install-Automate.cmd` skips if `LTService` exists
-7. Optional `-LinkToDomain` plus a workstation-only WMI filter (`ProductType = 1`). If that filter cannot be attached, the script does not link at the domain root.
-8. Grants and checks read access for **Domain Computers** and **Authenticated Users** on the MSI folder, the GPO files in SYSVOL, and the NETLOGON share. The GPO itself gets **Authenticated Users: Apply** and **Domain Computers: Read** (required so computer startup can read the policy). The script stops if those checks fail.
+5. Publishes a computer **Immediate Task** that runs at the next Group Policy refresh
+6. `Install-Automate.cmd` skips if `LTService` exists
+7. Optional `-LinkToDomain` plus a workstation-only WMI filter (`ProductType = 1`). Computers are granted read on that filter. If the filter cannot be attached, the script does not link at the domain root.
+8. Grants and checks read access for **Domain Computers** and **Authenticated Users** on the MSI folder, the GPO files in SYSVOL, and the NETLOGON share. The GPO itself gets **Authenticated Users: Apply** and **Domain Computers: Apply**.
 
-Startup scripts run at **boot**, not at `gpupdate`. After linking, reboot a
-test PC. The second boot should log that `LTService` is already present
-(`C:\Windows\Temp\Automate-GPO-Install.log`).
+The task runs as SYSTEM during background policy refresh, about every 90 minutes, while the PC is on. A reboot is not required. The log is `C:\Windows\Temp\Automate-GPO-Install.log`. On a domain controller, `gpresult /r /scope computer` should show this GPO denied by the WMI filter.
 
 Do **not** put uninstall-then-reinstall (`-Force` from the ticket) in this GPO.
 

@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Download a ConnectWise Automate location installer, bake the MST into the MSI,
-    stage it on SYSVOL, and create a computer startup-script GPO.
+    stage it on SYSVOL, and create a GPO immediate task that installs it.
 
 .DESCRIPTION
     Run as Domain Admin from a DC or RSAT box joined to the client domain.
@@ -9,10 +9,11 @@
     The token URL returns MSI_Install_Package.zip (Agent_Install.msi + Agent_Install.mst).
     This script applies the MST with msi_transform.ps1 (local copy, or downloaded from
     mytools when this file is invoked via irm), copies the baked MSI to NETLOGON, and
-    creates a GPO whose startup script installs that MSI when LTService is missing.
+    creates a GPO immediate task that installs that MSI when LTService is missing.
+    The task runs at the next Group Policy refresh. A reboot is not required.
 
     Native GPO Software Installation packages cannot be created from PowerShell (no
-    public API for .aas advertisement files). The startup script calls msiexec on the
+    public API for .aas advertisement files). The task calls msiexec on the
     already-transformed MSI, which is the same silent install.
 
 .PARAMETER Server
@@ -115,9 +116,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:WmiFilterName = 'Windows Workstations (ProductType=1)'
-# Scripts CSE + scripts snap-in. 42B5FA4A is the real CSE; 42B5FAAE was a typo and clients ignore it.
-$script:ScriptsCse = '[{42B5FA4A-6536-11D2-AE5A-0000F87571E3}{40B6664F-4972-11D1-A7CA-0000F87571E3}]'
-$script:BadScriptsCse = '42B5FAAE-6536-11D2-AE5A-0000F87571E3'
+# Group Policy Preferences Scheduled Tasks CSE + snap-in.
+$script:GppSchedCse = '[{AADCED64-746C-4633-A97C-D80500FC4251}{CAB54552-DEEA-4691-817E-ED4A4D1AFC72}]'
+$script:TaskUid = '{C4A91E2B-7D55-4F0A-9B3E-1A6D8E2F90C4}'
 $null = $Exit
 $null = $NoExit
 
@@ -239,7 +240,7 @@ function Set-DeployGpoSecurity {
     )
     $wanted = @(
         @{ Target = 'Authenticated Users'; Level = 'GpoApply' }
-        @{ Target = 'Domain Computers'; Level = 'GpoRead' }
+        @{ Target = 'Domain Computers'; Level = 'GpoApply' }
     )
     $canReplace = (Get-Command Set-GPPermission).Parameters.ContainsKey('Replace')
     foreach ($item in $wanted) {
@@ -264,7 +265,7 @@ function Set-DeployGpoSecurity {
         'GpoEdit' = 3
         'GpoEditDeleteModifySecurity' = 4
     }
-    $need = @{ $authSid = 2; $computersSid = 1 }
+    $need = @{ $authSid = 2; $computersSid = 2 }
     foreach ($sid in @($authSid, $computersSid)) {
         $best = 0
         foreach ($perm in $perms) {
@@ -334,7 +335,7 @@ function Merge-GpoExtensionNames {
     if ($Existing) {
         $pairs += [regex]::Matches($Existing, '\[\{[0-9A-Fa-f-]+\}\{[0-9A-Fa-f-]+\}\]') | ForEach-Object { $_.Value }
     }
-    $pairs = @($pairs | Where-Object { $_ -notmatch $script:BadScriptsCse })
+    $pairs = @($pairs | Where-Object { $_ -notmatch '42B5FAAE-6536-11D2-AE5A-0000F87571E3' })
     if ($pairs -notcontains $Add) { $pairs += $Add }
     return (($pairs | Sort-Object) -join '')
 }
@@ -389,13 +390,122 @@ function Set-GpoStartupScript {
     }
 }
 
+function Set-GpoImmediateTask {
+    param(
+        $Gpo,
+        [string]$DnsRoot,
+        [string]$DomainDN,
+        [string]$CmdName,
+        [string]$CmdText
+    )
+
+    $policyRoot = "\\$DnsRoot\SYSVOL\$DnsRoot\Policies\{$($Gpo.Id)}"
+    $scriptDir = Join-Path $policyRoot 'Machine\Scripts'
+    $prefDir = Join-Path $policyRoot 'Machine\Preferences\ScheduledTasks'
+    New-Item -ItemType Directory -Path $scriptDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $prefDir -Force | Out-Null
+    Set-Content -Path (Join-Path $scriptDir $CmdName) -Value $CmdText -Encoding Ascii
+
+    $startupIni = Join-Path $scriptDir 'scripts.ini'
+    if (Test-Path -LiteralPath $startupIni) { Remove-Item -LiteralPath $startupIni -Force }
+    $startupDir = Join-Path $scriptDir 'Startup'
+    $oldCmd = Join-Path $startupDir $CmdName
+    if (Test-Path -LiteralPath $oldCmd) { Remove-Item -LiteralPath $oldCmd -Force }
+
+    $cmdUnc = "\\$DnsRoot\SYSVOL\$DnsRoot\Policies\{$($Gpo.Id)}\Machine\Scripts\$CmdName"
+    $cmdEsc = [System.Security.SecurityElement]::Escape($cmdUnc)
+    $changed = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+    $xml = @"
+<?xml version="1.0" encoding="utf-8"?>
+<ScheduledTasks clsid="{CC63F200-7309-4ba0-B154-A71CD118DBCC}">
+	<ImmediateTaskV2 clsid="{9756B581-76EC-451C-9E12-DFF9B5CA5C32}" name="Install Automate" image="2" changed="$changed" uid="$($script:TaskUid)" userContext="0" removePolicy="0">
+		<Properties action="U" name="Install Automate" runAs="NT AUTHORITY\System" logonType="S4U">
+			<Task version="1.3">
+				<RegistrationInfo>
+					<Author>NT AUTHORITY\System</Author>
+					<Description>Install ConnectWise Automate when LTService is missing</Description>
+				</RegistrationInfo>
+				<Principals>
+					<Principal id="Author">
+						<UserId>S-1-5-18</UserId>
+						<RunLevel>HighestAvailable</RunLevel>
+					</Principal>
+				</Principals>
+				<Settings>
+					<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+					<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+					<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+					<AllowHardTerminate>false</AllowHardTerminate>
+					<StartWhenAvailable>true</StartWhenAvailable>
+					<RunOnlyIfNetworkAvailable>true</RunOnlyIfNetworkAvailable>
+					<AllowStartOnDemand>true</AllowStartOnDemand>
+					<Enabled>true</Enabled>
+					<Hidden>true</Hidden>
+					<RunOnlyIfIdle>false</RunOnlyIfIdle>
+					<WakeToRun>false</WakeToRun>
+					<ExecutionTimeLimit>PT30M</ExecutionTimeLimit>
+					<Priority>7</Priority>
+				</Settings>
+				<Actions Context="Author">
+					<Exec>
+						<Command>C:\Windows\System32\cmd.exe</Command>
+						<Arguments>/c &quot;$cmdEsc&quot;</Arguments>
+					</Exec>
+				</Actions>
+			</Task>
+		</Properties>
+	</ImmediateTaskV2>
+</ScheduledTasks>
+"@
+    $utf8 = New-Object System.Text.UTF8Encoding $true
+    [System.IO.File]::WriteAllText((Join-Path $prefDir 'ScheduledTasks.xml'), $xml, $utf8)
+
+    $adPath = "CN={$($Gpo.Id)},CN=Policies,CN=System,$DomainDN"
+    $obj = Get-ADObject -Identity $adPath -Properties versionNumber, gPCMachineExtensionNames
+    $ver = [int]($obj.versionNumber)
+    $userVer = $ver -shr 16
+    $machineVer = ($ver -band 0xFFFF) + 1
+    if ($machineVer -gt 65535) { $machineVer = 1 }
+    $newVer = ($userVer -shl 16) + $machineVer
+    $merged = Merge-GpoExtensionNames -Existing ([string]$obj.gPCMachineExtensionNames) -Add $script:GppSchedCse
+
+    Set-ADObject -Identity $adPath -Replace @{
+        versionNumber            = $newVer
+        gPCMachineExtensionNames = $merged
+    }
+
+    $gptPath = Join-Path $policyRoot 'GPT.INI'
+    if (Test-Path -LiteralPath $gptPath) {
+        $gpt = Get-Content -LiteralPath $gptPath -Raw
+        if ($gpt -match 'Version=\d+') {
+            $gpt = $gpt -replace 'Version=\d+', "Version=$newVer"
+        }
+        else {
+            $gpt = "[General]`r`nVersion=$newVer`r`n"
+        }
+        Set-Content -LiteralPath $gptPath -Value $gpt.TrimEnd() -Encoding Ascii
+    }
+}
+
+function Grant-WmiFilterRead {
+    param([string]$FilterDn)
+    if (-not $FilterDn) { throw 'WMI filter has no distinguished name.' }
+    & dsacls.exe $FilterDn /G "Authenticated Users:GR" /G "Domain Computers:GR" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not grant computers read on WMI filter $FilterDn (dsacls exit $LASTEXITCODE)."
+    }
+}
 function Resolve-WmiFilter {
     param([string]$DomainDN, [string]$Name)
 
     $searchBase = "CN=SOM,CN=WMIPolicy,CN=System,$DomainDN"
     $ldapName = ConvertTo-LdapFilterLiteral -Value $Name
     $existing = Get-ADObject -SearchBase $searchBase -LDAPFilter "(msWMI-Name=$ldapName)" -Properties 'msWMI-Name', 'msWMI-ID' -ErrorAction SilentlyContinue
-    if ($existing) { return @($existing)[0] }
+    if ($existing) {
+        $filter = @($existing)[0]
+        Grant-WmiFilterRead -FilterDn $filter.DistinguishedName
+        return $filter
+    }
 
     $guid = [guid]::NewGuid()
     $guidBrace = "{$guid}"
@@ -417,7 +527,9 @@ function Resolve-WmiFilter {
         'msWMI-CreationDate'     = $stamp
     } | Out-Null
 
-    return Get-ADObject -SearchBase $searchBase -LDAPFilter "(msWMI-Name=$ldapName)" -Properties 'msWMI-Name', 'msWMI-ID'
+    $created = Get-ADObject -SearchBase $searchBase -LDAPFilter "(msWMI-Name=$ldapName)" -Properties 'msWMI-Name', 'msWMI-ID'
+    Grant-WmiFilterRead -FilterDn $created.DistinguishedName
+    return $created
 }
 
 # ---------------------------------------------------------------------------
@@ -555,7 +667,7 @@ try {
     $cmdText = @"
 @echo off
 set LOG=%SystemRoot%\Temp\Automate-GPO-Install.log
-echo %DATE% %TIME% startup script began>>"%LOG%"
+echo %DATE% %TIME% immediate task began>>"%LOG%"
 sc query LTService >nul 2>&1
 if not errorlevel 1 (
   echo %DATE% %TIME% LTService already present. Nothing to do.>>"%LOG%"
@@ -565,7 +677,7 @@ echo %DATE% %TIME% Installing Automate from $stagedMsi>>"%LOG%"
 msiexec /i "$stagedMsi" /qn /norestart /l*v "%SystemRoot%\Temp\Automate-GPO-Install.msi.log"
 echo %DATE% %TIME% msiexec exit %ERRORLEVEL%>>"%LOG%"
 "@
-    Set-GpoStartupScript -Gpo $gpo -DnsRoot $dnsRoot -DomainDN $domainDN -CmdName $cmdName -CmdText $cmdText
+    Set-GpoImmediateTask -Gpo $gpo -DnsRoot $dnsRoot -DomainDN $domainDN -CmdName $cmdName -CmdText $cmdText
     $policyRoot = "\\$dnsRoot\SYSVOL\$dnsRoot\Policies\{$($gpo.Id)}"
     Write-Step '       Granting Domain Computers and Authenticated Users read on the GPO'
     Grant-DeployNtfs -Path $policyRoot -Netbios $adDomain.NetBIOSName
@@ -610,9 +722,9 @@ echo %DATE% %TIME% msiexec exit %ERRORLEVEL%>>"%LOG%"
     Write-Step ''
     Write-Step "[OK] $GpoName"
     Write-Step "     MSI: $stagedMsi"
-    Write-Step '     Startup script installs the baked MSI when LTService is missing.'
-    Write-Step '     Clients need a reboot after gpupdate (startup scripts do not run at gpupdate).'
-    Write-Step '     Pilot: security-filter the GPO to a test computer group before a wide link.'
+    Write-Step '     Immediate task installs the baked MSI when LTService is missing.'
+    Write-Step '     Workstations run it at the next Group Policy refresh, about every 90 minutes. A reboot is not required.'
+    Write-Step '     On the domain controller, gpresult should list this GPO as denied by the WMI filter.'
 }
 finally {
     if (-not $DryRun -and (Test-Path -LiteralPath $work)) {
