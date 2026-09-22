@@ -115,7 +115,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:WmiFilterName = 'Windows Workstations (ProductType=1)'
-$script:ScriptsCse = '[{42B5FAAE-6536-11D2-AE5A-0000F87571E3}{40B6664F-4972-11D1-A7CA-0000F87571E3}]'
+# Scripts CSE + scripts snap-in. 42B5FA4A is the real CSE; 42B5FAAE was a typo and clients ignore it.
+$script:ScriptsCse = '[{42B5FA4A-6536-11D2-AE5A-0000F87571E3}{40B6664F-4972-11D1-A7CA-0000F87571E3}]'
+$script:BadScriptsCse = '42B5FAAE-6536-11D2-AE5A-0000F87571E3'
 $null = $Exit
 $null = $NoExit
 
@@ -184,8 +186,14 @@ function Merge-GpoExtensionNames {
     if ($Existing) {
         $pairs += [regex]::Matches($Existing, '\[\{[0-9A-Fa-f-]+\}\{[0-9A-Fa-f-]+\}\]') | ForEach-Object { $_.Value }
     }
+    $pairs = @($pairs | Where-Object { $_ -notmatch $script:BadScriptsCse })
     if ($pairs -notcontains $Add) { $pairs += $Add }
     return (($pairs | Sort-Object) -join '')
+}
+
+function ConvertTo-LdapFilterLiteral {
+    param([string]$Value)
+    return ($Value -replace '\\', '\5c' -replace '\*', '\2a' -replace '\(', '\28' -replace '\)', '\29')
 }
 
 function Set-GpoStartupScript {
@@ -237,13 +245,15 @@ function Resolve-WmiFilter {
     param([string]$DomainDN, [string]$Name)
 
     $searchBase = "CN=SOM,CN=WMIPolicy,CN=System,$DomainDN"
-    $existing = Get-ADObject -SearchBase $searchBase -LDAPFilter "(msWMI-Name=$Name)" -Properties 'msWMI-Name', 'msWMI-ID' -ErrorAction SilentlyContinue
-    if ($existing) { return $existing }
+    $ldapName = ConvertTo-LdapFilterLiteral -Value $Name
+    $existing = Get-ADObject -SearchBase $searchBase -LDAPFilter "(msWMI-Name=$ldapName)" -Properties 'msWMI-Name', 'msWMI-ID' -ErrorAction SilentlyContinue
+    if ($existing) { return @($existing)[0] }
 
     $guid = [guid]::NewGuid()
     $guidBrace = "{$guid}"
     $now = (Get-Date).ToUniversalTime()
-    $stamp = $now.ToString('yyyyMMddHHmmss.ffffff') + '-000'
+    $frac = [int](($now.Ticks % 10000000) / 10)
+    $stamp = $now.ToString('yyyyMMddHHmmss') + '.' + $frac.ToString('000000') + '-000'
     $author = "$env:USERDOMAIN\$env:USERNAME"
     $query = 'SELECT * FROM Win32_OperatingSystem WHERE ProductType = 1'
     $parm2 = "1;3;10;$($query.Length);WQL;root\CIMv2;$query;"
@@ -254,13 +264,12 @@ function Resolve-WmiFilter {
         'msWMI-Parm2'            = $parm2
         'msWMI-Author'           = $author
         'msWMI-ID'               = $guidBrace
-        'instanceType'           = 4
         'showInAdvancedViewOnly' = $true
         'msWMI-ChangeDate'       = $stamp
         'msWMI-CreationDate'     = $stamp
     } | Out-Null
 
-    return Get-ADObject -SearchBase $searchBase -LDAPFilter "(msWMI-Name=$Name)" -Properties 'msWMI-Name', 'msWMI-ID'
+    return Get-ADObject -SearchBase $searchBase -LDAPFilter "(msWMI-Name=$ldapName)" -Properties 'msWMI-Name', 'msWMI-ID'
 }
 
 # ---------------------------------------------------------------------------
@@ -417,17 +426,12 @@ echo %DATE% %TIME% msiexec exit %ERRORLEVEL%>>"%LOG%"
     if ($linkTarget -and -not $SkipLink) {
         if ($LinkToDomain -and -not $TargetOU -and -not $SkipWmiFilter) {
             Write-Step "       Attaching WMI filter '$($script:WmiFilterName)'..."
-            try {
-                $wmi = Resolve-WmiFilter -DomainDN $domainDN -Name $script:WmiFilterName
-                $wmiId = [string]$wmi.'msWMI-ID'
-                if (-not $wmiId) { $wmiId = $wmi.Name }
-                if ($wmiId -notmatch '^\{') { $wmiId = "{$wmiId}" }
-                $gpoDn = "CN={$($gpo.Id)},CN=Policies,CN=System,$domainDN"
-                Set-ADObject -Identity $gpoDn -Replace @{ gPCWQLFilter = "[$dnsRoot;$wmiId]" }
-            }
-            catch {
-                Write-Warning "WMI filter was not attached: $($_.Exception.Message)"
-            }
+            $wmi = Resolve-WmiFilter -DomainDN $domainDN -Name $script:WmiFilterName
+            $wmiId = [string]$wmi.'msWMI-ID'
+            if (-not $wmiId) { throw "WMI filter '$($script:WmiFilterName)' was created but has no msWMI-ID. Refusing to link at the domain root." }
+            if ($wmiId -notmatch '^\{') { $wmiId = "{$wmiId}" }
+            $gpoDn = "CN={$($gpo.Id)},CN=Policies,CN=System,$domainDN"
+            Set-ADObject -Identity $gpoDn -Replace @{ gPCWQLFilter = "[$dnsRoot;$wmiId;0]" }
         }
 
         Write-Step "[5/5] Linking GPO to $linkTarget"

@@ -34,7 +34,7 @@ Do not commit tokens.
 4. Creates `Deploy Automate - <client> <location> (<id>)`
 5. Enables **Always wait for the network** and a 900-second script wait
 6. Startup `Install-Automate.cmd` skips if `LTService` exists
-7. Optional `-LinkToDomain` plus a workstation-only WMI filter (`ProductType = 1`)
+7. Optional `-LinkToDomain` plus a workstation-only WMI filter (`ProductType = 1`). If that filter cannot be attached, the script does not link at the domain root.
 
 Startup scripts run at **boot**, not at `gpupdate`. After linking, reboot a
 test PC. The second boot should log that `LTService` is already present
