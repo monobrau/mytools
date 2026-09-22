@@ -167,8 +167,10 @@ function Grant-DeployNtfs {
 
     $computers = ConvertTo-SecuritySid "$Netbios\Domain Computers"
     $authUsers = ConvertTo-SecuritySid 'Authenticated Users'
-    foreach ($target in @($Path, (Get-ChildItem -LiteralPath $Path -Recurse -File | Select-Object -ExpandProperty FullName))) {
-        Assert-NtfsRead -Path $target -RequiredSids @($computers, $authUsers)
+    $required = @($computers, $authUsers)
+    Assert-NtfsRead -Path $Path -RequiredSids $required
+    Get-ChildItem -LiteralPath $Path -Recurse -File | ForEach-Object {
+        Assert-NtfsRead -Path $_.FullName -RequiredSids $required
     }
 }
 
