@@ -35,6 +35,7 @@ Do not commit tokens.
 5. Enables **Always wait for the network** and a 900-second script wait
 6. Startup `Install-Automate.cmd` skips if `LTService` exists
 7. Optional `-LinkToDomain` plus a workstation-only WMI filter (`ProductType = 1`). If that filter cannot be attached, the script does not link at the domain root.
+8. Grants and checks read access for **Domain Computers** and **Authenticated Users** on the MSI folder, the GPO files in SYSVOL, and the NETLOGON share. The GPO itself gets **Authenticated Users: Apply** and **Domain Computers: Read** (required so computer startup can read the policy). The script stops if those checks fail.
 
 Startup scripts run at **boot**, not at `gpupdate`. After linking, reboot a
 test PC. The second boot should log that `LTService` is already present

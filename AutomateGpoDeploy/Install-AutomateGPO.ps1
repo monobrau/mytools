@@ -132,6 +132,152 @@ function Test-IsAdministrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function ConvertTo-SecuritySid {
+    param($Identity)
+    if ($Identity -is [System.Security.Principal.SecurityIdentifier]) { return $Identity }
+    $name = [string]$Identity
+    if ([string]::IsNullOrWhiteSpace($name)) { return $null }
+    if ($name -match '^S-\d-\d+(-\d+)+$') {
+        return [System.Security.Principal.SecurityIdentifier]$name
+    }
+    try {
+        return ([System.Security.Principal.NTAccount]$name).Translate([System.Security.Principal.SecurityIdentifier])
+    }
+    catch {
+        return $null
+    }
+}
+
+function Grant-DeployNtfs {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Netbios
+    )
+    if (-not (Test-Path -LiteralPath $Path)) { throw "Cannot set permissions. Path not found: $Path" }
+    $grants = @(
+        "$Netbios\Domain Computers:(OI)(CI)RX"
+        'Authenticated Users:(OI)(CI)RX'
+        "$Netbios\Domain Admins:(OI)(CI)F"
+        'SYSTEM:(OI)(CI)F'
+    )
+    foreach ($grant in $grants) {
+        & icacls.exe $Path '/grant' $grant '/T' '/C' | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "icacls failed on $Path for $grant (exit $LASTEXITCODE)" }
+    }
+
+    $computers = ConvertTo-SecuritySid "$Netbios\Domain Computers"
+    $authUsers = ConvertTo-SecuritySid 'Authenticated Users'
+    foreach ($target in @($Path, (Get-ChildItem -LiteralPath $Path -Recurse -File | Select-Object -ExpandProperty FullName))) {
+        Assert-NtfsRead -Path $target -RequiredSids @($computers, $authUsers)
+    }
+}
+
+function Assert-NtfsRead {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][System.Security.Principal.SecurityIdentifier[]]$RequiredSids
+    )
+    $need = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+    $acl = Get-Acl -LiteralPath $Path
+    foreach ($required in $RequiredSids) {
+        $found = $false
+        foreach ($ace in $acl.Access) {
+            if ($ace.AccessControlType -ne 'Allow') { continue }
+            $sid = ConvertTo-SecuritySid $ace.IdentityReference
+            if (-not $sid -or $sid.Value -ne $required.Value) { continue }
+            if (($ace.FileSystemRights -band $need) -eq $need) { $found = $true; break }
+        }
+        if (-not $found) { throw "Missing Allow ReadAndExecute for $($required.Value) on $Path" }
+    }
+}
+
+function Assert-NetlogonShareRead {
+    param(
+        [Parameter(Mandatory)][string]$Domain,
+        [Parameter(Mandatory)][string]$Netbios
+    )
+    $computers = ConvertTo-SecuritySid "$Netbios\Domain Computers"
+    $allowed = @('S-1-1-0', 'S-1-5-11', $computers.Value)
+    $dcs = @(Get-ADDomainController -Filter * -Server $Domain)
+    foreach ($dc in $dcs) {
+        $session = New-CimSession -ComputerName $dc.HostName
+        try {
+            $aces = @(Get-SmbShareAccess -Name 'NETLOGON' -CimSession $session)
+            $ok = $false
+            foreach ($ace in $aces) {
+                if ([string]$ace.AccessControlType -eq 'Deny') { continue }
+                if ([string]$ace.AccessRight -notin @('Read', 'Change', 'Full')) { continue }
+                $sid = ConvertTo-SecuritySid $ace.AccountName
+                if ($sid -and ($allowed -contains $sid.Value)) { $ok = $true; break }
+            }
+            if (-not $ok) {
+                Write-Step "       Granting Domain Computers Read on \\$($dc.HostName)\NETLOGON"
+                Grant-SmbShareAccess -Name 'NETLOGON' -CimSession $session -AccountName "$Netbios\Domain Computers" -AccessRight Read -Force | Out-Null
+                $aces = @(Get-SmbShareAccess -Name 'NETLOGON' -CimSession $session)
+                $ok = $false
+                foreach ($ace in $aces) {
+                    if ([string]$ace.AccessControlType -eq 'Deny') { continue }
+                    if ([string]$ace.AccessRight -notin @('Read', 'Change', 'Full')) { continue }
+                    $sid = ConvertTo-SecuritySid $ace.AccountName
+                    if ($sid -and ($allowed -contains $sid.Value)) { $ok = $true; break }
+                }
+            }
+            if (-not $ok) { throw "NETLOGON on $($dc.HostName) does not allow domain computers to read." }
+        }
+        finally {
+            Remove-CimSession $session -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Set-DeployGpoSecurity {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][string]$Domain
+    )
+    $wanted = @(
+        @{ Target = 'Authenticated Users'; Level = 'GpoApply' }
+        @{ Target = 'Domain Computers'; Level = 'GpoRead' }
+    )
+    $canReplace = (Get-Command Set-GPPermission).Parameters.ContainsKey('Replace')
+    foreach ($item in $wanted) {
+        $params = @{
+            Name            = $Name
+            Domain          = $Domain
+            TargetName      = $item.Target
+            TargetType      = 'Group'
+            PermissionLevel = $item.Level
+            Confirm         = $false
+        }
+        if ($canReplace) { $params.Replace = $true }
+        Set-GPPermission @params | Out-Null
+    }
+
+    $perms = @(Get-GPPermission -Name $Name -Domain $Domain -All)
+    $authSid = (ConvertTo-SecuritySid 'Authenticated Users').Value
+    $computersSid = (Get-ADGroup -Identity 'Domain Computers' -Server $Domain).SID.Value
+    $rank = @{
+        'GpoRead' = 1
+        'GpoApply' = 2
+        'GpoEdit' = 3
+        'GpoEditDeleteModifySecurity' = 4
+    }
+    $need = @{ $authSid = 2; $computersSid = 1 }
+    foreach ($sid in @($authSid, $computersSid)) {
+        $best = 0
+        foreach ($perm in $perms) {
+            $raw = $null
+            if ($perm.Trustee.PSObject.Properties['Sid']) { $raw = $perm.Trustee.Sid }
+            if (-not $raw -and $perm.Trustee.PSObject.Properties['Name']) { $raw = $perm.Trustee.Name }
+            $trusteeSid = ConvertTo-SecuritySid $raw
+            if (-not $trusteeSid -or $trusteeSid.Value -ne $sid) { continue }
+            $level = [string]$perm.Permission
+            if ($rank.ContainsKey($level) -and $rank[$level] -gt $best) { $best = $rank[$level] }
+        }
+        if ($best -lt $need[$sid]) { throw "GPO '$Name' is missing the required permission for $sid." }
+    }
+}
+
 function ConvertTo-FolderName {
     param([string]$Client, [string]$Location, [int]$Id)
     $clientPart = ($Client -replace '[^A-Za-z0-9]+', '')
@@ -383,6 +529,10 @@ try {
     ) -join [Environment]::NewLine
     Set-Content -Path (Join-Path $packageUnc 'BUILDINFO.txt') -Value $info -Encoding Ascii
 
+    Write-Step '       Granting Domain Computers and Authenticated Users read on the MSI folder'
+    Grant-DeployNtfs -Path $packageUnc -Netbios $adDomain.NetBIOSName
+    Assert-NetlogonShareRead -Domain $dnsRoot -Netbios $adDomain.NetBIOSName
+
     if ($SkipGpo) {
         Write-Step ''
         Write-Step "[OK] Staged $stagedMsi"
@@ -414,6 +564,10 @@ msiexec /i "$stagedMsi" /qn /norestart /l*v "%SystemRoot%\Temp\Automate-GPO-Inst
 echo %DATE% %TIME% msiexec exit %ERRORLEVEL%>>"%LOG%"
 "@
     Set-GpoStartupScript -Gpo $gpo -DnsRoot $dnsRoot -DomainDN $domainDN -CmdName $cmdName -CmdText $cmdText
+    $policyRoot = "\\$dnsRoot\SYSVOL\$dnsRoot\Policies\{$($gpo.Id)}"
+    Write-Step '       Granting Domain Computers and Authenticated Users read on the GPO'
+    Grant-DeployNtfs -Path $policyRoot -Netbios $adDomain.NetBIOSName
+    Set-DeployGpoSecurity -Name $GpoName -Domain $dnsRoot
 
     $linkTarget = $null
     if ($TargetOU) {
