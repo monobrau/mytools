@@ -490,10 +490,36 @@ function Set-GpoImmediateTask {
 function Grant-WmiFilterRead {
     param([string]$FilterDn)
     if (-not $FilterDn) { throw 'WMI filter has no distinguished name.' }
-    & dsacls.exe $FilterDn /G "Authenticated Users:GR" /G "Domain Computers:GR" | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not grant computers read on WMI filter $FilterDn (dsacls exit $LASTEXITCODE)."
+
+    # dsacls crashes (0xC0000005) when the filter CN is a {guid}. Write the ACL directly.
+    $rights = [System.DirectoryServices.ActiveDirectoryRights]::GenericRead
+    $allow = [System.Security.AccessControl.AccessControlType]::Allow
+    $none = [System.DirectoryServices.ActiveDirectorySecurityInheritance]::None
+    $sidType = [System.Security.Principal.SecurityIdentifier]
+    $identities = @(
+        (New-Object System.Security.Principal.SecurityIdentifier 'S-1-5-11'),
+        (Get-ADGroup -Identity 'Domain Computers').SID
+    )
+
+    $entry = New-Object System.DirectoryServices.DirectoryEntry("LDAP://$FilterDn")
+    $sd = $entry.ObjectSecurity
+    $existing = @($sd.GetAccessRules($true, $true, $sidType))
+    foreach ($id in $identities) {
+        $hasRead = $false
+        foreach ($ace in $existing) {
+            if ($ace.IdentityReference.Value -eq $id.Value -and
+                $ace.AccessControlType -eq $allow -and
+                (($ace.ActiveDirectoryRights -band $rights) -eq $rights)) {
+                $hasRead = $true
+                break
+            }
+        }
+        if (-not $hasRead) {
+            $rule = New-Object System.DirectoryServices.ActiveDirectoryAccessRule($id, $rights, $allow, $none)
+            $sd.AddAccessRule($rule)
+        }
     }
+    $entry.CommitChanges()
 }
 function Resolve-WmiFilter {
     param([string]$DomainDN, [string]$Name)
