@@ -18,7 +18,7 @@ Reports default to `C:\SecurityReports` from ScreenConnect.
 | Prefetch, scheduled tasks, installed software, local users, logged-on users, DNS cache, ARP | CSVs |
 | `systeminfo` | `{HOST}_SystemInfo_{stamp}.txt` |
 | Harkins EVTX set | `EventLogs_{stamp}\` |
-| Manifest + zip hash | `{HOST}_CollectionSummary_{stamp}.json` and `{zip}.sha256` |
+| Manifest + zip hash | `{HOST}_ForensicAnalysis_{stamp}.zip` and `{zip}.sha256`. Loose CSVs, `EventLogs_{stamp}`, and `Artifacts_{stamp}` are deleted after the zip is written |
 
 Does **not** enable extra Windows logs (Harkins does; that changes the host). It only exports logs that already exist.
 

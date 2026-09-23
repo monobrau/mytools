@@ -98,7 +98,7 @@ param(
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch { }
 
 # Script version - for verification
-$script:Version = "3.1.2"
+$script:Version = "3.1.3"
 $script:AdditionalCsvPaths = New-Object 'System.Collections.Generic.List[string]'
 $script:EventLogFolder = $null
 $script:ArtifactRoot = $null
@@ -1620,6 +1620,7 @@ function Export-HostArtifactReports {
     try {
         systeminfo | Out-File -FilePath $sysInfoPath -Encoding UTF8
         Write-ColoredMessage "[+] SystemInfo saved: $sysInfoPath" -Color Green
+        [void]$script:AdditionalCsvPaths.Add($sysInfoPath)
     }
     catch {
         Write-ColoredMessage "[!] systeminfo failed: $_" -Color Yellow
@@ -2115,21 +2116,69 @@ function Export-Results {
             }
         }
 
-        # Create zip archive of CSV files + event logs + artifacts
+        # Create zip archive of CSV files + event logs + artifacts, then remove the loose copies.
         if ($zipSources.Count -gt 0) {
             try {
                 $zipPath = Join-Path $OutputPath "${hostname}_ForensicAnalysis_${timestamp}.zip"
                 Compress-Archive -Path $zipSources -DestinationPath $zipPath -Force -ErrorAction Stop
+                if (-not (Test-Path -LiteralPath $zipPath) -or (Get-Item -LiteralPath $zipPath).Length -lt 1) {
+                    throw "Zip was not written: $zipPath"
+                }
                 $script:ZipPath = $zipPath
                 Write-ColoredMessage "[+] Reports archived: $zipPath" -Color Green
                 Write-ZipHashFile -ZipPath $zipPath
+                Remove-RunLooseOutput -Timestamp $timestamp -ZipPath $zipPath
+                return $zipPath
             } catch {
                 Write-ColoredMessage "[!] Warning: Failed to create zip archive: $_" -Color Yellow
+                Write-ColoredMessage "[!] Loose report files were left in place." -Color Yellow
             }
         }
 
         Write-ColoredMessage "`n[!] Note: CSV files do not include color coding. Use Excel for color-coded risk levels." -Color Yellow
         return $csvPaths -join ", "
+    }
+}
+
+function Remove-RunLooseOutput {
+    param(
+        [Parameter(Mandatory)][string]$Timestamp,
+        [Parameter(Mandatory)][string]$ZipPath
+    )
+
+    if (-not (Test-Path -LiteralPath $OutputPath)) { return }
+    $root = (Resolve-Path -LiteralPath $OutputPath).Path
+    $zipFull = (Resolve-Path -LiteralPath $ZipPath).Path
+    $hashFull = $null
+    $hashPath = $ZipPath + '.sha256'
+    if (Test-Path -LiteralPath $hashPath) {
+        $hashFull = (Resolve-Path -LiteralPath $hashPath).Path
+    }
+
+    $dirs = @(Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like ('*{0}*' -f $Timestamp) })
+    foreach ($dir in $dirs) {
+        try {
+            Remove-Item -LiteralPath $dir.FullName -Recurse -Force -ErrorAction Stop
+            Write-ColoredMessage ("[+] Removed folder: {0}" -f $dir.FullName) -Color Green
+        }
+        catch {
+            Write-ColoredMessage ("[!] Could not remove folder {0}: {1}" -f $dir.FullName, $_.Exception.Message) -Color Yellow
+        }
+    }
+
+    $files = @(Get-ChildItem -LiteralPath $root -File -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -like ('*{0}*' -f $Timestamp) })
+    foreach ($file in $files) {
+        if ($file.FullName -eq $zipFull) { continue }
+        if ($hashFull -and $file.FullName -eq $hashFull) { continue }
+        try {
+            Remove-Item -LiteralPath $file.FullName -Force -ErrorAction Stop
+            Write-ColoredMessage ("[+] Removed file: {0}" -f $file.Name) -Color Green
+        }
+        catch {
+            Write-ColoredMessage ("[!] Could not remove file {0}: {1}" -f $file.Name, $_.Exception.Message) -Color Yellow
+        }
     }
 }
 

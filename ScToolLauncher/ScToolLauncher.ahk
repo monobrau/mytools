@@ -549,13 +549,13 @@ HP Support Assistant AppX
         "Repo", "mytools",
         "Script", "ForensicInvestigator/Invoke-ForensicAnalysis.ps1",
         "TempName", "Invoke-ForensicAnalysis.ps1",
-        "UaVer", "3.1.2",
+        "UaVer", "3.1.3",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "ScanOnly CacheBust AlwaysNote",
         "DefaultArgs", '-OutputPath "C:\SecurityReports"',
         "Note", "Sysinternals + all-user Downloads/Desktop + prefetch/tasks/users + EVTX. Reports → C:\SecurityReports. Elevate. VT off in this one-liner. Long-running.",
-        "ClipboardNote", "NOTE: Reports under C:\SecurityReports (CSV + EventLogs + Artifacts + zip.sha256). Zone.ID, PS history, hives, browser History, admins/RMM, Defender included. Prefer elevated. No VirusTotal."
+        "ClipboardNote", "NOTE: One zip plus .sha256 under C:\SecurityReports. Loose CSVs and EventLogs/Artifacts folders are deleted after the zip is written. Prefer elevated. No VirusTotal."
     ),
     Map(
         "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
