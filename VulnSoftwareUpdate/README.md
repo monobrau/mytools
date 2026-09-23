@@ -22,7 +22,7 @@ Built for endpoints that may **not** have RMM patch management or Intune — Scr
 | Microsoft Teams Network Assessment Tool | `TeamsNetworkAssessment` | **Manual** (no reliable winget package) |
 | WinRAR | `WinRAR` | winget `RARLab.WinRAR` |
 | Foxit PDF Reader | `FoxitReader` | winget `Foxit.FoxitReader` |
-| 7-Zip | `SevenZip` | winget `7zip.7zip` |
+| 7-Zip | `SevenZip` | winget `7zip.7zip`, then remove every copy except the latest (x64 preferred) |
 | Notepad++ | `NotepadPlusPlus` | winget `Notepad++.Notepad++` |
 | Visual C++ 2015+ Redistributable (x64) | `VcRedistX64` | winget `Microsoft.VCRedist.2015+.x64` |
 | Visual C++ 2015+ Redistributable (x86) | `VcRedistX86` | winget `Microsoft.VCRedist.2015+.x86` |
@@ -73,7 +73,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.3'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.5'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes
@@ -86,6 +86,7 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 - **Browsers** are opt-in (`-IncludeBrowsers`) because upgrades can close open sessions — still a primary remediation path when there is no browser policy ring.
 - **HPSA on Windows 10** is uninstalled by default (SoftPaqs remain below patched builds / EOL). Windows 11 updates HPSA instead. Use `-CheckOnly` if you only want status.
 - Winget upgrades use `--silent --disable-interactivity` (and `--scope machine` when possible).
+- **7-Zip** (`SevenZip`) lists every installed copy, updates `7zip.7zip`, then uninstalls everything except the latest version. When the latest version is installed for both x64 and x86, the x64 copy is kept.
 - Duo Authentication Proxy is intentionally out of scope (use the dedicated Duo tooling if needed).
 - Add new products by extending the catalog in `Update-VulnSoftware.ps1`.
 

@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.4'
+$ScriptVersion = '1.4.5'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -201,7 +201,8 @@ function Get-VulnCatalog {
         # Phase 1 — high-volume / completely safe winget targets
         [pscustomobject]@{
             Id = 'SevenZip'; Name = '7-Zip'; Method = 'Winget'; WingetId = '7zip.7zip'
-            Match = @('^7-Zip', '7-Zip ')
+            Match = @('^7-Zip(\s+\d|\s*\(|$)')
+            Notes = 'Lists every 7-Zip copy, updates 7zip.7zip, then removes all but the latest (x64 preferred)'
         }
         [pscustomobject]@{
             Id = 'NotepadPlusPlus'; Name = 'Notepad++'; Method = 'Winget'; WingetId = 'Notepad++.Notepad++'
@@ -513,6 +514,269 @@ function Update-WingetPackage {
     return $r
 }
 
+function Install-WingetPackage {
+    param([string]$WingetPath, [string]$WingetId)
+    return Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
+        'install', '--id', $WingetId, '--exact',
+        '--silent',
+        '--disable-interactivity',
+        '--accept-package-agreements',
+        '--accept-source-agreements',
+        '--scope', 'machine'
+    ) -TimeoutSec 1200
+}
+
+function Get-UninstallAppEntries {
+    $paths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    try {
+        Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object {
+            $_.PSChildName -match '^S-1-5-21-\d+-\d+-\d+-\d+$'
+        } | ForEach-Object {
+            $paths += (Join-Path $_.PSPath 'Software\Microsoft\Windows\CurrentVersion\Uninstall\*')
+        }
+    }
+    catch { }
+
+    $apps = foreach ($p in $paths) {
+        Get-ItemProperty $p -ErrorAction SilentlyContinue | Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_.DisplayName)
+        } | ForEach-Object {
+            $keyName = [string]$_.PSChildName
+            [pscustomobject]@{
+                DisplayName          = [string]$_.DisplayName
+                DisplayVersion       = [string]$_.DisplayVersion
+                Publisher            = [string]$_.Publisher
+                InstallLocation      = [string]$_.InstallLocation
+                UninstallString      = [string]$_.UninstallString
+                QuietUninstallString = [string]$_.QuietUninstallString
+                ProductCode          = $(if ($keyName -match '^\{[0-9A-Fa-f-]+\}$') { $keyName } else { '' })
+                Hive                 = $(if ([string]$_.PSPath -match 'WOW6432Node') { 'x86' } else { 'native' })
+            }
+        }
+    }
+    return , @($apps)
+}
+
+function ConvertTo-SevenZipVersion {
+    param([string]$DisplayVersion, [string]$DisplayName)
+    foreach ($text in @($DisplayVersion, $DisplayName)) {
+        if ($text -match '(\d+\.\d+(?:\.\d+){0,2})') {
+            try { return [version]$Matches[1] } catch { }
+        }
+    }
+    return $null
+}
+
+function Get-SevenZipArch {
+    param($Entry)
+    if ($Entry.DisplayName -match '\(x64\)') { return 'x64' }
+    if ($Entry.DisplayName -match '\(x86\)') { return 'x86' }
+    if ($Entry.InstallLocation -match 'Program Files \(x86\)') { return 'x86' }
+    if ($Entry.Hive -eq 'x86') { return 'x86' }
+    return 'x64'
+}
+
+function Get-SevenZipInstalls {
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($app in (Get-UninstallAppEntries)) {
+        if ($app.DisplayName -notmatch '^7-Zip(\s+\d|\s*\(|$)') { continue }
+        if ($app.DisplayName -match '^7-Zip\s+(ZS|Extra)\b') { continue }
+        [void]$rows.Add([pscustomobject]@{
+                DisplayName          = $app.DisplayName
+                DisplayVersion       = $app.DisplayVersion
+                Version              = (ConvertTo-SevenZipVersion -DisplayVersion $app.DisplayVersion -DisplayName $app.DisplayName)
+                Arch                 = (Get-SevenZipArch -Entry $app)
+                ProductCode          = $app.ProductCode
+                UninstallString      = $app.UninstallString
+                QuietUninstallString = $app.QuietUninstallString
+            })
+    }
+    return , $rows.ToArray()
+}
+
+function Get-SevenZipKey {
+    param($Entry)
+    if ($Entry.ProductCode) { return $Entry.ProductCode }
+    return '{0}|{1}|{2}|{3}' -f $Entry.DisplayName, $Entry.DisplayVersion, $Entry.Arch, $Entry.UninstallString
+}
+
+function Format-SevenZipList {
+    param($Installs)
+    $parts = foreach ($item in @($Installs)) {
+        $ver = if ($item.Version) { $item.Version.ToString() } elseif ($item.DisplayVersion) { $item.DisplayVersion } else { 'unknown' }
+        '{0} {1}' -f $ver, $item.Arch
+    }
+    return (@($parts) -join ', ')
+}
+
+function Select-SevenZipKeeper {
+    param($Installs)
+    $known = @($Installs | Where-Object { $_.Version })
+    if ($known.Count -eq 0) { return $null }
+    $max = ($known | Sort-Object Version -Descending | Select-Object -First 1).Version
+    $top = @($known | Where-Object { $_.Version -eq $max })
+    $x64 = @($top | Where-Object { $_.Arch -eq 'x64' })
+    if ($x64.Count -ge 1) { return $x64[0] }
+    return $top[0]
+}
+
+function Get-MsiProductCodeFromText {
+    param([string]$Text)
+    if ($Text -match '\{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\}') {
+        return $Matches[0]
+    }
+    return $null
+}
+
+function Uninstall-SevenZipCopy {
+    param($Entry)
+    $code = $Entry.ProductCode
+    if (-not $code) { $code = Get-MsiProductCodeFromText $Entry.QuietUninstallString }
+    if (-not $code) { $code = Get-MsiProductCodeFromText $Entry.UninstallString }
+    if ($code) {
+        Write-VulnLog ("Removing 7-Zip {0} {1} ({2})" -f $Entry.DisplayVersion, $Entry.Arch, $code)
+        $p = Start-Process -FilePath "$env:SystemRoot\System32\msiexec.exe" -ArgumentList @('/X', $code, '/qn', '/norestart') -Wait -PassThru -WindowStyle Hidden
+        return [int]$p.ExitCode
+    }
+
+    $src = if ($Entry.QuietUninstallString) { $Entry.QuietUninstallString } else { $Entry.UninstallString }
+    $exe = $null
+    if ($src -match '^"([^"]+\.exe)"') { $exe = $Matches[1] }
+    elseif ($src -match '^(\S+\.exe)') { $exe = $Matches[1] }
+    if ($exe -and (Test-Path -LiteralPath $exe)) {
+        Write-VulnLog ("Removing 7-Zip {0} {1} via {2}" -f $Entry.DisplayVersion, $Entry.Arch, $exe)
+        $p = Start-Process -FilePath $exe -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+        return [int]$p.ExitCode
+    }
+    throw ("No quiet uninstall for {0} {1}" -f $Entry.DisplayName, $Entry.DisplayVersion)
+}
+
+function Invoke-SevenZipKeepLatest {
+    param(
+        [string]$WingetPath,
+        [switch]$CheckOnly,
+        [switch]$Force
+    )
+
+    $before = @(Get-SevenZipInstalls)
+    if ($before.Count -eq 0) {
+        Add-Result -Id 'SevenZip' -Name '7-Zip' -Status 'SKIPPED_NOT_INSTALLED' `
+            -Detail 'Not detected in uninstall registry.'
+        return
+    }
+
+    $listText = Format-SevenZipList -Installs $before
+    Write-VulnLog ("7-Zip installs: {0}" -f $listText)
+    $keeper = Select-SevenZipKeeper -Installs $before
+    $keepKey = if ($keeper) { Get-SevenZipKey -Entry $keeper } else { '' }
+    $extra = @($before | Where-Object { (Get-SevenZipKey -Entry $_) -ne $keepKey })
+
+    $state = $null
+    $needsWinget = $false
+    if ($WingetPath) {
+        $state = Get-WingetPackageState -WingetPath $WingetPath -WingetId '7zip.7zip'
+        $needsWinget = [bool]($state.NeedsUpdate -or $Force -or -not $state.Present)
+    }
+    $stale = ($extra.Count -gt 0) -or (-not $keeper)
+
+    if ($CheckOnly) {
+        if (-not $WingetPath) {
+            $detail = "Installed: $listText. winget is missing, so the kept copy cannot be upgraded."
+            if ($keeper) { $detail += " Would keep $($keeper.Version) $($keeper.Arch)." }
+            if ($extra.Count -gt 0) { $detail += " Would remove $($extra.Count) other install(s)." }
+            Add-Result -Id 'SevenZip' -Name '7-Zip' -Status 'MANUAL' -Detail $detail -InstalledVersion $listText
+            return
+        }
+        if ($stale -or $needsWinget) {
+            $detail = "Installed: $listText."
+            if ($keeper) { $detail += " Would keep $($keeper.Version) $($keeper.Arch)." }
+            if ($extra.Count -gt 0) { $detail += " Would remove $($extra.Count) other install(s)." }
+            if ($needsWinget -and $state.Available) { $detail += " winget target $($state.Available)." }
+            elseif ($needsWinget -and -not $state.Present) { $detail += ' Not tracked by winget; would install 7zip.7zip, then remove older copies.' }
+            Add-Result -Id 'SevenZip' -Name '7-Zip' -Status 'UPDATE_AVAILABLE' -Detail $detail `
+                -InstalledVersion $listText -TargetVersion $state.Available
+        }
+        else {
+            Add-Result -Id 'SevenZip' -Name '7-Zip' -Status 'UP_TO_DATE' `
+                -Detail ("Single current install: {0}." -f $listText) -InstalledVersion $listText
+        }
+        return
+    }
+
+    if ($WingetPath -and $needsWinget) {
+        if ($state.Present) {
+            $up = Update-WingetPackage -WingetPath $WingetPath -WingetId '7zip.7zip'
+            Write-VulnLog ("7-Zip winget upgrade exit {0}" -f $up.ExitCode)
+        }
+        else {
+            $up = Install-WingetPackage -WingetPath $WingetPath -WingetId '7zip.7zip'
+            Write-VulnLog ("7-Zip winget install exit {0}" -f $up.ExitCode)
+        }
+    }
+
+    $current = @(Get-SevenZipInstalls)
+    $keeper = Select-SevenZipKeeper -Installs $current
+    if (-not $keeper) {
+        Add-Result -Id 'SevenZip' -Name '7-Zip' -Status 'ERROR' `
+            -Detail ("Could not identify a latest 7-Zip to keep. Installed: {0}" -f (Format-SevenZipList -Installs $current)) `
+            -InstalledVersion (Format-SevenZipList -Installs $current)
+        return
+    }
+
+    $keepKey = Get-SevenZipKey -Entry $keeper
+    $removed = 0
+    $failed = 0
+    foreach ($copy in @($current)) {
+        if ((Get-SevenZipKey -Entry $copy) -eq $keepKey) { continue }
+        if (-not $copy.Version) {
+            Write-VulnLog ("Skipping uninstall of {0}; version could not be parsed." -f $copy.DisplayName) 'WARN'
+            $failed++
+            continue
+        }
+        try {
+            $code = Uninstall-SevenZipCopy -Entry $copy
+            if ($code -in 0, 3010, 1641, 1605) { $removed++ }
+            else {
+                Write-VulnLog ("7-Zip uninstall exit {0} for {1} {2}" -f $code, $copy.DisplayVersion, $copy.Arch) 'WARN'
+                $failed++
+            }
+        }
+        catch {
+            Write-VulnLog $_.Exception.Message 'WARN'
+            $failed++
+        }
+    }
+
+    $left = @(Get-SevenZipInstalls)
+    $leftText = Format-SevenZipList -Installs $left
+    $stillBehind = $false
+    if ($WingetPath -and $needsWinget) {
+        $after = Get-WingetPackageState -WingetPath $WingetPath -WingetId '7zip.7zip'
+        $stillBehind = [bool]($after.NeedsUpdate -or -not $after.Present)
+    }
+    if ($failed -gt 0 -or $left.Count -gt 1 -or $stillBehind) {
+        Add-Result -Id 'SevenZip' -Name '7-Zip' -Status 'UPDATE_AVAILABLE' `
+            -Detail ("Removed {0} older install(s); {1} could not be removed. Remaining: {2}. Update pending: {3}" -f $removed, $failed, $leftText, $stillBehind) `
+            -InstalledVersion $leftText
+        return
+    }
+
+    if (-not $WingetPath) {
+        Add-Result -Id 'SevenZip' -Name '7-Zip' -Status 'MANUAL' `
+            -Detail ("winget is missing, so the kept copy was not upgraded. Remaining: {0}. Removed {1} older install(s)." -f $leftText, $removed) `
+            -InstalledVersion $leftText
+        return
+    }
+
+    $status = if ($needsWinget -or $removed -gt 0) { 'UPDATED' } else { 'UP_TO_DATE' }
+    Add-Result -Id 'SevenZip' -Name '7-Zip' -Status $status `
+        -Detail ("Remaining: {0}. Removed {1} older install(s)." -f $leftText, $removed) `
+        -InstalledVersion $leftText
+}
+
 function Get-MyToolsScript {
     param([Parameter(Mandatory)][string]$RelativePath)
     $uri = "https://api.github.com/repos/$MyToolsRepo/contents/$RelativePath`?ref=$MyToolsRef"
@@ -720,6 +984,10 @@ foreach ($item in $selected) {
         }
 
         'Winget' {
+            if ($item.Id -eq 'SevenZip') {
+                Invoke-SevenZipKeepLatest -WingetPath $winget -CheckOnly:$CheckOnly -Force:$Force
+                break
+            }
             $hits = Find-InstalledMatches -CatalogItem $item -InstalledApps $installedApps
             if ($hits.Count -eq 0) {
                 Add-Result -Id $item.Id -Name $item.Name -Status 'SKIPPED_NOT_INSTALLED' `
