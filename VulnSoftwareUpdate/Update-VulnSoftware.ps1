@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.5'
+$ScriptVersion = '1.4.6'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -557,7 +557,8 @@ function Get-UninstallAppEntries {
             }
         }
     }
-    return , @($apps)
+    # Do not use "return , $array": @( ) on PS 5.1 nests it and property access becomes System.Object[].
+    return $apps
 }
 
 function ConvertTo-SevenZipVersion {
@@ -594,7 +595,7 @@ function Get-SevenZipInstalls {
                 QuietUninstallString = $app.QuietUninstallString
             })
     }
-    return , $rows.ToArray()
+    return $rows.ToArray()
 }
 
 function Get-SevenZipKey {
@@ -605,11 +606,16 @@ function Get-SevenZipKey {
 
 function Format-SevenZipList {
     param($Installs)
-    $parts = foreach ($item in @($Installs)) {
-        $ver = if ($item.Version) { $item.Version.ToString() } elseif ($item.DisplayVersion) { $item.DisplayVersion } else { 'unknown' }
-        '{0} {1}' -f $ver, $item.Arch
+    $parts = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @($Installs)) {
+        if ($null -eq $item -or $item -is [System.Array]) { continue }
+        $ver = if ($item.Version) { [string]$item.Version } elseif ($item.DisplayVersion) { [string]$item.DisplayVersion } else { 'unknown' }
+        $arch = if ($item.Arch) { [string]$item.Arch } else { 'unknown' }
+        $name = if ($item.DisplayName) { [string]$item.DisplayName } else { '7-Zip' }
+        [void]$parts.Add(('{0} {1} ({2})' -f $name, $ver, $arch))
     }
-    return (@($parts) -join ', ')
+    if ($parts.Count -eq 0) { return 'none' }
+    return ($parts.ToArray() -join ', ')
 }
 
 function Select-SevenZipKeeper {
