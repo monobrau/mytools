@@ -17,7 +17,7 @@ Matches stay specific (`Ask Toolbar`, `Ask.com`, `AskToolbar`, `APN`). A bare `A
 | `AppSuitePdf` | AppSuite-PDF.msi / TamperedChef `PDF Editor` / ManualFinderApp (not Foxit or Adobe) |
 | `WaveBrowser` | Wavesor Wave Browser (`WaveBrowser-StartAtLogin`) |
 | `OneLaunch` | OneLaunch / OneStart launcher adware |
-| `FakePdfConverter` | ConvertMate, Easy2Convert, UpdateRetriever, and related malvertising converter installers |
+| `FakePdfConverter` | ConvertMate, Easy2Convert, UpdateRetriever, PDFConvertSetup, and related malvertising converter installers |
 | `BrowserAssistant` | Per-user `AppData\Roaming\Browser Assistant` (Blaze Media helper PUP), updater, `BAv*.msi`, `NetTwoUpdater` |
 
 ```powershell

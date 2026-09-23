@@ -66,7 +66,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.3.0'
+$ScriptVersion = '1.3.1'
 $script:ExitCode = 0
 $script:Findings = New-Object System.Collections.Generic.List[object]
 $script:Seen = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -255,19 +255,19 @@ function Get-PupCatalog {
 
         FakePdfConverter = @{
             Id          = 'FakePdfConverter'
-            DisplayName = 'Fake PDF/file converter installers (ConvertMate / Easy2Convert)'
-            Notes       = 'Malvertising converters that drop UpdateRetriever.exe (or similar) under LocalAppData and a +1 day scheduled task. Not Adobe, Foxit, Nitro, or PDF24.'
-            FolderNameMatch = '(?i)^ConvertMate$|^Easy2Convert$|^InfiniteDocs$|^PowerDoc$|^PdfSkills$|^PdfClick$|^ZapPdf$|^OneZip$|^ZipMate(Pro)?$|^NotaWord$|^CrystalPdf$|^PdfSpark$|^ConvertMaster$'
-            LooseFileMatch  = '(?i)^(ConvertMate|Easy2Convert|InfiniteDocs|PowerDoc|PdfSkills|PdfClick|ZapPdf|OneZip|ZipMate(Pro)?|NotaWord|CrystalPdf|PdfSpark|ConvertMaster|UpdateRetriever)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
-            TaskMatch                 = '(?i)Easy2ConvertTask|Crystal_updater|PDC_Update|ConvertMate|UpdateRetriever'
-            ServiceMatch              = '(?i)ConvertMate|Easy2Convert'
-            UninstallDisplayNameMatch = '(?i)^ConvertMate$|^Easy2Convert$|^InfiniteDocs$|^PowerDoc$|^PdfSkills$|^PdfClick$|^ZapPdf$|^OneZip$|^ZipMate(Pro)?$|^NotaWord$|^CrystalPdf$|^PdfSpark$|^ConvertMaster$'
+            DisplayName = 'Fake PDF/file converter installers (ConvertMate / Easy2Convert / PDFConvertSetup)'
+            Notes       = 'Malvertising converters that drop UpdateRetriever.exe or PDFConvertSetup under LocalAppData, Downloads, or Desktop, plus a +1 day scheduled task. Not Adobe, Foxit, Nitro, or PDF24.'
+            FolderNameMatch = '(?i)^ConvertMate$|^Easy2Convert$|^InfiniteDocs$|^PowerDoc$|^PdfSkills$|^PdfClick$|^ZapPdf$|^OneZip$|^ZipMate(Pro)?$|^NotaWord$|^CrystalPdf$|^PdfSpark$|^ConvertMaster$|^PDFConvertSetup$'
+            LooseFileMatch  = '(?i)^(ConvertMate|Easy2Convert|InfiniteDocs|PowerDoc|PdfSkills|PdfClick|ZapPdf|OneZip|ZipMate(Pro)?|NotaWord|CrystalPdf|PdfSpark|ConvertMaster|UpdateRetriever|PDFConvertSetup)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            TaskMatch                 = '(?i)Easy2ConvertTask|Crystal_updater|PDC_Update|ConvertMate|UpdateRetriever|PDFConvertSetup'
+            ServiceMatch              = '(?i)ConvertMate|Easy2Convert|PDFConvertSetup'
+            UninstallDisplayNameMatch = '(?i)^ConvertMate$|^Easy2Convert$|^InfiniteDocs$|^PowerDoc$|^PdfSkills$|^PdfClick$|^ZapPdf$|^OneZip$|^ZipMate(Pro)?$|^NotaWord$|^CrystalPdf$|^PdfSpark$|^ConvertMaster$|^PDFConvertSetup$'
             UninstallPublisherMatch   = '(?i)^BLUE TAKIN|^ConvertMate$|^Easy2Convert$'
             SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(conmateapp|convertyfileapp|ez2convertapp|powerdocapp|infinitedocsapp|convertmasterapp|pdfskillsapp|pdfclickapp|zappdfapp|onezipapp|crystalpdf|pdfsparkware|zipmatepro|notawordapp)\.com'
             SearchDisplayNameMatch    = '(?i)ConvertMate|Easy2Convert'
-            RunValueMatch             = '(?i)ConvertMate|Easy2Convert|UpdateRetriever|\\ConvertMate\\'
+            RunValueMatch             = '(?i)ConvertMate|Easy2Convert|UpdateRetriever|PDFConvertSetup|\\ConvertMate\\'
             BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(conmateapp|convertyfileapp|ez2convertapp|powerdocapp|infinitedocsapp|convertmasterapp|pdfskillsapp|pdfclickapp|zappdfapp|onezipapp|crystalpdf|pdfsparkware|zipmatepro|notawordapp)\.com'
-            ProcessMatch              = '(?i)^ConvertMate$|^Easy2Convert$|^UpdateRetriever$|^InfiniteDocs$|^PowerDoc$'
+            ProcessMatch              = '(?i)^ConvertMate$|^Easy2Convert$|^UpdateRetriever$|^InfiniteDocs$|^PowerDoc$|^PDFConvertSetup$'
             SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
         }
 
