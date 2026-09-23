@@ -87,6 +87,48 @@ Tools := [
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
         "Name", "Vulnerable software updater (catalog)",
         "Summary", "Checks/updates common third-party apps (winget + M365/HPSA/.NET/VC++ 2005-2013 delegates). Browsers are opt-in.",
+        "Affects", "
+(Join`r`n
+Scan skips anything not installed. Apply updates only what is installed and behind.
+Microsoft 365 Apps (Click-to-Run)
+HP Support Assistant (Windows 10 uninstall, Windows 11 update)
+.NET 6+ Runtime / Desktop / ASP.NET / SDK (same major only)
+Visual C++ 2005-2013 redistributables
+ShareX
+Adobe Acrobat / Reader
+Visual Studio Code
+Git
+GIMP (stays on 2.x)
+Winamp
+Greenshot
+Teams Network Assessment Tool (report only)
+WinRAR
+Foxit PDF Reader
+7-Zip (update, then remove every older copy)
+Notepad++
+Visual C++ 2015+ x64 and x86
+PuTTY
+WinSCP
+VLC
+Edge WebView2 Runtime
+PowerShell 7
+FileZilla
+KeePass
+KeePassXC
+SumatraPDF
+Azure CLI
+GitHub CLI
+TreeSize Free
+PowerToys
+Windows Terminal
+AWS CLI
+Sysinternals Suite
+---
+Opt-in only, when Include browsers is checked:
+Google Chrome
+Microsoft Edge
+Mozilla Firefox
+)",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/VulnSoftwareUpdate",
         "Fetch", "Contents",
         "Path", "VulnSoftwareUpdate",
@@ -251,6 +293,15 @@ Tools := [
         "Folder", "HP",
         "Name", "HP bloat / Wolf (mark05e gist)",
         "Summary", "Downloads mark05e's Remove-HPbloatware.ps1 from GitHub gist and runs it. Removes HP AppX + Wolf / Sure Click / Sure Run / HPSA AppX. No dry-run.",
+        "Affects", "
+(Join`r`n
+No dry-run. One run removes:
+HP AppX / bloat packages the gist targets
+HP Wolf Security
+Sure Click
+Sure Run
+HP Support Assistant AppX
+)",
         "DocsUrl", "https://gist.github.com/mark05e/a79221b4245962a477a49eb281d97388",
         "Fetch", "IrmOutFile",
         "Url", "https://gist.githubusercontent.com/mark05e/a79221b4245962a477a49eb281d97388/raw/Remove-HPbloatware.ps1",
@@ -525,12 +576,23 @@ Tools := [
         "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
         "Name", "PUP remnant cleanup",
         "Summary", "Dry-run the catalog (Ask Toolbar, MediaArena, AppSuite PDF, Wave, OneLaunch, fake PDF installers, Browser Assistant) and report what is on the host. Clean up deletes all matched remnants. Chromium/Firefox prefs are reported only. Family dropdown limits to one catalog id.",
+        "Affects", "
+(Join`r`n
+Scan reports matches. Remove deletes folders, tasks, services, uninstall entries, and leftover installers. Browser preference files are reported only.
+Ask Toolbar — Ask.com / Ask Toolbar / APN
+MediaArena — PdfPower, PdfMagic, and related converters
+AppSuite PDF — AppSuite-PDF, PDF Editor, ManualFinder (not Foxit or Adobe)
+Wave Browser
+OneLaunch / OneStart
+Fake PDF converters — ConvertMate, Easy2Convert, UpdateRetriever, PDFConvertSetup
+Browser Assistant — Blaze Media helper, updater, BAv MSI
+)",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PupRemnantCleanup",
         "Fetch", "Contents",
         "Path", "PupRemnantCleanup",
         "Script", "Invoke-PupRemnantCleanup.ps1",
         "UaPrefix", "PupRemnantCleanup-bootstrap",
-        "UaVer", "1.3.0",
+        "UaVer", "1.3.1",
         "TimeoutScan", 180000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly Remediate ProductList NoExit",
@@ -732,6 +794,8 @@ ShowGui(*) {
     gCtrls["HelpBody"] := gGui.Add("Edit", "w" UiContentW " r16 ReadOnly vHelpBody", HelpIntroText)
     gCtrls["BtnDocs"] := gGui.Add("Button", "w200", "Open docs in browser")
     gCtrls["BtnDocs"].OnEvent("Click", (*) => OpenSelectedToolDocs())
+    gCtrls["BtnAffects"] := gGui.Add("Button", "w200", "What this affects")
+    gCtrls["BtnAffects"].OnEvent("Click", (*) => ShowAffectsPopup())
 
     gCtrls["LblMode"] := gGui.Add("Text", "Section", "Mode")
     ; Group: first radio in each set — required so Mode and Paste format stay separate
@@ -835,7 +899,7 @@ ShowGui(*) {
 
     ; Right-column stack order (only Visible controls advance Y). Left = tool tree.
     gFlowKeys := [
-        "LblAbout", "Summary", "HelpBody", "BtnDocs",
+        "LblAbout", "Summary", "HelpBody", "BtnDocs", "BtnAffects",
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
@@ -908,7 +972,7 @@ ReflowGui() {
             ch := 48
         else if (key = "Status")
             ch := 36
-        else if (key = "BtnDocs") {
+        else if (key = "BtnDocs" || key = "BtnAffects") {
             ch := 26
             cw := 200
         }
@@ -1076,7 +1140,7 @@ RefreshOptionEnable(*) {
             "LblAutomateToken", "AutomateToken", "LblAutomateClient", "AutomateClientName",
             "LblAutomateLocation", "AutomateLocationName", "LblAutomateDomain", "AutomateDomain",
             "LblAutomateOu", "AutomateTargetOu", "AutomateLinkToDomain", "LblWebrootKeyCode", "WebrootKeyCode",
-            "LblPaste", "FmtCommands", "FmtBackstage", "Note"
+            "LblPaste", "FmtCommands", "FmtBackstage", "Note", "BtnAffects"
         ]
         for key in hideKeys
             SetCtrlShown(gCtrls[key], false)
@@ -1303,6 +1367,7 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["LblAbout"], true)
     SetCtrlShown(gCtrls["Summary"], true)
     SetCtrlShown(gCtrls["BtnDocs"], ToolDocsUrl(t) != "")
+    SetCtrlShown(gCtrls["BtnAffects"], ToolGet(t, "Affects", "") != "")
 
     note := ToolGet(t, "Note", "")
     gCtrls["Note"].Value := note
@@ -1326,6 +1391,39 @@ ToolDocsUrl(tool) {
     if (repo != "")
         return "https://github.com/" owner "/" repo
     return ""
+}
+
+ShowAffectsPopup(*) {
+    global gGui, gCtrls, AppName
+    tool := SelectedTool()
+    body := Trim(ToolGet(tool, "Affects", ""))
+    if (body = "")
+        return
+    scope := ""
+    if ToolHasFlag(tool, "Product") && CtrlActive(gCtrls["Product"]) {
+        prod := Trim(gCtrls["Product"].Value)
+        if (prod != "")
+            scope .= "This copy is limited to catalog id(s): " prod "`r`n`r`n"
+    }
+    if ToolHasFlag(tool, "ProductList") && CtrlActive(gCtrls["PupFamily"]) {
+        fam := Trim(gCtrls["PupFamily"].Text)
+        if (fam != "" && fam != "All on host")
+            scope .= "This copy is limited to family: " fam "`r`n`r`n"
+    }
+    if ToolHasFlag(tool, "IncludeBrowsers") {
+        if CtrlActive(gCtrls["IncludeBrowsers"]) && gCtrls["IncludeBrowsers"].Value
+            scope .= "Include browsers is checked, so Chrome, Edge, and Firefox are in this copy.`r`n`r`n"
+        else
+            scope .= "Include browsers is off, so Chrome, Edge, and Firefox are not in this copy.`r`n`r`n"
+    }
+    pop := Gui("+Owner" gGui.Hwnd " +AlwaysOnTop", ToolGet(tool, "Name", AppName))
+    pop.SetFont("s9", "Segoe UI")
+    pop.Add("Edit", "w520 r24 ReadOnly", scope body)
+    btn := pop.Add("Button", "Default w80", "OK")
+    btn.OnEvent("Click", (*) => pop.Destroy())
+    pop.OnEvent("Escape", (*) => pop.Destroy())
+    pop.OnEvent("Close", (*) => pop.Destroy())
+    pop.Show()
 }
 
 OpenSelectedToolDocs(*) {
