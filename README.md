@@ -13,6 +13,7 @@ Public collection of work tools and scripts.
 | [ForensicInvestigator](ForensicInvestigator/) | Sysinternals + Harkins EVTX + all-user Downloads (Zone.ID), PS history, hives, browser History, admins/RMM, Defender; `C:\SecurityReports` |
 | [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
 | [M365AppsUpdate](M365AppsUpdate/) | Silent M365 Apps Click-to-Run check/update; clear up-to-date verdict; does not close Office apps by default |
+| [RmmAgentDeploy](RmmAgentDeploy/) | Coverage CSV of Automate/Huntress on recent AD computers, then a non-GPO push to hosts that are missing one |
 | [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep (Ask Toolbar, MediaArena/PDF converters, AppSuite, Wave, OneLaunch, Browser Assistant). Dry-run by default; `-Remove` deletes remnants |
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
