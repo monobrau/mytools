@@ -43,6 +43,8 @@ Built for endpoints that may **not** have RMM patch management or Intune — Scr
 | Windows Terminal | `WindowsTerminal` | winget `Microsoft.WindowsTerminal` |
 | AWS CLI | `AwsCli` | winget `Amazon.AWSCLI` |
 | Sysinternals Suite | `SysinternalsSuite` | winget `Microsoft.Sysinternals.Suite` |
+| UltraVNC | `UltraVNC` | winget `uvncbvba.UltraVNC` |
+| Python 3.13 | `Python313` | winget `Python.Python.3.13` (does not jump to 3.14) |
 | Google Chrome | `Chrome` | **Opt-in** — `-IncludeBrowsers` or `-Product Chrome` (may close sessions) |
 | Microsoft Edge | `Edge` | **Opt-in** — `-IncludeBrowsers` or `-Product Edge` (may close sessions) |
 | Mozilla Firefox | `Firefox` | **Opt-in** — `-IncludeBrowsers` or `-Product Firefox` (may close sessions) |
@@ -74,7 +76,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.7'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.8'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes

@@ -124,6 +124,8 @@ PowerToys
 Windows Terminal
 AWS CLI
 Sysinternals Suite
+UltraVNC
+Python 3.13 (stays on 3.13; does not jump to 3.14)
 ---
 Opt-in only, when Include browsers is checked:
 Google Chrome
@@ -135,7 +137,7 @@ Mozilla Firefox
         "Path", "VulnSoftwareUpdate",
         "Script", "Update-VulnSoftware.ps1",
         "UaPrefix", "VulnSoftwareUpdate-bootstrap",
-        "UaVer", "1.4.7",
+        "UaVer", "1.4.8",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers Product NoExit"

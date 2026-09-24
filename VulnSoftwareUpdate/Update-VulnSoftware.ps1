@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.7'
+$ScriptVersion = '1.4.8'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -294,6 +294,16 @@ function Get-VulnCatalog {
         [pscustomobject]@{
             Id = 'SysinternalsSuite'; Name = 'Sysinternals Suite'; Method = 'Winget'; WingetId = 'Microsoft.Sysinternals.Suite'
             Match = @('Sysinternals Suite')
+        }
+        [pscustomobject]@{
+            Id = 'UltraVNC'; Name = 'UltraVNC'; Method = 'Winget'; WingetId = 'uvncbvba.UltraVNC'
+            Match = @('^UltraVNC', '^UltraVnc')
+            Notes = 'In-place winget upgrade. Does not change the VNC password.'
+        }
+        [pscustomobject]@{
+            Id = 'Python313'; Name = 'Python 3.13'; Method = 'Winget'; WingetId = 'Python.Python.3.13'
+            Match = @('Python 3\.13')
+            Notes = 'Stays on 3.13. Does not install 3.14 or remove older majors.'
         }
         # Browsers — opt-in only (-IncludeBrowsers or explicit -Product); may close sessions
         [pscustomobject]@{
