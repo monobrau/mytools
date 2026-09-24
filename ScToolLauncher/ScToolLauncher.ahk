@@ -33,7 +33,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product ProductList
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
-;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall AutomateGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
+;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
 ;        BackstageOnly AutoReboot Help
 HelpIntroText := Format("
 (
@@ -50,7 +50,7 @@ How to use
 5. Paste into ScreenConnect Commands (recommended) or PowerShell.
 
 Tips
-- Untested means the tool has not been validated yet.
+- Untrusted means the tool has not been validated yet.
 - After you edit this script, use Reload. {1} does not reload the catalog.
 - Tokens and keys are only in the snippet you copy — they are not saved here.
 )", HotkeyLabel)
@@ -62,7 +62,7 @@ CategoryOrder := [
     "Agents — SentinelOne, ConnectSecure, Huntress",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — Inky/IPW transport rules (EXO admin)",
-    "Untested",
+    "Untrusted",
     "Client-specific"
 ]
 
@@ -276,6 +276,22 @@ Mozilla Firefox
         "Flags", "ScanOnly Domain"
     ),
     Map(
+        "Category", "Untrusted",
+        "Name", "Deploy client via GPO",
+        "Summary", "Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task. Skips PCs that already have the client service.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectGpoDeploy",
+        "Fetch", "Contents",
+        "Path", "ScreenConnectGpoDeploy",
+        "Script", "Install-ScreenConnectGPO.ps1",
+        "UaPrefix", "ScreenConnectGpoDeploy-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 600000,
+        "Flags", "ScreenConnectGpo AlwaysNote",
+        "Note", "Run elevated as Domain Admin on the client DC or RSAT box. Use the MSI from your ScreenConnect instance. Dry-run first. Pilot an OU before a domain link.",
+        "ClipboardNote", "NOTE: Run on a DC/RSAT box as Domain Admin. Dry-run first. The MSI path is on that machine. Workstations install at the next gpupdate when the client service is missing."
+    ),
+    Map(
         "Category", "ScreenConnect — GPO/MSI finder, temp cleanup",
         "Name", "Temp file cleanup",
         "Summary", "Removes stale ScreenConnect temp leftovers; reports CVE-2026-84869 client version; cleans Huntress staging IOCs. Dry-run first.",
@@ -382,7 +398,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Elevated PowerShell / SYSTEM only. Scan does not change anything. Apply is a full RTP repair (services + policy + preferences)."
     ),
     Map(
-        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Category", "Untrusted",
         "Folder", "Webroot",
         "Name", "Webroot uninstall GPO",
         "Summary", "Create a GPO Immediate Task: optional silent WRSA /autouninstall, then leftover sweep (services, folders, registry, drivers). Run on the client DC or RSAT box.",
@@ -523,7 +539,7 @@ HP Support Assistant AppX
         "Note", "Prefer elevated PowerShell if the reboot was armed as SYSTEM."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Category", "Untrusted",
         "Name", "Automate GPO deploy",
         "Summary", "Download the location MSI+MST, bake the transform, stage on NETLOGON, and create a startup-script GPO. Run on the client DC or RSAT box.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/AutomateGpoDeploy",
@@ -634,9 +650,9 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Note", "Run after Connect-ExchangeOnline on an admin workstation. Scan lists; Delete removes with no Read-Host prompt.",
         "ClipboardNote", "NOTE: Requires Connect-ExchangeOnline in this session. Delete has no interactive confirm — Scan first."
     ),
-    ; --- Untested (move here until validated) ---
+    ; --- Untrusted (move here until validated) ---
     Map(
-        "Category", "Untested",
+        "Category", "Untrusted",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
@@ -1199,6 +1215,7 @@ RefreshOptionEnable(*) {
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
     showAutomate := ToolHasFlag(t, "AutomateGpo")
+    showScGpo := ToolHasFlag(t, "ScreenConnectGpo")
     showWebrootGpo := ToolHasFlag(t, "WebrootUninstallGpo")
     scanOnly := ToolHasFlag(t, "ScanOnly")
 
@@ -1274,13 +1291,19 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["AutomateServer"], showAutomate)
     SetCtrlShown(gCtrls["LblAutomateLocationId"], showAutomate)
     SetCtrlShown(gCtrls["AutomateLocationId"], showAutomate)
-    SetCtrlShown(gCtrls["LblAutomateToken"], showAutomate)
-    SetCtrlShown(gCtrls["AutomateToken"], showAutomate)
-    SetCtrlShown(gCtrls["LblAutomateClient"], showAutomate)
-    SetCtrlShown(gCtrls["AutomateClientName"], showAutomate)
+    gCtrls["LblAutomateToken"].Text := "Windows MSI installer token — not saved; paste each time"
+    gCtrls["LblAutomateClient"].Text := "Client name (GPO / NETLOGON folder)"
+    if (showScGpo) {
+        gCtrls["LblAutomateToken"].Text := "Path to the ScreenConnect client MSI on this DC"
+        gCtrls["LblAutomateClient"].Text := "Name for the GPO and NETLOGON folder"
+    }
+    SetCtrlShown(gCtrls["LblAutomateToken"], showAutomate || showScGpo)
+    SetCtrlShown(gCtrls["AutomateToken"], showAutomate || showScGpo)
+    SetCtrlShown(gCtrls["LblAutomateClient"], showAutomate || showScGpo)
+    SetCtrlShown(gCtrls["AutomateClientName"], showAutomate || showScGpo)
     SetCtrlShown(gCtrls["LblAutomateLocation"], showAutomate)
     SetCtrlShown(gCtrls["AutomateLocationName"], showAutomate)
-    showGpoDomain := showAutomate || showWebrootGpo
+    showGpoDomain := showAutomate || showScGpo || showWebrootGpo
     SetCtrlShown(gCtrls["LblAutomateDomain"], showGpoDomain)
     SetCtrlShown(gCtrls["AutomateDomain"], showGpoDomain)
     SetCtrlShown(gCtrls["LblAutomateOu"], showGpoDomain)
@@ -1372,6 +1395,10 @@ RefreshOptionEnable(*) {
     }
     if ToolHasFlag(t, "AutomateGpo") {
         gCtrls["ModeScan"].Text := "Dry-run (transform only)"
+        gCtrls["ModeUpdate"].Text := "Stage MSI + create GPO"
+    }
+    if ToolHasFlag(t, "ScreenConnectGpo") {
+        gCtrls["ModeScan"].Text := "Dry-run (no SYSVOL write)"
         gCtrls["ModeUpdate"].Text := "Stage MSI + create GPO"
     }
     if ToolHasFlag(t, "WebrootUninstallGpo") {
@@ -1613,6 +1640,25 @@ BuildSwitches(tool, isScan, isCommands) {
             sw.Push("-ClientName '" StrReplace(client, "'", "''") "'")
         if (locName != "")
             sw.Push("-LocationName '" StrReplace(locName, "'", "''") "'")
+        if (domain != "")
+            sw.Push("-Domain '" StrReplace(domain, "'", "''") "'")
+        if isScan
+            sw.Push("-DryRun")
+        else if (targetOu != "")
+            sw.Push("-TargetOU '" StrReplace(targetOu, "'", "''") "'")
+        else if CtrlActive(gCtrls["AutomateLinkToDomain"]) && gCtrls["AutomateLinkToDomain"].Value
+            sw.Push("-LinkToDomain")
+    }
+
+    if ToolHasFlag(tool, "ScreenConnectGpo") {
+        msi := Trim(gCtrls["AutomateToken"].Value)
+        client := Trim(gCtrls["AutomateClientName"].Value)
+        domain := Trim(gCtrls["AutomateDomain"].Value)
+        targetOu := Trim(gCtrls["AutomateTargetOu"].Value)
+        if (msi != "")
+            sw.Push("-MsiPath '" StrReplace(msi, "'", "''") "'")
+        if (client != "")
+            sw.Push("-ClientName '" StrReplace(client, "'", "''") "'")
         if (domain != "")
             sw.Push("-Domain '" StrReplace(domain, "'", "''") "'")
         if isScan

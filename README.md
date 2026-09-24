@@ -15,6 +15,7 @@ Public collection of work tools and scripts.
 | [M365AppsUpdate](M365AppsUpdate/) | Silent M365 Apps Click-to-Run check/update; clear up-to-date verdict; does not close Office apps by default |
 | [RmmAgentDeploy](RmmAgentDeploy/) | Coverage CSV of Automate/Huntress on recent AD computers, then a non-GPO push to hosts that are missing one |
 | [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep (Ask Toolbar, MediaArena/PDF converters, AppSuite, Wave, OneLaunch, Browser Assistant). Dry-run by default; `-Remove` deletes remnants |
+| [ScreenConnectGpoDeploy](ScreenConnectGpoDeploy/) | Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task GPO |
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet/VC++ 2005-2013 delegates + winget; ScreenConnect `#!ps`) |
