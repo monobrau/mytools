@@ -277,7 +277,7 @@ Mozilla Firefox
     ),
     Map(
         "Category", "Untested",
-        "Name", "Deploy client via GPO",
+        "Name", "Deploy ScreenConnect client via GPO",
         "Summary", "Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task. Skips PCs that already have the client service.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectGpoDeploy",
         "Fetch", "Contents",
