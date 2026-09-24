@@ -91,9 +91,9 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | --- | --- |
 | Inky / IPW transport rules | mytools — requires `Connect-ExchangeOnline` on an admin workstation; Scan lists, Delete removes (no `Read-Host`) |
 
-### Untrusted
+### Untested
 
-Park tools here until they have been validated on a host. Add `"Category", "Untrusted"` on the tool Map.
+Park tools here until they have been validated on a host. Add `"Category", "Untested"` on the tool Map.
 
 | Tool | Source |
 | --- | --- |

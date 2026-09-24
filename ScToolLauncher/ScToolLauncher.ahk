@@ -50,7 +50,7 @@ How to use
 5. Paste into ScreenConnect Commands (recommended) or PowerShell.
 
 Tips
-- Untrusted means the tool has not been validated yet.
+- Untested means the tool has not been validated yet.
 - After you edit this script, use Reload. {1} does not reload the catalog.
 - Tokens and keys are only in the snippet you copy — they are not saved here.
 )", HotkeyLabel)
@@ -62,7 +62,7 @@ CategoryOrder := [
     "Agents — SentinelOne, ConnectSecure, Huntress",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — Inky/IPW transport rules (EXO admin)",
-    "Untrusted",
+    "Untested",
     "Client-specific"
 ]
 
@@ -276,7 +276,7 @@ Mozilla Firefox
         "Flags", "ScanOnly Domain"
     ),
     Map(
-        "Category", "Untrusted",
+        "Category", "Untested",
         "Name", "Deploy client via GPO",
         "Summary", "Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task. Skips PCs that already have the client service.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectGpoDeploy",
@@ -398,7 +398,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Elevated PowerShell / SYSTEM only. Scan does not change anything. Apply is a full RTP repair (services + policy + preferences)."
     ),
     Map(
-        "Category", "Untrusted",
+        "Category", "Untested",
         "Folder", "Webroot",
         "Name", "Webroot uninstall GPO",
         "Summary", "Create a GPO Immediate Task: optional silent WRSA /autouninstall, then leftover sweep (services, folders, registry, drivers). Run on the client DC or RSAT box.",
@@ -539,7 +539,7 @@ HP Support Assistant AppX
         "Note", "Prefer elevated PowerShell if the reboot was armed as SYSTEM."
     ),
     Map(
-        "Category", "Untrusted",
+        "Category", "Untested",
         "Name", "Automate GPO deploy",
         "Summary", "Download the location MSI+MST, bake the transform, stage on NETLOGON, and create a startup-script GPO. Run on the client DC or RSAT box.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/AutomateGpoDeploy",
@@ -650,9 +650,9 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Note", "Run after Connect-ExchangeOnline on an admin workstation. Scan lists; Delete removes with no Read-Host prompt.",
         "ClipboardNote", "NOTE: Requires Connect-ExchangeOnline in this session. Delete has no interactive confirm — Scan first."
     ),
-    ; --- Untrusted (move here until validated) ---
+    ; --- Untested (move here until validated) ---
     Map(
-        "Category", "Untrusted",
+        "Category", "Untested",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
