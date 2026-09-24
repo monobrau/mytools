@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.6'
+$ScriptVersion = '1.4.7'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -132,6 +132,14 @@ function Get-VulnCatalog {
             # Win10: HPSA SoftPaqs stay below patched builds (EOL/vulnerable) -> default uninstall.
             # Win11: default update to patched SoftPaq. Pass -CheckOnly to assess only.
             Notes = 'Win10 uninstall by default (EOL/vulnerable); Win11 update. Use -CheckOnly to skip changes.'
+        }
+        [pscustomobject]@{
+            Id = 'DellSupportAssist'; Name = 'Dell SupportAssist'
+            Method = 'Delegate'
+            DelegatePath = 'DellSupportAssistUpdate/Update-DellSupportAssist.ps1'
+            ResultVariable = 'DellSupportAssistUpdateResultCode'
+            Match = @('^Dell SupportAssist$', '^SupportAssist$')
+            Notes = 'Updates an installed Home PCs copy via Dell''s bootstrapper. Skips OS Recovery, Remediation, and TechHub. Does not install when absent.'
         }
         [pscustomobject]@{
             Id = 'DotNet'; Name = '.NET 6+ Runtime / Desktop / ASP.NET / SDK'

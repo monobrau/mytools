@@ -10,6 +10,7 @@ Built for endpoints that may **not** have RMM patch management or Intune — Scr
 | --- | --- | --- |
 | Microsoft 365 Apps for business / enterprise | `M365Apps` | Delegates to [M365AppsUpdate](../M365AppsUpdate/) (Click-to-Run, not winget) |
 | HP Support Assistant (extra) | `HpSupportAssistant` | Win10: **uninstall by default** (EOL/vulnerable SoftPaqs); Win11: update. `-CheckOnly` to assess only |
+| Dell SupportAssist | `DellSupportAssist` | Updates an installed copy via Dell's bootstrapper. Does not install when absent. Skips OS Recovery, Remediation, and TechHub |
 | .NET 6+ Runtime / Desktop / ASP.NET / SDK | `DotNet` | Delegates to [DotNetUpdate](../DotNetUpdate/) (same-major security patches only) |
 | Visual C++ 2005-2013 Redistributable | `VcRedistLegacy` | Delegates to [VisualCppUpdate](../VisualCppUpdate/) (final security build per installed year) |
 | ShareX | `ShareX` | winget `ShareX.ShareX` |
@@ -73,7 +74,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.6'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.7'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes

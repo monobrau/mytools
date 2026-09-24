@@ -28,6 +28,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | .NET runtime / SDK patches | mytools |
 | Visual C++ 2005-2013 redistributables | mytools `VisualCppUpdate` — last security build per installed year |
 | HP Support Assistant | mytools |
+| Dell SupportAssist | mytools `DellSupportAssistUpdate` — update only when already installed; leaves OS Recovery, Remediation, and TechHub |
 | Classic Teams remnants | mytools |
 | Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
 | Windows Update → feature | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot |

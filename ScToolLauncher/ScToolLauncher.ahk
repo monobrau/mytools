@@ -92,6 +92,7 @@ Tools := [
 Scan skips anything not installed. Apply updates only what is installed and behind.
 Microsoft 365 Apps (Click-to-Run)
 HP Support Assistant (Windows 10 uninstall, Windows 11 update)
+Dell SupportAssist (update only when already installed)
 .NET 6+ Runtime / Desktop / ASP.NET / SDK (same major only)
 Visual C++ 2005-2013 redistributables
 ShareX
@@ -134,7 +135,7 @@ Mozilla Firefox
         "Path", "VulnSoftwareUpdate",
         "Script", "Update-VulnSoftware.ps1",
         "UaPrefix", "VulnSoftwareUpdate-bootstrap",
-        "UaVer", "1.4.6",
+        "UaVer", "1.4.7",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers Product NoExit"
@@ -194,6 +195,20 @@ Mozilla Firefox
         "TimeoutScan", 300000,
         "TimeoutUpdate", 600000,
         "Flags", "CheckOnly Uninstall Force NoExit"
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "Dell SupportAssist",
+        "Summary", "Updates Dell SupportAssist when it is already installed. Does not install it, and does not touch OS Recovery, Remediation, or TechHub.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DellSupportAssistUpdate",
+        "Fetch", "Contents",
+        "Path", "DellSupportAssistUpdate",
+        "Script", "Update-DellSupportAssist.ps1",
+        "UaPrefix", "DellSupportAssistUpdate-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 600000,
+        "Flags", "CheckOnly Force NoExit"
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
