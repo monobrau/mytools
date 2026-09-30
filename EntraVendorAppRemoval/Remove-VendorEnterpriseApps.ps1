@@ -76,19 +76,167 @@ param(
     [switch]$Force
 )
 
-Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$scriptRoot = $PSScriptRoot
-if (-not $scriptRoot) {
-    $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+# The launcher runs this file from a script block, so there is no script path
+# and Private\ is not downloaded. These functions live in this file.
+
+function Get-VendorEnterpriseAppCatalog {
+    @(
+        [pscustomobject]@{ Vendor = 'Inky'; VendorLabel = 'INKY'; Name = 'INKY Phish Fence - Installation'; ExampleId = '939be9d0-ed9f-48df-8867-f04004e7e460' }
+        [pscustomobject]@{ Vendor = 'Inky'; VendorLabel = 'INKY'; Name = 'Inky Dashboard SSO'; ExampleId = '35343bd4-37f5-410b-bb69-fd23e9da03a6' }
+        [pscustomobject]@{ Vendor = 'Inky'; VendorLabel = 'INKY'; Name = 'INKY Phish Fence - Directory Synchronization'; ExampleId = 'f02bffa3-76d9-41d3-8452-3d548c1290b7' }
+        [pscustomobject]@{ Vendor = 'Inky'; VendorLabel = 'INKY'; Name = 'Inky Phish Fence Remediation'; ExampleId = 'dadbac07-d008-4b2d-b954-732074411c81' }
+        [pscustomobject]@{ Vendor = 'Inky'; VendorLabel = 'INKY'; Name = 'INKY - Setup and Maintenance'; ExampleId = '0fdacf15-7cc1-4477-82df-b88e0ce107f3' }
+        [pscustomobject]@{ Vendor = 'Usecure'; VendorLabel = 'usecure'; Name = 'usecure'; ExampleId = 'ccfeac09-c6ae-4dd7-b621-2f3c0bcf72d5' }
+        [pscustomobject]@{ Vendor = 'Usecure'; VendorLabel = 'usecure'; Name = 'usecure - Message Injection'; ExampleId = '24decd76-8045-478f-b5d5-35b6b254d0d0' }
+        [pscustomobject]@{ Vendor = 'Barracuda'; VendorLabel = 'Barracuda (Skout)'; Name = 'Skout Cybersecurity'; ExampleId = '9ad0f9b6-8ca4-4839-b1c8-061bad20e8da' }
+    )
 }
-. (Join-Path $scriptRoot 'Private\VendorAppSelection.ps1')
+
+function Resolve-VendorAppCategory {
+    param(
+        [string]$DisplayName,
+        [string]$AppId,
+        [string]$ObjectId,
+        $Catalog
+    )
+
+    $name = [string]$DisplayName
+    $fromName = $null
+    if ($name -match '(?i)phish\s*fence|\binky\b') {
+        $fromName = 'Inky'
+    }
+    elseif ($name -match '(?i)u-?secure') {
+        $fromName = 'Usecure'
+    }
+    elseif ($name -match '(?i)\bskout\b' -or ($name -match '(?i)barracuda' -and $name -match '(?i)cybersecurity')) {
+        $fromName = 'Barracuda'
+    }
+
+    if ($fromName) { return $fromName }
+
+    $candidates = @($AppId, $ObjectId) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    foreach ($item in @($Catalog)) {
+        foreach ($candidate in $candidates) {
+            if ([string]$item.ExampleId -eq [string]$candidate) {
+                return [string]$item.Vendor
+            }
+        }
+    }
+
+    return $null
+}
+
+function Add-VendorAppMenuNumbers {
+    param($Apps)
+
+    $n = 0
+    foreach ($app in @($Apps)) {
+        if ($null -eq $app) { continue }
+        if ($app.Found) {
+            $n++
+            $app | Add-Member -NotePropertyName Number -NotePropertyValue $n -Force
+        }
+        else {
+            $app | Add-Member -NotePropertyName Number -NotePropertyValue $null -Force
+        }
+    }
+    return @($Apps)
+}
+
+function ConvertFrom-VendorAppSelection {
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$InputText,
+
+        [AllowEmptyCollection()]
+        [object[]]$NumberedApps = @()
+    )
+
+    $text = if ($null -eq $InputText) { '' } else { $InputText.Trim() }
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return [pscustomobject]@{ Action = 'Invalid'; AppIds = @(); Message = 'Enter a selection.' }
+    }
+    if ($text -match '^(?i)q(uit)?$') {
+        return [pscustomobject]@{ Action = 'Quit'; AppIds = @(); Message = '' }
+    }
+
+    $numbered = @($NumberedApps | Where-Object { $null -ne $_ -and $null -ne $_.Number })
+    $byNumber = @{}
+    foreach ($app in $numbered) {
+        $byNumber[[string][int]$app.Number] = $app
+    }
+
+    if ($text -match '^(?i)all$') {
+        if ($byNumber.Count -eq 0) {
+            return [pscustomobject]@{ Action = 'Invalid'; AppIds = @(); Message = 'Nothing is in this tenant.' }
+        }
+        return [pscustomobject]@{ Action = 'Select'; AppIds = @($numbered | ForEach-Object { [string]$_.AppId }); Message = '' }
+    }
+
+    $vendorMap = @{
+        'inky'      = 'Inky'
+        'usecure'   = 'Usecure'
+        'u-secure'  = 'Usecure'
+        'barracuda' = 'Barracuda'
+        'skout'     = 'Barracuda'
+    }
+    $key = $text.ToLowerInvariant()
+    if ($vendorMap.ContainsKey($key)) {
+        $vendor = $vendorMap[$key]
+        $hits = @($numbered | Where-Object { $_.Vendor -eq $vendor })
+        if ($hits.Count -eq 0) {
+            return [pscustomobject]@{ Action = 'Invalid'; AppIds = @(); Message = "No $vendor apps are in this tenant." }
+        }
+        return [pscustomobject]@{ Action = 'Select'; AppIds = @($hits | ForEach-Object { [string]$_.AppId }); Message = '' }
+    }
+
+    $tokens = @($text -split '[,\s]+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $ids = New-Object System.Collections.Generic.List[string]
+    foreach ($token in $tokens) {
+        $range = [regex]::Match($token, '^(\d+)-(\d+)$')
+        if ($range.Success) {
+            $start = [int]$range.Groups[1].Value
+            $end = [int]$range.Groups[2].Value
+            if ($end -lt $start) {
+                return [pscustomobject]@{ Action = 'Invalid'; AppIds = @(); Message = "Range $token is backwards." }
+            }
+            for ($n = $start; $n -le $end; $n++) {
+                $keyN = [string]$n
+                if (-not $byNumber.ContainsKey($keyN)) {
+                    return [pscustomobject]@{ Action = 'Invalid'; AppIds = @(); Message = "Number $n is not in the list." }
+                }
+                [void]$ids.Add([string]$byNumber[$keyN].AppId)
+            }
+            continue
+        }
+
+        if ($token -match '^\d+$') {
+            if (-not $byNumber.ContainsKey([string][int]$token)) {
+                return [pscustomobject]@{ Action = 'Invalid'; AppIds = @(); Message = "Number $token is not in the list." }
+            }
+            [void]$ids.Add([string]$byNumber[[string][int]$token].AppId)
+            continue
+        }
+
+        return [pscustomobject]@{
+            Action  = 'Invalid'
+            AppIds  = @()
+            Message = "Could not read '$token'. Use numbers (1,3 or 1-3), a vendor name, all, or q."
+        }
+    }
+
+    $unique = @($ids | Select-Object -Unique)
+    return [pscustomobject]@{ Action = 'Select'; AppIds = $unique; Message = '' }
+}
 
 function Complete-VendorAppRemoval {
     param([Parameter(Mandatory)][int]$Code)
     $global:LASTEXITCODE = $Code
-    if ($script:Exit -and -not $script:NoExit) { exit $Code }
+    # $script: is the launcher's scope when this file is invoked as a script block.
+    if ($Exit -and -not $NoExit) { exit $Code }
     break VendorAppRun
 }
 
@@ -152,6 +300,14 @@ function Get-VendorAppTenant {
     }
 }
 
+function Get-VendorObjectProperty {
+    param($Object, [string]$Name)
+    if ($null -eq $Object) { return $null }
+    $prop = $Object.PSObject.Properties[$Name]
+    if ($null -eq $prop) { return $null }
+    return $prop.Value
+}
+
 function Get-ServicePrincipalByExampleId {
     param([string]$Id)
     $hits = New-Object System.Collections.Generic.List[object]
@@ -167,7 +323,7 @@ function Get-ServicePrincipalByExampleId {
         }
     }
     catch { }
-    return @($hits)
+    return $hits.ToArray()
 }
 
 function Find-ServicePrincipalsByDisplayName {
@@ -194,7 +350,7 @@ function Find-ServicePrincipalsByDisplayName {
             Write-Warning "startswith '$prefix' failed: $($_.Exception.Message)"
         }
     }
-    return @($rows)
+    return $rows.ToArray()
 }
 
 function Get-DiscoveredVendorApps {
@@ -205,37 +361,46 @@ function Get-DiscoveredVendorApps {
     foreach ($term in $terms) {
         Write-Host "Searching enterprise apps for '$term'..."
         foreach ($sp in @(Find-ServicePrincipalsByDisplayName -Term $term)) {
-            if (-not $sp -or -not $sp.Id) { continue }
-            $byObjectId[[string]$sp.Id] = $sp
+            $objectId = [string](Get-VendorObjectProperty $sp 'Id')
+            if ($objectId) { $byObjectId[$objectId] = $sp }
         }
     }
     foreach ($item in @($Catalog)) {
         foreach ($sp in @(Get-ServicePrincipalByExampleId -Id $item.ExampleId)) {
-            if ($sp -and $sp.Id) { $byObjectId[[string]$sp.Id] = $sp }
+            $objectId = [string](Get-VendorObjectProperty $sp 'Id')
+            if ($objectId) { $byObjectId[$objectId] = $sp }
         }
     }
 
     $rows = New-Object System.Collections.Generic.List[object]
     foreach ($key in @($byObjectId.Keys)) {
         $sp = $byObjectId[$key]
-        $vendor = Resolve-VendorAppCategory -DisplayName $sp.DisplayName -AppId $sp.AppId -ObjectId $sp.Id -Catalog $Catalog
+        $displayName = [string](Get-VendorObjectProperty $sp 'DisplayName')
+        $appId = [string](Get-VendorObjectProperty $sp 'AppId')
+        $objectId = [string](Get-VendorObjectProperty $sp 'Id')
+        $vendor = Resolve-VendorAppCategory -DisplayName $displayName -AppId $appId -ObjectId $objectId -Catalog $Catalog
         if (-not $vendor) { continue }
         $label = @($Catalog | Where-Object { $_.Vendor -eq $vendor } | Select-Object -First 1).VendorLabel
+        $enabled = Get-VendorObjectProperty $sp 'AccountEnabled'
         [void]$rows.Add([pscustomobject]@{
-                Vendor         = $vendor
-                VendorLabel    = $label
-                Name           = [string]$sp.DisplayName
-                AppId          = [string]$sp.AppId
-                ObjectId       = [string]$sp.Id
-                Found          = $true
-                AccountEnabled = [bool]$sp.AccountEnabled
-                Created        = $sp.CreatedDateTime
+                Vendor           = $vendor
+                VendorLabel      = $label
+                Name             = $displayName
+                AppId            = $appId
+                ObjectId         = $objectId
+                Found            = $true
+                AccountEnabled   = [bool]$enabled
+                Created          = Get-VendorObjectProperty $sp 'CreatedDateTime'
                 ServicePrincipal = $sp
             })
     }
 
     $order = @{ Inky = 0; Usecure = 1; Barracuda = 2 }
-    return @($rows | Sort-Object { $order[$_.Vendor] }, Name)
+    return @($rows.ToArray() | Sort-Object {
+            $rank = 9
+            if ($order.ContainsKey([string]$_.Vendor)) { $rank = [int]$order[[string]$_.Vendor] }
+            '{0:D2}|{1}' -f $rank, [string]$_.Name
+        })
 }
 
 function Show-VendorAppMenu {
@@ -263,39 +428,39 @@ function Show-VendorAppMenu {
 function ConvertTo-VendorSpRecord {
     param($Sp)
     [pscustomobject]@{
-        Id                     = [string]$Sp.Id
-        AppId                  = [string]$Sp.AppId
-        DisplayName            = [string]$Sp.DisplayName
-        AppDisplayName         = [string]$Sp.AppDisplayName
-        AccountEnabled         = [bool]$Sp.AccountEnabled
-        AppOwnerOrganizationId = [string]$Sp.AppOwnerOrganizationId
-        ServicePrincipalType   = [string]$Sp.ServicePrincipalType
-        CreatedDateTime        = [string]$Sp.CreatedDateTime
+        Id                     = [string](Get-VendorObjectProperty $Sp 'Id')
+        AppId                  = [string](Get-VendorObjectProperty $Sp 'AppId')
+        DisplayName            = [string](Get-VendorObjectProperty $Sp 'DisplayName')
+        AppDisplayName         = [string](Get-VendorObjectProperty $Sp 'AppDisplayName')
+        AccountEnabled         = [bool](Get-VendorObjectProperty $Sp 'AccountEnabled')
+        AppOwnerOrganizationId = [string](Get-VendorObjectProperty $Sp 'AppOwnerOrganizationId')
+        ServicePrincipalType   = [string](Get-VendorObjectProperty $Sp 'ServicePrincipalType')
+        CreatedDateTime        = [string](Get-VendorObjectProperty $Sp 'CreatedDateTime')
     }
 }
 
 function ConvertTo-VendorAssignmentRecord {
     param($Item)
     [pscustomobject]@{
-        Id                   = [string]$Item.Id
-        PrincipalId          = [string]$Item.PrincipalId
-        PrincipalDisplayName = [string]$Item.PrincipalDisplayName
-        PrincipalType        = [string]$Item.PrincipalType
-        AppRoleId            = [string]$Item.AppRoleId
-        ResourceId           = [string]$Item.ResourceId
-        ResourceDisplayName  = [string]$Item.ResourceDisplayName
+        Id                   = [string](Get-VendorObjectProperty $Item 'Id')
+        PrincipalId          = [string](Get-VendorObjectProperty $Item 'PrincipalId')
+        PrincipalDisplayName = [string](Get-VendorObjectProperty $Item 'PrincipalDisplayName')
+        PrincipalType        = [string](Get-VendorObjectProperty $Item 'PrincipalType')
+        AppRoleId            = [string](Get-VendorObjectProperty $Item 'AppRoleId')
+        ResourceId           = [string](Get-VendorObjectProperty $Item 'ResourceId')
+        ResourceDisplayName  = [string](Get-VendorObjectProperty $Item 'ResourceDisplayName')
     }
 }
 
 function ConvertTo-VendorGrantRecord {
     param($Item)
     [pscustomobject]@{
-        Id          = [string]$Item.Id
-        ClientId    = [string]$Item.ClientId
-        ConsentType = [string]$Item.ConsentType
-        PrincipalId = [string]$Item.PrincipalId
-        ResourceId  = [string]$Item.ResourceId
-        Scope       = [string]$Item.Scope
+        Id          = [string](Get-VendorObjectProperty $Item 'Id')
+        ClientId    = [string](Get-VendorObjectProperty $Item 'ClientId')
+        ConsentType = [string](Get-VendorObjectProperty $Item 'ConsentType')
+        PrincipalId = [string](Get-VendorObjectProperty $Item 'PrincipalId')
+        ResourceId  = [string](Get-VendorObjectProperty $Item 'ResourceId')
+        Scope       = [string](Get-VendorObjectProperty $Item 'Scope')
     }
 }
 
@@ -306,6 +471,10 @@ function Get-SafeTenantFolderName {
     return $safe
 }
 
+# Dot-sourcing loads the functions for tests and does not sign in.
+if ($MyInvocation.InvocationName -eq '.') { return }
+
+Set-StrictMode -Version Latest
 :VendorAppRun foreach ($_vendorAppOnce in 1) {
 Test-VendorAppModule
 $catalog = @(Get-VendorEnterpriseAppCatalog)

@@ -2,8 +2,8 @@
 
 Describe 'Vendor enterprise app selection' {
     BeforeAll {
-        $private = Join-Path (Split-Path -Parent $PSScriptRoot) 'Private\VendorAppSelection.ps1'
-        . $private
+        $tool = Join-Path (Split-Path -Parent $PSScriptRoot) 'Remove-VendorEnterpriseApps.ps1'
+        . $tool
         $script:Catalog = @(Get-VendorEnterpriseAppCatalog)
         $script:Menu = @(
             [pscustomobject]@{ Number = 1; Vendor = 'Inky'; AppId = 'app-inky-1'; Name = 'INKY one' }
