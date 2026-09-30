@@ -10,6 +10,7 @@ Public collection of work tools and scripts.
 | [DellSupportAssistUpdate](DellSupportAssistUpdate/) | Update an already-installed Dell SupportAssist (Dell bootstrapper). Does not install when absent |
 | [DellTechHubCleanup](DellTechHubCleanup/) | Scan/remove Dell TechHub (`DellTechHub` service, `techhub.dll`) — common SentinelOne false positive |
 | [DotNetUpdate](DotNetUpdate/) | Patch installed .NET 6+ Runtime/Desktop/ASP.NET/SDK to latest same-major security release |
+| [EntraIntuneEvidence](EntraIntuneEvidence/) | Export Entra authorized users, likely service accounts, and Intune BitLocker status per workstation |
 | [EntraVendorAppRemoval](EntraVendorAppRemoval/) | Delete INKY, usecure, and Skout enterprise apps from the signed-in Entra tenant (matched by name; ids differ per tenant) |
 | [ForensicInvestigator](ForensicInvestigator/) | Sysinternals + Harkins EVTX + all-user Downloads (Zone.ID), PS history, hives, browser History, admins/RMM, Defender; `C:\SecurityReports` |
 | [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
