@@ -26,7 +26,7 @@
     Passed to Connect-MgGraph when a new sign-in is required.
 
 .PARAMETER OutputPath
-    Backup folder. Default is Documents\EntraVendorAppRemoval\<tenant>\<timestamp>.
+    Backup folder. Default is OneDrive\EntraVendorAppRemoval\<tenant>\<timestamp>.
 
 .PARAMETER CheckOnly
     List matching apps and stop. This is what the launcher sends for Scan.
@@ -471,6 +471,33 @@ function Get-SafeTenantFolderName {
     return $safe
 }
 
+function Get-VendorAppOneDriveRoot {
+    foreach ($candidate in @($env:OneDriveCommercial, $env:OneDrive)) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate) -and (Test-Path -LiteralPath $candidate)) {
+            return $candidate
+        }
+    }
+
+    $regPaths = @(
+        'HKCU:\Software\Microsoft\OneDrive\Accounts\Business1'
+        'HKCU:\Software\Microsoft\OneDrive\Accounts\Business2'
+        'HKCU:\Software\Microsoft\OneDrive\Accounts\Personal'
+    )
+    foreach ($reg in $regPaths) {
+        if (-not (Test-Path -LiteralPath $reg)) { continue }
+        $item = Get-ItemProperty -LiteralPath $reg -ErrorAction SilentlyContinue
+        $folder = $null
+        if ($item -and $item.PSObject.Properties['UserFolder']) {
+            $folder = [string]$item.UserFolder
+        }
+        if (-not [string]::IsNullOrWhiteSpace($folder) -and (Test-Path -LiteralPath $folder)) {
+            return $folder
+        }
+    }
+
+    return $null
+}
+
 # Dot-sourcing loads the functions for tests and does not sign in.
 if ($MyInvocation.InvocationName -eq '.') { return }
 
@@ -569,9 +596,13 @@ if (-not $WhatIfPreference -and -not $Force) {
 }
 
 if (-not $OutputPath) {
-    $docs = [Environment]::GetFolderPath('MyDocuments')
+    $root = Get-VendorAppOneDriveRoot
+    if (-not $root) {
+        Write-Warning 'OneDrive folder was not found. Saving the backup under Documents instead.'
+        $root = [Environment]::GetFolderPath('MyDocuments')
+    }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $OutputPath = Join-Path $docs (Join-Path 'EntraVendorAppRemoval' (Join-Path (Get-SafeTenantFolderName $tenant.DisplayName) $stamp))
+    $OutputPath = Join-Path $root (Join-Path 'EntraVendorAppRemoval' (Join-Path (Get-SafeTenantFolderName $tenant.DisplayName) $stamp))
 }
 $null = New-Item -ItemType Directory -Path $OutputPath -Force
 Write-Host "Backup folder: $OutputPath"

@@ -110,4 +110,22 @@ Describe 'Vendor enterprise app selection' {
             $r.Action | Should -Be 'Invalid'
         }
     }
+
+    Context 'Get-VendorAppOneDriveRoot' {
+        It 'prefers the work OneDrive folder when it exists' {
+            $prevCommercial = $env:OneDriveCommercial
+            $prevOneDrive = $env:OneDrive
+            try {
+                $dir = Join-Path $TestDrive 'WorkOneDrive'
+                $null = New-Item -ItemType Directory -Path $dir -Force
+                $env:OneDriveCommercial = $dir
+                $env:OneDrive = Join-Path $TestDrive 'missing-personal'
+                Get-VendorAppOneDriveRoot | Should -Be $dir
+            }
+            finally {
+                $env:OneDriveCommercial = $prevCommercial
+                $env:OneDrive = $prevOneDrive
+            }
+        }
+    }
 }

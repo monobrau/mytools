@@ -40,7 +40,7 @@ From the SC Tool Launcher, paste the PowerShell one-liner into Backstage on this
 
 Deletion asks you to type `DELETE`. `-Force` skips that prompt. `-WhatIf` still does not delete.
 
-Backups go to `Documents\EntraVendorAppRemoval\<tenant>\<timestamp>\` unless you pass `-OutputPath`. Each app is a `<appId>.json` plus `results.csv`.
+Backups go to `OneDrive\EntraVendorAppRemoval\<tenant>\<timestamp>\` (work OneDrive first) unless you pass `-OutputPath`. Each app is a `<appId>.json` plus `results.csv`. If OneDrive cannot be found, the backup is saved under Documents and the script says so.
 
 Exit codes: `0` done or nothing selected, `2` a delete failed, `1` a hard error (sign-in or backup).
 
