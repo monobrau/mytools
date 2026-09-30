@@ -36,6 +36,8 @@ cd EntraVendorAppRemoval
 
 The menu accepts `1,3`, `1-3`, `inky`, `usecure`, `barracuda`, `skout`, `all`, or `q`.
 
+From the SC Tool Launcher, paste the PowerShell one-liner into Backstage on this PC. Scan sends `-CheckOnly` and only lists matches. Apply sends `-Delete` and opens the picker.
+
 Deletion asks you to type `DELETE`. `-Force` skips that prompt. `-WhatIf` still does not delete.
 
 Backups go to `Documents\EntraVendorAppRemoval\<tenant>\<timestamp>\` unless you pass `-OutputPath`. Each app is a `<appId>.json` plus `results.csv`.

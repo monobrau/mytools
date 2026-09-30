@@ -85,11 +85,12 @@ Huntress account key is built into the launcher and `HuntressInstall/ScreenConne
 
 Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypass` plus `Invoke-RestMethod -OutFile` then `&` run. ADWCleaner downloads the vendor EXE and runs `Start-Process -Wait`. Prefer elevated PowerShell.
 
-### M365 / Exchange — Inky/IPW transport rules (EXO admin)
+### M365 / Exchange — admin PC (Inky rules, vendor apps)
 
 | Tool | Source |
 | --- | --- |
 | Inky / IPW transport rules | mytools — requires `Connect-ExchangeOnline` on an admin workstation; Scan lists, Delete removes (no `Read-Host`) |
+| INKY / usecure / Skout enterprise apps | mytools `EntraVendorAppRemoval` — Backstage PowerShell on an admin PC. Scan lists matches. Apply opens the picker. App ids differ per tenant |
 
 ### Untested
 

@@ -61,7 +61,7 @@ CategoryOrder := [
     "AV — Defender repair, Cylance/Webroot, McAfee remnants",
     "Agents — SentinelOne, ConnectSecure, Huntress",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
-    "M365 / Exchange — Inky/IPW transport rules (EXO admin)",
+    "M365 / Exchange — admin PC (Inky rules, vendor apps)",
     "Untested",
     "Client-specific"
 ]
@@ -635,7 +635,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     ; --- M365 / Exchange ---
     Map(
-        "Category", "M365 / Exchange — Inky/IPW transport rules (EXO admin)",
+        "Category", "M365 / Exchange — admin PC (Inky rules, vendor apps)",
         "Name", "Inky / IPW transport rules",
         "Summary", "List or remove EXO transport rules matching IPW|Inky|IOC Strip. Requires Connect-ExchangeOnline first (admin PC, not endpoint SC).",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/InkyTransportRuleCleanup",
@@ -649,6 +649,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Flags", "CheckOnly Delete AlwaysNote",
         "Note", "Run after Connect-ExchangeOnline on an admin workstation. Scan lists; Delete removes with no Read-Host prompt.",
         "ClipboardNote", "NOTE: Requires Connect-ExchangeOnline in this session. Delete has no interactive confirm — Scan first."
+    ),
+    Map(
+        "Category", "M365 / Exchange — admin PC (Inky rules, vendor apps)",
+        "Name", "INKY / usecure / Skout enterprise apps",
+        "Summary", "Find and delete those vendor enterprise apps in the signed-in Entra tenant. Matched by name, because the app id differs per tenant.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EntraVendorAppRemoval",
+        "Fetch", "Contents",
+        "Path", "EntraVendorAppRemoval",
+        "Script", "Remove-VendorEnterpriseApps.ps1",
+        "UaPrefix", "EntraVendorAppRemoval-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 600000,
+        "Flags", "CheckOnly Delete AlwaysNote",
+        "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Scan lists matches. Apply opens the picker; type DELETE to remove the ones you select. Needs Microsoft.Graph and Application Administrator.",
+        "ClipboardNote", "NOTE: Admin PC Backstage PowerShell. Scan lists only. Apply opens the picker. Type DELETE to remove. App ids differ per tenant."
     ),
     ; --- Untested (move here until validated) ---
     Map(
@@ -1392,6 +1408,10 @@ RefreshOptionEnable(*) {
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
         gCtrls["ModeUpdate"].Text := "Delete matching rules"
+    }
+    if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "EntraVendorAppRemoval") {
+        gCtrls["ModeScan"].Text := "List matching apps"
+        gCtrls["ModeUpdate"].Text := "Pick apps and delete"
     }
     if ToolHasFlag(t, "AutomateGpo") {
         gCtrls["ModeScan"].Text := "Dry-run (transform only)"

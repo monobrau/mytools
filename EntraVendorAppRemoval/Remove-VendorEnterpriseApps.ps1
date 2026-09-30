@@ -28,6 +28,18 @@
 .PARAMETER OutputPath
     Backup folder. Default is Documents\EntraVendorAppRemoval\<tenant>\<timestamp>.
 
+.PARAMETER CheckOnly
+    List matching apps and stop. This is what the launcher sends for Scan.
+
+.PARAMETER Delete
+    Pick apps in the menu and delete them. This is what the launcher sends for Apply.
+
+.PARAMETER Exit
+    Exit the PowerShell process with a status code. The launcher sends this for Commands #!ps.
+
+.PARAMETER NoExit
+    Keep the PowerShell window open. Backstage omits -Exit, which already does this.
+
 .PARAMETER Force
     Skip the typed DELETE confirmation. -WhatIf still does not delete.
 
@@ -53,6 +65,14 @@ param(
 
     [string]$OutputPath,
 
+    [switch]$CheckOnly,
+
+    [switch]$Delete,
+
+    [switch]$Exit,
+
+    [switch]$NoExit,
+
     [switch]$Force
 )
 
@@ -68,7 +88,8 @@ if (-not $scriptRoot) {
 function Complete-VendorAppRemoval {
     param([Parameter(Mandatory)][int]$Code)
     $global:LASTEXITCODE = $Code
-    exit $Code
+    if ($script:Exit -and -not $script:NoExit) { exit $Code }
+    break VendorAppRun
 }
 
 function Test-VendorAppModule {
@@ -218,7 +239,10 @@ function Get-DiscoveredVendorApps {
 }
 
 function Show-VendorAppMenu {
-    param($Apps)
+    param(
+        $Apps,
+        [switch]$ListOnly
+    )
     $labels = @{ Inky = 'INKY'; Usecure = 'usecure'; Barracuda = 'Barracuda (Skout)' }
     foreach ($vendor in @('Inky', 'Usecure', 'Barracuda')) {
         $group = @($Apps | Where-Object { $_.Vendor -eq $vendor })
@@ -231,6 +255,7 @@ function Show-VendorAppMenu {
             Write-Host ("      appId {0}  objectId {1}  {2}" -f $app.AppId, $app.ObjectId, $state)
         }
     }
+    if ($ListOnly) { return }
     Write-Host ''
     Write-Host 'Select: numbers (1,3 or 1-3), a vendor (inky, usecure, barracuda), all, or q to quit'
 }
@@ -281,6 +306,7 @@ function Get-SafeTenantFolderName {
     return $safe
 }
 
+:VendorAppRun foreach ($_vendorAppOnce in 1) {
 Test-VendorAppModule
 $catalog = @(Get-VendorEnterpriseAppCatalog)
 $ctx = Connect-VendorAppGraph -TenantId $TenantId
@@ -295,6 +321,13 @@ Write-Host ''
 $discovered = @(Add-VendorAppMenuNumbers -Apps @(Get-DiscoveredVendorApps -Catalog $catalog))
 if ($discovered.Count -eq 0) {
     Write-Host "No INKY, usecure, or Skout enterprise apps were found in $($tenant.DisplayName)."
+    Complete-VendorAppRemoval -Code 0
+}
+
+if ($CheckOnly) {
+    Show-VendorAppMenu -Apps $discovered -ListOnly
+    Write-Host ''
+    Write-Host 'List only. Run again with -Delete to pick apps and remove them.'
     Complete-VendorAppRemoval -Code 0
 }
 
@@ -467,3 +500,4 @@ if ($deleted.Count -gt 0) {
 $failed = @($results | Where-Object { $_.Result -eq 'Failed' })
 if ($failed.Count -gt 0) { Complete-VendorAppRemoval -Code 2 }
 Complete-VendorAppRemoval -Code 0
+}
