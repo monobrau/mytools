@@ -48,6 +48,20 @@ function Write-Section([string]$Message) {
     Write-Line "=== $Message ==="
 }
 
+function Convert-WindlpNumber([string]$Value) {
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
+    $text = $Value.Trim()
+    $n = 0L
+    if ($text -match '^[0-9]+$') {
+        [void][int64]::TryParse($text, [ref]$n)
+        return $n
+    }
+    if ($text -match '^[0-9A-Fa-f]+$') {
+        return [Convert]::ToInt64($text, 16)
+    }
+    return $null
+}
+
 function Read-WindlpFile {
     param([string]$Path)
     $result = [ordered]@{
@@ -73,7 +87,7 @@ function Read-WindlpFile {
             'OsDownloadComplete' { $result.OsDownloadComplete = $prop.Value }
             'RecreatePackageFileList' { $result.RecreatePackageFileList = $prop.Value }
             'PreDownloadCheckComplete' { $result.PreDownloadCheckComplete = $prop.Value }
-            'OSDownloadSize' { $result.OSDownloadSize = $prop.Value }
+            'OSDownloadSize' { $result.OSDownloadSize = Convert-WindlpNumber ([string]$prop.Value) }
         }
     }
     return [pscustomobject]$result
@@ -208,7 +222,12 @@ function Get-ProgressVerdict($Sample) {
         [void][int64]::TryParse([string]$_.OSDownloadSize, [ref]$size)
         $tasks = 0
         [void][int]::TryParse([string]$_.TaskCount, [ref]$tasks)
-        ($_.OsDownloadComplete -eq '1') -or ($size -gt 0) -or ($tasks -gt 0)
+        $recent = @((Get-TopFiles -Folder $_.WorkingPath) | Where-Object {
+            $_.Name -notmatch '^(ActionList\.xml|windlp\.state(-old)?\.xml)$' -and
+            $_.LastWriteTime -gt (Get-Date).AddMinutes(-15) -and
+            $_.Length -gt 1MB
+        })
+        ($_.OsDownloadComplete -eq '1') -or ($size -gt 0) -or ($tasks -gt 0) -or ($recent.Count -gt 0)
     })
     if ($busy.Count -gt 0) {
         $done = @($busy | Where-Object { $_.OsDownloadComplete -eq '1' })
