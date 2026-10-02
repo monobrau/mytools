@@ -36,3 +36,9 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 #timeout=14400000
 #maxlength=200000
 $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Invoke-WindowsUpdate.ps1?ref=main'); & ([scriptblock]::Create($script)) -Feature -Reboot -Exit
+
+# Feature progress, second window. Does not start a download.
+#!ps
+#timeout=180000
+#maxlength=200000
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Get-WindowsUpdateProgress.ps1?ref=main'); & ([scriptblock]::Create($script)) -WatchSeconds 90 -Exit

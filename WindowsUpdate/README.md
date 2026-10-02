@@ -52,6 +52,14 @@ the install.
 | `-NoExit` | Keep the host open (Backstage). Accepted so the launcher does not fail |
 | `-Exit` | Exit with a status code (Commands) |
 
+## Progress
+
+`Get-WindowsUpdateProgress.ps1` only reports status. Run it in a second window while a feature install is sitting on `=== Download ===`. It does not start a download and it does not walk the download tree.
+
+`OSDownloadSize` 0 and `TaskCount` 0 mean the OS image is not downloading. A new timestamp on `ActionList.xml` only means Windows Update rewrote the plan. `-WatchSeconds 90` takes a second sample and says whether those counters increased.
+
+Exit `0` means setup is running or the OS download grew. Exit `1` means a feature folder exists and the image is not downloading. Exit `2` means no feature download is in progress.
+
 ## ScreenConnect
 
 Use ScToolLauncher (**Software updates** → Windows Update quality / feature).
