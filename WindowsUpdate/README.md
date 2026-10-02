@@ -66,6 +66,8 @@ Use ScToolLauncher (**Software updates** → Windows Update quality / feature).
 Scan first. Prefer elevated. Feature installs can take hours — use Backstage
 or a long Commands timeout (4 hours). Reload the launcher after pull (`1.0.0`).
 
+A feature install skips the download call when Windows Update already marks the update downloaded. That call prints nothing until it returns, so a second run was sitting on `=== Download ===` even after the files were on disk.
+
 A feature install from Backstage does not need someone signed in at the desktop.
 It installs pending driver updates first, because those keep the version upgrade
 at "Downloading 0%". It will not start a second copy while one is already in

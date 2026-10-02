@@ -610,21 +610,33 @@ function Install-WindowsUpdates {
         return
     }
 
-    Write-Section 'Download'
-    $downloader = $Session.CreateUpdateDownloader()
-    $downloader.Updates = $coll
-    $dlResult = $downloader.Download()
-    Write-Line ("Download ResultCode: {0} (1=InProgress 2=Succeeded 3=SucceededWithErrors 4=Failed)" -f $dlResult.ResultCode)
-    if ($dlResult.ResultCode -eq 1) {
-        Write-Line 'Result: Download is still in progress. Not installing and not rebooting.'
-        $script:ExitCode = 1
-        return
+    $needDownload = $false
+    foreach ($u in $coll) {
+        $have = $false
+        try { $have = [bool]$u.IsDownloaded } catch { $have = $false }
+        if (-not $have) { $needDownload = $true; break }
     }
-    if ($dlResult.ResultCode -notin 2, 3) {
-        Write-UpdateOperationResults -Result $dlResult -Updates $coll -Stage 'Download'
-        Write-Line 'Result: Download failed.'
-        $script:ExitCode = 2
-        return
+
+    Write-Section 'Download'
+    if (-not $needDownload) {
+        Write-Line 'Already downloaded. Skipping the download call.'
+    } else {
+        Write-Line 'This call prints nothing until Windows Update finishes.'
+        $downloader = $Session.CreateUpdateDownloader()
+        $downloader.Updates = $coll
+        $dlResult = $downloader.Download()
+        Write-Line ("Download ResultCode: {0} (1=InProgress 2=Succeeded 3=SucceededWithErrors 4=Failed)" -f $dlResult.ResultCode)
+        if ($dlResult.ResultCode -eq 1) {
+            Write-Line 'Result: Download is still in progress. Not installing and not rebooting.'
+            $script:ExitCode = 1
+            return
+        }
+        if ($dlResult.ResultCode -notin 2, 3) {
+            Write-UpdateOperationResults -Result $dlResult -Updates $coll -Stage 'Download'
+            Write-Line 'Result: Download failed.'
+            $script:ExitCode = 2
+            return
+        }
     }
 
     Write-Section 'Install'
