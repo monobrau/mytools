@@ -66,7 +66,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Tool | Source |
 | --- | --- |
 | SentinelOne silent install | mytools `SentinelOneInstall` — paste site/group token in GUI; optional URL or on-disk EXE/MSI |
-| ConnectSecure → silent install | mytools `ConnectSecureInstall` — company/env/install token in GUI; agentlink download then `-c/-e/-j/-i`. Default option: skip if agent is Running (fleet / scan-prep) |
+| ConnectSecure → silent install | mytools `ConnectSecureInstall` — company/env/install token in GUI; OS dropdown defaults to Windows (agentlink + leftover cleanup). Mac, Linux, ARM, and ARM-32 copy the portal shell command. Default option on Windows: skip if agent is Running |
 | ConnectSecure → agent repair + reinstall | mytools — wipe then reinstall (same GUI secrets). Default option: skip if agent is Running; uncheck to force wipe |
 | Huntress → silent install | mytools `HuntressInstall` — account key built in; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
 | Huntress → Verify scheduled reboot | Inline — host time, recent User32 1074 shutdown events, HuntressSC task query |
@@ -90,7 +90,8 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | Tool | Source |
 | --- | --- |
 | Inky / IPW transport rules | mytools — requires `Connect-ExchangeOnline` on an admin workstation; Scan lists, Delete removes (no `Read-Host`) |
-| INKY / usecure / Skout enterprise apps | mytools `EntraVendorAppRemoval` — Backstage PowerShell on an admin PC. Scan lists matches. Apply opens the picker. App ids differ per tenant |
+| INKY / usecure / Skout enterprise apps | mytools `EntraVendorAppRemoval` — PowerShell one-liner only, pasted into Backstage on an admin PC. Scan lists matches. Apply opens the picker. App ids differ per tenant |
+| Entra users, service accounts, BitLocker | mytools `EntraIntuneEvidence` — PowerShell one-liner only, pasted into Backstage on an admin PC. One run writes the authorized-user list, likely service accounts, and BitLocker per workstation to OneDrive |
 
 ### Untested
 

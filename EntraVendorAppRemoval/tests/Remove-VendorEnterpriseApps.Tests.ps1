@@ -112,7 +112,7 @@ Describe 'Vendor enterprise app selection' {
     }
 
     Context 'Get-VendorAppOneDriveRoot' {
-        It 'prefers the work OneDrive folder when it exists' {
+        It 'prefers the local work OneDrive path when that variable is set' {
             $prevCommercial = $env:OneDriveCommercial
             $prevOneDrive = $env:OneDrive
             try {

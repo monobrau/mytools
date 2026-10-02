@@ -24,13 +24,35 @@ Describe 'Entra Intune evidence classification' {
         }
 
         It 'matches a title that says service account' {
-            $reasons = Get-EntraServiceAccountReasons -DisplayName 'Nightly Job' -JobTitle 'Service account'
-            @($reasons) | Should -Be @('TitleOrDepartment')
+            $reasons = Get-EntraServiceAccountReasons -DisplayName 'Nightly' -JobTitle 'Service account'
+            @($reasons) | Should -Contain 'TitleOrDepartment'
         }
 
         It 'applies an extra pattern' {
-            $reasons = Get-EntraServiceAccountReasons -DisplayName 'Nightly Job' -UserPrincipalName 'nightly@contoso.example' -ExtraPattern 'nightly'
+            $reasons = Get-EntraServiceAccountReasons -DisplayName 'Nightly' -UserPrincipalName 'nightly@contoso.example' -ExtraPattern 'nightly'
             @($reasons) | Should -Contain 'ExtraPattern'
+        }
+
+        It 'keeps a one-word device or app name for review' {
+            @(Get-EntraServiceAccountReasons -DisplayName 'scan' -UserPrincipalName 'scan@contoso.example') | Should -Contain 'NeedsReview'
+            @(Get-EntraServiceAccountReasons -DisplayName 'Copier' -UserPrincipalName 'copier@contoso.example') | Should -Contain 'NeedsReview'
+            @(Get-EntraServiceAccountReasons -DisplayName 'ErpApp' -UserPrincipalName 'erpapp@contoso.example') | Should -Contain 'NeedsReview'
+        }
+
+        It 'excludes admin, break-glass, and test accounts' {
+            @(Get-EntraServiceAccountReasons -DisplayName 'Administrator' -UserPrincipalName 'administrator@contoso.example').Count | Should -Be 0
+            @(Get-EntraServiceAccountReasons -DisplayName 'Break Glass' -UserPrincipalName 'breakglass@contoso.example').Count | Should -Be 0
+            @(Get-EntraServiceAccountReasons -DisplayName 'SharePoint Test' -UserPrincipalName 'sharepointtest@contoso.example').Count | Should -Be 0
+        }
+
+        It 'excludes a person whose display name has a spaced hyphen' {
+            $reasons = Get-EntraServiceAccountReasons -DisplayName 'Jane - Doe' -UserPrincipalName 'jane.doe@contoso.example'
+            @($reasons).Count | Should -Be 0
+        }
+
+        It 'excludes an obvious person even when the sign-in looks like a service account' {
+            $reasons = Get-EntraServiceAccountReasons -DisplayName 'Jane Doe' -UserPrincipalName 'svc-jane@contoso.example'
+            @($reasons).Count | Should -Be 0
         }
     }
 

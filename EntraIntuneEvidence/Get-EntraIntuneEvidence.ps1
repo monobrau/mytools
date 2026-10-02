@@ -16,9 +16,9 @@
     (Graph beta deviceManagement/managedDeviceEncryptionStates). Recovery keys
     are not exported.
 
-    Entra has no service-account object class. ServiceAccounts.csv is the subset
-    whose name, job title, department, or on-premises OU looks like a service
-    account. PasswordNeverExpires is a column, not the reason a row is included.
+    Entra has no service-account object class. ServiceAccounts.csv is every
+    account that is not an obvious person name, an admin account, or a test
+    account. Prune it before you send it. PasswordNeverExpires is only a column.
 
 .PARAMETER TenantId
     Passed to Connect-MgGraph when a new sign-in is required.
@@ -29,6 +29,12 @@
 .PARAMETER ServiceAccountPattern
     Extra regular expression matched against display name, UPN, and mail nickname.
     Use this when a tenant's service accounts do not follow svc / sa- / service account.
+
+.PARAMETER Exit
+    Exit the PowerShell process when the export finishes. The launcher sends this for Commands #!ps.
+
+.PARAMETER NoExit
+    Keep the PowerShell window open. Backstage omits -Exit, which already does this.
 
 .EXAMPLE
     .\Get-EntraIntuneEvidence.ps1
@@ -42,7 +48,11 @@ param(
 
     [string]$OutputPath,
 
-    [string]$ServiceAccountPattern
+    [string]$ServiceAccountPattern,
+
+    [switch]$Exit,
+
+    [switch]$NoExit
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,9 +77,10 @@ function Get-SafeTenantFolderName {
 }
 
 function Get-EvidenceOneDriveRoot {
+    # Local sync folder only. Do not Test-Path it; that can prompt OneDrive to sign in.
     foreach ($candidate in @($env:OneDriveCommercial, $env:OneDrive)) {
-        if (-not [string]::IsNullOrWhiteSpace($candidate) -and (Test-Path -LiteralPath $candidate)) {
-            return $candidate
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate.TrimEnd('\')
         }
     }
 
@@ -85,12 +96,67 @@ function Get-EvidenceOneDriveRoot {
         if ($item -and $item.PSObject.Properties['UserFolder']) {
             $folder = [string]$item.UserFolder
         }
-        if (-not [string]::IsNullOrWhiteSpace($folder) -and (Test-Path -LiteralPath $folder)) {
-            return $folder
+        if (-not [string]::IsNullOrWhiteSpace($folder)) {
+            return $folder.TrimEnd('\')
         }
     }
 
     return $null
+}
+
+function Test-ObviousPersonName {
+    param(
+        [string]$DisplayName,
+        [string]$UserPrincipalName,
+        [string]$MailNickname
+    )
+
+    $candidates = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($DisplayName)) {
+        $candidates.Add($DisplayName)
+    }
+    foreach ($value in @($MailNickname, $UserPrincipalName)) {
+        if ([string]::IsNullOrWhiteSpace($value)) { continue }
+        $local = $value
+        if ($local -match '^([^@]+)@') { $local = $Matches[1] }
+        $candidates.Add($local)
+    }
+
+    foreach ($candidate in $candidates) {
+        if ($candidate -match '\d') { continue }
+        if ($candidate -match '^([A-Za-z]{2,})-([A-Za-z]{2,})$') {
+            $left = $Matches[1]
+            $right = $Matches[2]
+            $prefix = '(?i)^(svc|srv|sa|scan|copier)$'
+            if ($left -notmatch $prefix -and $right -notmatch $prefix) { return $true }
+            continue
+        }
+        $tokens = @($candidate -split '[^A-Za-z'']+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($tokens.Count -lt 2) { continue }
+        $longTokens = 0
+        $allNames = $true
+        foreach ($token in $tokens) {
+            if ($token -notmatch "^[A-Za-z]([A-Za-z'-]+)?$") { $allNames = $false; break }
+            if ($token.Length -ge 2) { $longTokens++ }
+        }
+        if ($allNames -and $longTokens -ge 2) { return $true }
+    }
+    return $false
+}
+
+function Test-ExcludedServiceAccount {
+    param(
+        [string]$DisplayName,
+        [string]$UserPrincipalName,
+        [string]$MailNickname
+    )
+
+    $identity = (@($DisplayName, $UserPrincipalName, $MailNickname) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
+    if ($identity -match '(?i)break[-_\s]?glass') { return $true }
+    if ($identity -match '(?i)admin') { return $true }
+    if ($identity -match '(?i)(^|[^A-Za-z0-9])test|test([^A-Za-z0-9]|$)') { return $true }
+    if (Test-ObviousPersonName -DisplayName $DisplayName -UserPrincipalName $UserPrincipalName -MailNickname $MailNickname) { return $true }
+    return $false
 }
 
 function Get-EntraServiceAccountReasons {
@@ -103,6 +169,10 @@ function Get-EntraServiceAccountReasons {
         [string]$OnPremisesDistinguishedName,
         [string]$ExtraPattern
     )
+
+    if (Test-ExcludedServiceAccount -DisplayName $DisplayName -UserPrincipalName $UserPrincipalName -MailNickname $MailNickname) {
+        return (New-Object System.Collections.Generic.List[string])
+    }
 
     $reasons = New-Object System.Collections.Generic.List[string]
     $identity = (@($DisplayName, $UserPrincipalName, $MailNickname) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ' '
@@ -125,6 +195,9 @@ function Get-EntraServiceAccountReasons {
     }
     if (-not [string]::IsNullOrWhiteSpace($ExtraPattern) -and $identity -match $ExtraPattern) {
         $reasons.Add('ExtraPattern')
+    }
+    if ($reasons.Count -eq 0) {
+        $reasons.Add('NeedsReview')
     }
 
     $unique = New-Object System.Collections.Generic.List[string]
@@ -263,7 +336,7 @@ Write-Host "Tenant: $tenantName"
 if (-not $OutputPath) {
     $root = Get-EvidenceOneDriveRoot
     if (-not $root) {
-        Write-Warning 'OneDrive folder was not found. Saving the export under Documents instead.'
+        Write-Warning 'No local OneDrive path is set. Saving the export under Documents instead.'
         $root = [Environment]::GetFolderPath('MyDocuments')
     }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -445,10 +518,10 @@ $notes = @(
     'Accounts that exist only on a domain controller and are not synced to Entra are not in this file.'
     'Enabled guests are not in this file.'
     ''
-    'ServiceAccounts.csv is not an official Entra object class. A row is included when the name'
-    'looks like svc / srv / sa-, the title or department says service account, the on-premises OU'
-    'contains "service", or -ServiceAccountPattern matches. PasswordNeverExpires is only a column.'
-    'Review the list before sending it. A person named in a service OU will show up here.'
+    'ServiceAccounts.csv is not an official Entra object class. It is every account that is'
+    'not an obvious person name, not an admin account, and not a test account.'
+    'Names containing admin or break-glass, and names containing test, are left off.'
+    'Prune the file before you send it. Microsoft-generated ids and one-word app names can remain.'
     ''
     'BitLocker-Workstations.csv is one row per Windows device in the Intune encryption report'
     '(Graph beta deviceManagement/managedDeviceEncryptionStates).'
@@ -465,3 +538,4 @@ $notes = @(
 $notesPath = Join-Path $OutputPath 'Evidence-Notes.txt'
 $notes -join [Environment]::NewLine | Set-Content -LiteralPath $notesPath -Encoding utf8
 Write-Host "Notes: $notesPath"
+if ($Exit -and -not $NoExit) { exit 0 }

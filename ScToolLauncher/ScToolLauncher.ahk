@@ -258,7 +258,7 @@ Mozilla Firefox
         "TimeoutUpdate", 14400000,
         "DefaultArgs", "-Feature",
         "Flags", "CheckOnly Force AutoReboot NoExit",
-        "Note", "Needs ~20+ GB free and a 750+ MB recovery/WinRE partition. Use PowerShell or a 4-hour Commands timeout. Session drops if Auto reboot is checked."
+        "Note", "Backstage is fine. No desktop login. Driver updates install first. Auto reboot restarts only when Windows Update requires it; leave it off to stop instead. Do not start a second run while one is in progress. 4-hour timeout."
     ),
     ; --- ScreenConnect ---
     Map(
@@ -467,7 +467,7 @@ HP Support Assistant AppX
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
         "Folder", "ConnectSecure",
         "Name", "ConnectSecure silent install",
-        "Summary", "Download Windows agent from ConnectSecure agentlink API, then silent install with -c/-e/-j/-i. Paste IDs/token at copy time — never stored.",
+        "Summary", "Silent install with -c/-e/-j/-i. Defaults to Windows (agentlink + leftover cleanup). Mac, Linux, ARM, and ARM-32 copy the portal shell command. Paste IDs/token at copy time — never stored.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureInstall",
         "Fetch", "Contents",
         "Path", "ConnectSecureInstall",
@@ -477,7 +477,7 @@ HP Support Assistant AppX
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly ConnectSecure SkipIfRunning AlwaysNote",
-        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Prefer elevated PowerShell.",
+        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Windows is the default and skips if CyberCNSAgent is Running. Mac, Linux, ARM, and ARM-32 are root shell commands.",
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
@@ -662,9 +662,25 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "UaVer", "1.0.0",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 600000,
-        "Flags", "CheckOnly Delete AlwaysNote",
+        "Flags", "CheckOnly Delete AlwaysNote BackstageOnly",
         "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Scan lists matches. Apply opens the picker; type DELETE to remove the ones you select. Needs Microsoft.Graph and Application Administrator.",
         "ClipboardNote", "NOTE: Admin PC Backstage PowerShell. Scan lists only. Apply opens the picker. Type DELETE to remove. App ids differ per tenant."
+    ),
+    Map(
+        "Category", "M365 / Exchange — admin PC (Inky rules, vendor apps)",
+        "Name", "Entra users, service accounts, BitLocker",
+        "Summary", "Export the Entra authorized-user list, likely service accounts, and Intune BitLocker status per workstation. Saves under OneDrive.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EntraIntuneEvidence",
+        "Fetch", "Contents",
+        "Path", "EntraIntuneEvidence",
+        "Script", "Get-EntraIntuneEvidence.ps1",
+        "UaPrefix", "EntraIntuneEvidence-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 600000,
+        "Flags", "RunOnly AlwaysNote BackstageOnly",
+        "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Signs into Microsoft Graph and writes AuthorizedUsers.csv, ServiceAccounts.csv, and BitLocker-Workstations.csv under OneDrive\EntraIntuneEvidence. Review the service-account file before you send it.",
+        "ClipboardNote", "NOTE: Admin PC Backstage PowerShell. Exports authorized users, likely service accounts, and BitLocker per workstation to OneDrive. Review ServiceAccounts.csv before sending."
     ),
     ; --- Untested (move here until validated) ---
     Map(
@@ -889,6 +905,11 @@ ShowGui(*) {
     gCtrls["LblDomain"] := gGui.Add("Text", , "AD domain (optional)")
     gCtrls["Domain"] := gGui.Add("Edit", "w" UiContentW " vDomain", "")
 
+    gCtrls["LblCsOs"] := gGui.Add("Text", "Section", "Operating system")
+    gCtrls["CsOs"] := gGui.Add("DropDownList", "w" UiContentW " vCsOs", ["Windows", "Mac", "Linux", "ARM", "ARM-32"])
+    gCtrls["CsOs"].Choose(1)
+    gCtrls["CsOs"].OnEvent("Change", (*) => RefreshOptionEnable())
+
     gCtrls["LblCsCompany"] := gGui.Add("Text", "Section", "ConnectSecure company ID (-c)")
     gCtrls["CsCompanyId"] := gGui.Add("Edit", "w" UiContentW " vCsCompanyId", "")
     gCtrls["LblCsEnv"] := gGui.Add("Text", , "ConnectSecure environment ID (-e)")
@@ -957,6 +978,7 @@ ShowGui(*) {
         "LblPupFamily", "PupFamily",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
+        "LblCsOs", "CsOs",
         "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
         "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
         "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
@@ -1026,7 +1048,7 @@ ReflowGui() {
             cw := 200
         }
         else if (key = "Product" || key = "PupFamily" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor"
-            || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
+            || key = "CsOs" || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
             || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl"
             || key = "HuntressAccountKey" || key = "HuntressOrgKey" || key = "HuntressTags"
             || key = "HuntressRebootAt"
@@ -1182,6 +1204,7 @@ RefreshOptionEnable(*) {
             "LblProduct", "Product", "LblPupFamily", "PupFamily",
             "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
             "LblDomainController", "DomainController", "LblDomain", "Domain",
+            "LblCsOs", "CsOs",
             "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
             "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
             "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
@@ -1221,7 +1244,12 @@ RefreshOptionEnable(*) {
     showVendor := ToolHasFlag(t, "Vendor")
     showDomain := ToolHasFlag(t, "Domain")
     showConnectSecure := ToolHasFlag(t, "ConnectSecure")
-    showSkipIfRunning := ToolHasFlag(t, "SkipIfRunning")
+    showCsOs := showConnectSecure && ToolHasFlag(t, "RunOnly")
+    csOs := ""
+    if (showCsOs)
+        csOs := gCtrls["CsOs"].Text
+    csOsShell := showCsOs && (csOs != "" && csOs != "Windows")
+    showSkipIfRunning := ToolHasFlag(t, "SkipIfRunning") && !csOsShell
     showResetPlatform := ToolHasFlag(t, "ResetPlatform")
     if InStr(ToolGet(t, "Path", ""), "WindowsDefender") && gCtrls["ModeScan"].Value
         showResetPlatform := false
@@ -1282,8 +1310,11 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["DomainController"], showDomain)
     SetCtrlShown(gCtrls["LblDomain"], showDomain)
     SetCtrlShown(gCtrls["Domain"], showDomain)
-    ; ConnectSecure IDs/token: always for silent install (RunOnly); repair only in Apply mode
+    ; ConnectSecure IDs/token: always for silent install (RunOnly); repair only in Apply mode.
+    ; OS list is install-only. Repair stays the Windows wipe script.
     showCsFields := showConnectSecure && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
+    SetCtrlShown(gCtrls["LblCsOs"], showCsOs)
+    SetCtrlShown(gCtrls["CsOs"], showCsOs)
     SetCtrlShown(gCtrls["LblCsCompany"], showCsFields)
     SetCtrlShown(gCtrls["CsCompanyId"], showCsFields)
     SetCtrlShown(gCtrls["LblCsEnv"], showCsFields)
@@ -1365,7 +1396,10 @@ RefreshOptionEnable(*) {
     } else if runOnly && (ToolGet(t, "Fetch", "") = "Inline") {
         gCtrls["ModeUpdate"].Text := "Run command"
     } else if runOnly && showConnectSecure {
-        gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
+        if (csOsShell)
+            gCtrls["ModeUpdate"].Text := "Silent install (shell)"
+        else
+            gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
     } else if runOnly && InStr(ToolGet(t, "TempName", ""), "HPbloatware") {
         gCtrls["ModeUpdate"].Text := "Remove HP bloat / Wolf"
     } else if runOnly {
@@ -1386,12 +1420,16 @@ RefreshOptionEnable(*) {
     if ToolHasFlag(t, "BackstageOnly") {
         gCtrls["FmtBackstage"].Value := 1
         gCtrls["FmtCommands"].Value := 0
-        gCtrls["FmtCommands"].Enabled := false
+        SetCtrlShown(gCtrls["FmtCommands"], false)
         gCtrls["LblPaste"].Text := "Paste format (PowerShell only)"
     } else {
-        gCtrls["FmtCommands"].Enabled := true
+        SetCtrlShown(gCtrls["FmtCommands"], true)
         gCtrls["LblPaste"].Text := "Paste format"
     }
+    if (csOsShell)
+        gCtrls["FmtBackstage"].Text := "Terminal (one line)"
+    else
+        gCtrls["FmtBackstage"].Text := "PowerShell (one line)"
 
     if InStr(ToolGet(t, "Path", ""), "WindowsDefender") {
         gCtrls["ModeScan"].Text := "Check RTP + services"
@@ -1412,6 +1450,9 @@ RefreshOptionEnable(*) {
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "EntraVendorAppRemoval") {
         gCtrls["ModeScan"].Text := "List matching apps"
         gCtrls["ModeUpdate"].Text := "Pick apps and delete"
+    }
+    if ToolHasFlag(t, "RunOnly") && InStr(ToolGet(t, "Path", ""), "EntraIntuneEvidence") {
+        gCtrls["ModeUpdate"].Text := "Export to OneDrive"
     }
     if ToolHasFlag(t, "AutomateGpo") {
         gCtrls["ModeScan"].Text := "Dry-run (transform only)"
@@ -1434,6 +1475,8 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["BtnAffects"], ToolGet(t, "Affects", "") != "")
 
     note := ToolGet(t, "Note", "")
+    if (csOsShell)
+        note := csOs " copies the ConnectSecure portal shell command. Company ID, environment ID, and install token come from the fields above and are not saved. Run as root."
     gCtrls["Note"].Value := note
     SetCtrlShown(gCtrls["Note"], note != "")
 
@@ -1835,8 +1878,39 @@ BuildHuntressScheduleBody(isCommands) {
     return p
 }
 
+ShellSingleQuote(value) {
+    return "'" StrReplace(value, "'", "'\''") "'"
+}
+
+; Portal shell commands for Mac / Linux / ARM / ARM-32. Windows stays on the
+; PowerShell installer. IDs and the install token are quoted; nothing is stored.
+BuildConnectSecureShellSnippet(isCommands) {
+    global gCtrls, MaxLength
+    os := gCtrls["CsOs"].Text
+    company := ShellSingleQuote(Trim(gCtrls["CsCompanyId"].Value))
+    envId := ShellSingleQuote(Trim(gCtrls["CsEnvironmentId"].Value))
+    token := ShellSingleQuote(Trim(gCtrls["CsInstallToken"].Value))
+    install := " -c " company " -e " envId " -j " token " -i"
+    if (os = "Mac")
+        body := "macurl=$(curl -L -s -g `"https://configuration.myconnectsecure.com/api/v4/configuration/agentlink?ostype=darwinpkg`" | tr -d '`"'); sudo curl $macurl -o cybercnsagent_darwin.pkg; sudo installer -pkg ./cybercnsagent_darwin.pkg -target /; sudo /opt/install.sh" install
+    else if (os = "Linux")
+        body := "linuxurl=$(curl -L -s -g `"https://configuration.myconnectsecure.com/api/v4/configuration/agentlink?ostype=linux`" | tr -d '`"'); curl $linuxurl -o cybercnsagent_linux; chmod +x cybercnsagent_linux; sudo ./cybercnsagent_linux" install
+    else if (os = "ARM-32")
+        body := "armurl=$(curl -L -s -g `"https://configuration.myconnectsecure.com/api/v4/configuration/agentlink?ostype=arm32`" | tr -d '`"'); curl $armurl -o cybercnsagent_arm; chmod +x cybercnsagent_arm; sudo ./cybercnsagent_arm" install
+    else
+        body := "armurl=$(curl -L -s -g `"https://configuration.myconnectsecure.com/api/v4/configuration/agentlink?ostype=arm`" | tr -d '`"'); curl $armurl -o cybercnsagent_arm; chmod +x cybercnsagent_arm; sudo ./cybercnsagent_arm" install
+    if isCommands
+        return "#!sh`n#timeout=600000`n#maxlength=" MaxLength "`n" body "`n# NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Run as root."
+    return body
+}
+
 BuildSnippet(tool, isScan, isCommands) {
     global DefaultOwner, DefaultRepo, DefaultRef, MaxLength, gCtrls
+    if ToolHasFlag(tool, "ConnectSecure") && ToolHasFlag(tool, "RunOnly") {
+        csOs := gCtrls["CsOs"].Text
+        if (csOs != "" && csOs != "Windows")
+            return BuildConnectSecureShellSnippet(isCommands)
+    }
     timeout := isScan ? tool["TimeoutScan"] : tool["TimeoutUpdate"]
     fetch := ToolGet(tool, "Fetch", "Contents")
     tls := BootstrapTls()
@@ -1932,12 +2006,18 @@ DescribeSelection(tool, isScan) {
             else
                 mode := "Silent install"
         }
-        else if ToolHasFlag(tool, "ConnectSecure")
-            mode := "Silent install"
+        else if ToolHasFlag(tool, "ConnectSecure") {
+            if (CtrlActive(gCtrls["CsOs"]) && gCtrls["CsOs"].Text != "" && gCtrls["CsOs"].Text != "Windows")
+                mode := "Silent install (" gCtrls["CsOs"].Text ")"
+            else
+                mode := "Silent install"
+        }
         else if (ToolGet(tool, "Fetch", "") = "Inline")
             mode := "Run command"
         else if InStr(ToolGet(tool, "TempName", ""), "HPbloatware")
             mode := "Remove HP bloat"
+        else if InStr(ToolGet(tool, "Path", ""), "EntraIntuneEvidence")
+            mode := "Export evidence"
         else
             mode := "Download and run"
     } else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "Inline")
@@ -2025,6 +2105,8 @@ DescribeSelection(tool, isScan) {
         if (fam != "")
             parts.Push("Family=" fam)
     }
+    if CtrlActive(gCtrls["CsOs"])
+        parts.Push(gCtrls["CsOs"].Text)
     if ToolHasFlag(tool, "SentinelOneInstall") && CtrlActive(gCtrls["S1InstallerUrl"]) {
         if (Trim(gCtrls["S1InstallerUrl"].Value) != "")
             parts.Push("Download+install")

@@ -472,9 +472,10 @@ function Get-SafeTenantFolderName {
 }
 
 function Get-VendorAppOneDriveRoot {
+    # Local sync folder only. Do not Test-Path it; that can prompt OneDrive to sign in.
     foreach ($candidate in @($env:OneDriveCommercial, $env:OneDrive)) {
-        if (-not [string]::IsNullOrWhiteSpace($candidate) -and (Test-Path -LiteralPath $candidate)) {
-            return $candidate
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate.TrimEnd('\')
         }
     }
 
@@ -490,8 +491,8 @@ function Get-VendorAppOneDriveRoot {
         if ($item -and $item.PSObject.Properties['UserFolder']) {
             $folder = [string]$item.UserFolder
         }
-        if (-not [string]::IsNullOrWhiteSpace($folder) -and (Test-Path -LiteralPath $folder)) {
-            return $folder
+        if (-not [string]::IsNullOrWhiteSpace($folder)) {
+            return $folder.TrimEnd('\')
         }
     }
 
@@ -598,7 +599,7 @@ if (-not $WhatIfPreference -and -not $Force) {
 if (-not $OutputPath) {
     $root = Get-VendorAppOneDriveRoot
     if (-not $root) {
-        Write-Warning 'OneDrive folder was not found. Saving the backup under Documents instead.'
+        Write-Warning 'No local OneDrive path is set. Saving the backup under Documents instead.'
         $root = [Environment]::GetFolderPath('MyDocuments')
     }
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'

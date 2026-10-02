@@ -29,7 +29,7 @@ cd EntraIntuneEvidence
 .\Get-EntraIntuneEvidence.ps1
 ```
 
-Files land in `OneDrive\EntraIntuneEvidence\<tenant>\<timestamp>\`:
+Files are written to the local OneDrive folder on this PC, `OneDrive\EntraIntuneEvidence\<tenant>\<timestamp>\`. The script does not sign in to OneDrive.
 
 | File | Contents |
 | --- | --- |
@@ -38,24 +38,23 @@ Files land in `OneDrive\EntraIntuneEvidence\<tenant>\<timestamp>\`:
 | `BitLocker-Workstations.csv` | One Windows workstation per row, with `BitLockerDeployed` and the Intune policy name. |
 | `Evidence-Notes.txt` | When it was collected, what each file means, and the counts. |
 
-`-OutputPath` overrides the folder. If OneDrive cannot be found, the script warns and uses Documents.
+`-OutputPath` overrides the folder. If no local OneDrive path is set, the script warns and uses Documents.
 
 ## Service accounts
 
-Entra has no service-account object class. A row is included when any of these match:
+Entra has no service-account object class. `ServiceAccounts.csv` is what remains after three exclusions:
 
-- the name, UPN, or mail nickname looks like `svc`, `srv`, or `sa-`
-- the job title or department says "service account"
-- the on-premises distinguished name has an OU containing "service"
-- `-ServiceAccountPattern` matches (your extra regular expression)
+- obvious person names (two or more name words, or a hyphenated first-last sign-in)
+- admin accounts (the name contains `admin` or `break-glass`)
+- test accounts (the name contains `test`)
 
-`PasswordNeverExpires` is a column on the row. It is not enough, by itself, to call someone a service account.
+A matching `svc`, `srv`, or `sa-` name, a "service account" title, a service OU, or `-ServiceAccountPattern` is recorded in `ServiceAccountReason` when it applies. Everything else that survived the exclusions is included with reason `NeedsReview`.
 
 ```powershell
 .\Get-EntraIntuneEvidence.ps1 -ServiceAccountPattern 'backup|sqlagent'
 ```
 
-Review `ServiceAccounts.csv` before you send it. A person who sits in an OU named Service will be on that list.
+Prune `ServiceAccounts.csv` before you send it. One-word application names and Microsoft-generated ids can still be on the list.
 
 ## BitLocker
 
