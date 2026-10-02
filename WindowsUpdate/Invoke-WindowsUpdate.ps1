@@ -12,6 +12,10 @@
     policy, pending reboot). Default install does not reboot. -Reboot
     restarts when the installer reports RebootRequired.
 
+    On Windows 11 23H2 (build 22631), Apply also turns Windows Update
+    services and WinRE back on when policy allows, and installs pending
+    cumulative updates before a feature update.
+
 .PARAMETER CheckOnly
     Search and report only. No download or install.
 
@@ -58,6 +62,14 @@ if ($Quality -and $Feature) {
 }
 if (-not $Quality -and -not $Feature) { $Quality = $true }
 $script:Channel = $(if ($Feature) { 'Feature' } else { 'Quality' })
+$script:OsBuild = 0
+$script:IsBuild22631 = $false
+$script:QualityFirst = $false
+$script:DriversFirst = $false
+try {
+    $script:OsBuild = [int](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).BuildNumber
+    $script:IsBuild22631 = ($script:OsBuild -eq 22631)
+} catch { }
 
 function Write-Line([string]$Message) {
     Write-Host $Message
@@ -97,6 +109,103 @@ function Test-IsFeatureUpdate($Update) {
         }
     } catch { }
     return $false
+}
+
+function Test-IsServicingUpdate($Update) {
+    if (Test-IsFeatureUpdate $Update) { return $false }
+    $title = [string]$Update.Title
+    if ($title -match '(?i)Defender|Security Intelligence|Malicious Software Removal|Definition Update') { return $false }
+    return ($title -match '(?i)Cumulative Update|Servicing Stack')
+}
+
+function Test-UpdateAccessBlocked {
+    $disableAccess = $null
+    try {
+        $disableAccess = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' -ErrorAction Stop).DisableWindowsUpdateAccess
+    } catch { }
+    return ($disableAccess -eq 1)
+}
+
+function Enable-UpdateService {
+    param([string]$Name)
+    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (-not $svc) {
+        Write-Line ("Prep: {0} is not installed." -f $Name)
+        return
+    }
+    if ($svc.StartType -eq 'Disabled') {
+        try {
+            Set-Service -Name $Name -StartupType Manual -ErrorAction Stop
+            Write-Line ("Prep: {0} startup set to Manual (was Disabled)." -f $Name)
+        } catch {
+            Write-Line ("Prep: could not enable {0}: {1}" -f $Name, $_.Exception.Message)
+            return
+        }
+        $svc.Refresh()
+    }
+    if ($svc.Status -ne 'Running') {
+        try {
+            Start-Service -Name $Name -ErrorAction Stop
+            Write-Line ("Prep: {0} started." -f $Name)
+        } catch {
+            Write-Line ("Prep: could not start {0}: {1}" -f $Name, $_.Exception.Message)
+        }
+    }
+}
+
+function Invoke-Build22631Prep {
+    Write-Section 'Prep (build 22631)'
+    if (Test-UpdateAccessBlocked) {
+        Write-Line 'Prep: DisableWindowsUpdateAccess=1. Leaving services unchanged.'
+    } else {
+        foreach ($n in @('wuauserv', 'bits', 'dosvc', 'UsoSvc', 'WaaSMedicSvc')) {
+            Enable-UpdateService -Name $n
+        }
+    }
+    $winre = Get-WinReStatus
+    if ($winre -and $winre.Enabled -eq 'Disabled') {
+        Write-Line 'Prep: Windows RE is disabled. Running reagentc /enable.'
+        $out = ''
+        try { $out = (& reagentc.exe /enable 2>&1 | Out-String) } catch { $out = $_.Exception.Message }
+        if (-not [string]::IsNullOrWhiteSpace($out)) { Write-Line $out.Trim() }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Line ("Prep: reagentc /enable exited {0}." -f $LASTEXITCODE)
+        }
+    }
+}
+
+function Get-WuResultHint {
+    param([int64]$HResult)
+    $code = [uint32]($HResult -band 0xFFFFFFFF)
+    switch ($code) {
+        0x80240016 { return 'A reboot is still required, or another install is already running.' }
+        0x80240034 { return 'Download failed. BITS, Delivery Optimization (dosvc), or access to Windows Update is the usual cause.' }
+        0x80240022 { return 'Every update in the batch failed.' }
+        0x80070643 { return 'On build 22631 this is usually WinRE. Enable it and keep the recovery partition at 250 MB or larger.' }
+        0xC1900208 { return 'The version upgrade is blocked by an incompatible app or driver.' }
+        0xC1900200 { return 'This PC does not meet the requirements for that Windows version.' }
+        default { return $null }
+    }
+}
+
+function Write-UpdateOperationResults {
+    param($Result, $Updates, [string]$Stage)
+    $n = 0
+    try { $n = [int]$Updates.Count } catch { return }
+    for ($i = 0; $i -lt $n; $i++) {
+        $title = ''
+        try { $title = [string]$Updates.Item($i).Title } catch { }
+        $one = $null
+        try { $one = $Result.GetUpdateResult($i) } catch { }
+        if (-not $one) { continue }
+        if ($one.ResultCode -in 2, 3) { continue }
+        $hr = 0
+        try { $hr = [int64]$one.HResult } catch { }
+        $hrText = ('0x{0:X8}' -f [uint32]($hr -band 0xFFFFFFFF))
+        Write-Line ("{0} failed: {1} | ResultCode={2} | HResult={3}" -f $Stage, $title, $one.ResultCode, $hrText)
+        $hint = Get-WuResultHint -HResult $hr
+        if ($hint) { Write-Line ("Hint: {0}" -f $hint) }
+    }
 }
 
 function Get-SystemDriveInfo {
@@ -157,6 +266,60 @@ function Get-WinReStatus {
     [pscustomobject]@{ Enabled = $enabled; Location = $loc; Raw = $text.Trim() }
 }
 
+function Write-SafeguardHolds {
+    $base = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\TargetVersionUpgradeExperienceIndicators'
+    if (-not (Test-Path -LiteralPath $base)) {
+        Write-Check Pass 'SafeguardHold' 'No upgrade-experience indicators.'
+        return
+    }
+    $found = $false
+    foreach ($k in @(Get-ChildItem -LiteralPath $base -ErrorAction SilentlyContinue)) {
+        $p = $null
+        try { $p = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction Stop } catch { continue }
+        $gStatus = [string]$p.GStatus
+        $upgEx = [string]$p.UpgEx
+        $blockId = @($p.GatedBlockId) | Where-Object { $_ -and [string]$_ -ne 'None' }
+        $red = @($p.RedReason) | Where-Object { $_ -and [string]$_ -ne 'None' }
+        if ($gStatus -eq '0') {
+            $found = $true
+            $idText = 'no id'
+            if ($blockId) { $idText = ($blockId -join ',') }
+            Write-Check Warn 'SafeguardHold' ("{0} GStatus=0 id={1}. Microsoft is blocking this version upgrade." -f $k.PSChildName, $idText)
+        } elseif ($upgEx -eq 'Red' -and $red) {
+            $found = $true
+            Write-Check Warn 'SafeguardHold' ("{0} UpgEx=Red reason={1}." -f $k.PSChildName, ($red -join ','))
+        }
+    }
+    if (-not $found) {
+        Write-Check Pass 'SafeguardHold' 'No safeguard hold and no red upgrade block.'
+    }
+}
+
+function Test-FeatureSetupRunning {
+    foreach ($n in @('SetupHost', 'Windows10UpgraderApp')) {
+        if (Get-Process -Name $n -ErrorAction SilentlyContinue) { return $true }
+    }
+    return $false
+}
+
+function Test-FeatureInstallInProgress {
+    $searcher = $null
+    try { $searcher = (New-Object -ComObject Microsoft.Update.Session).CreateUpdateSearcher() } catch { return $false }
+    $n = 0
+    try { $n = [int]$searcher.GetTotalHistoryCount() } catch { return $false }
+    if ($n -lt 1) { return $false }
+    $take = $n
+    if ($take -gt 15) { $take = 15 }
+    $hist = @()
+    try { $hist = @($searcher.QueryHistory(0, $take)) } catch { return $false }
+    foreach ($h in $hist) {
+        $title = [string]$h.Title
+        if ($title -notmatch '(?i)version \d\dH\d|feature update|enablement package') { continue }
+        return ([int]$h.ResultCode -eq 1)
+    }
+    return $false
+}
+
 function Test-PendingReboot {
     $reasons = @()
     if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') {
@@ -178,6 +341,9 @@ function Invoke-UpdatePreCheck {
     $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction SilentlyContinue
     if ($os) {
         Write-Line ("OS: {0} ({1}.{2})" -f $os.Caption.Trim(), $os.Version, $os.BuildNumber)
+    }
+    if ($script:IsBuild22631) {
+        Write-Line 'Note: Build 22631 (Windows 11 23H2). Apply re-enables Windows Update services and WinRE when policy allows. Pending cumulative updates install before a version upgrade.'
     }
     Write-Line ("ComputerName: {0}" -f $env:COMPUTERNAME)
     Write-Line ("Channel: {0}" -f $script:Channel)
@@ -282,9 +448,18 @@ function Invoke-UpdatePreCheck {
 
     $pending = @(Test-PendingReboot)
     if ($pending.Count -gt 0) {
-        Write-Check Warn 'PendingReboot' (($pending -join ', ') + '  -  finish the reboot before a reliable install.')
+        $onlyRename = ($pending.Count -eq 1 -and $pending[0] -eq 'PendingFileRenameOperations')
+        if ($script:IsBuild22631 -and $onlyRename) {
+            Write-Check Warn 'PendingReboot' 'PendingFileRenameOperations only. No CBS or Windows Update reboot is pending, so this does not stop the install.'
+        } else {
+            Write-Check Warn 'PendingReboot' (($pending -join ', ') + '  -  finish the reboot before a reliable install.')
+        }
     } else {
         Write-Check Pass 'PendingReboot' 'No CBS/WU pending-reboot keys.'
+    }
+
+    if ($Feature -and $script:IsBuild22631) {
+        Write-SafeguardHolds
     }
 
     if ($Feature -and $os) {
@@ -319,17 +494,48 @@ function Search-WindowsUpdates {
         $all += $result.Updates.Item($i)
     }
 
-    $picked = @()
-    foreach ($u in $all) {
-        $isFeat = Test-IsFeatureUpdate $u
-        if ($Feature -and -not $isFeat) { continue }
-        if ($Quality -and $isFeat) { continue }
-        $title = [string]$u.Title
-        if (-not $Force -and $title -match '(?i)\bPreview\b') {
-            Write-Line ("Skip (Preview; use -Force): {0}" -f $title)
-            continue
+    $qualityFirst = @()
+    if ($Feature -and $script:IsBuild22631) {
+        foreach ($u in $all) {
+            if (-not (Test-IsServicingUpdate $u)) { continue }
+            $title = [string]$u.Title
+            if (-not $Force -and $title -match '(?i)\bPreview\b') { continue }
+            $qualityFirst += $u
         }
-        $picked += $u
+        if ($qualityFirst.Count -gt 0) {
+            Write-Line ("Build 22631: {0} cumulative or servicing-stack update(s) are still pending." -f $qualityFirst.Count)
+            foreach ($u in $qualityFirst) {
+                Write-Line ("QualityPending: {0} | {1}" -f $u.Title, (Get-KbList $u))
+            }
+            if ($CheckOnly) {
+                Write-Line 'Build 22631: install these before a version upgrade. This scan does not install them.'
+            } else {
+                Write-Line 'Build 22631: this run installs those updates first. Run -Feature again after reboot for the version upgrade.'
+                $script:QualityFirst = $true
+            }
+        }
+    }
+
+    $picked = @()
+    if ($script:QualityFirst) {
+        $picked = $qualityFirst
+        foreach ($u in $all) {
+            if (Test-IsFeatureUpdate $u) {
+                Write-Line ("FeatureDeferred: {0} | {1}" -f $u.Title, (Get-KbList $u))
+            }
+        }
+    } else {
+        foreach ($u in $all) {
+            $isFeat = Test-IsFeatureUpdate $u
+            if ($Feature -and -not $isFeat) { continue }
+            if ($Quality -and $isFeat) { continue }
+            $title = [string]$u.Title
+            if (-not $Force -and $title -match '(?i)\bPreview\b') {
+                Write-Line ("Skip (Preview; use -Force): {0}" -f $title)
+                continue
+            }
+            $picked += $u
+        }
     }
 
     Write-Line ("UpdatesFound: {0}" -f $picked.Count)
@@ -338,12 +544,34 @@ function Search-WindowsUpdates {
         try { $mb = [math]::Round($u.MaxDownloadSize / 1MB, 0) } catch { }
         $dl = $false
         try { $dl = [bool]$u.IsDownloaded } catch { }
-        Write-Line ("Update: {0} | {1} | {2} MB | Downloaded={3}" -f $u.Title, (Get-KbList $u), $mb, $dl)
+        Write-Line ("Update: {0} | {1} | max {2} MB (catalog size, not required free space) | Downloaded={3}" -f $u.Title, (Get-KbList $u), $mb, $dl)
     }
     if ($picked.Count -eq 0) {
         Write-Line ("Result: No {0} updates waiting." -f $script:Channel.ToLower())
     }
-    return @{ Session = $session; Updates = $picked }
+
+    $drivers = @()
+    if ($Feature) {
+        try {
+            Write-Line 'Searching (IsInstalled=0 IsHidden=0 Type=Driver)...'
+            $dResult = $searcher.Search("IsInstalled=0 and IsHidden=0 and Type='Driver'")
+            for ($i = 0; $i -lt $dResult.Updates.Count; $i++) {
+                $drivers += $dResult.Updates.Item($i)
+            }
+        } catch {
+            Write-Line ("Driver search failed: {0}" -f $_.Exception.Message)
+        }
+        Write-Line ("DriversFound: {0}" -f $drivers.Count)
+        foreach ($u in $drivers) {
+            Write-Line ("DriverPending: {0}" -f $u.Title)
+        }
+        if ($drivers.Count -gt 0 -and $CheckOnly) {
+            Write-Line 'Driver updates are pending. An install, not this scan, clears them before the version upgrade.'
+        } elseif ($drivers.Count -gt 0) {
+            Write-Line 'Driver updates are installed before the version upgrade. They block it while they are still downloading or installing.'
+        }
+    }
+    return @{ Session = $session; Updates = $picked; Drivers = $drivers }
 }
 
 function Install-WindowsUpdates {
@@ -357,9 +585,13 @@ function Install-WindowsUpdates {
     foreach ($u in $Updates) {
         $title = [string]$u.Title
         try {
-            if ($u.InstallationBehavior.CanRequestUserInput -and -not $Force) {
-                Write-Line ("Skip (may prompt; use -Force): {0}" -f $title)
-                continue
+            if ($u.InstallationBehavior.CanRequestUserInput) {
+                if ($Feature) {
+                    Write-Line ("No desktop prompt in Backstage. Continuing: {0}" -f $title)
+                } elseif (-not $Force) {
+                    Write-Line ("Skip (may prompt; use -Force): {0}" -f $title)
+                    continue
+                }
             }
         } catch { }
         try {
@@ -382,8 +614,14 @@ function Install-WindowsUpdates {
     $downloader = $Session.CreateUpdateDownloader()
     $downloader.Updates = $coll
     $dlResult = $downloader.Download()
-    Write-Line ("Download ResultCode: {0} (2=Succeeded)" -f $dlResult.ResultCode)
+    Write-Line ("Download ResultCode: {0} (1=InProgress 2=Succeeded 3=SucceededWithErrors 4=Failed)" -f $dlResult.ResultCode)
+    if ($dlResult.ResultCode -eq 1) {
+        Write-Line 'Result: Download is still in progress. Not installing and not rebooting.'
+        $script:ExitCode = 1
+        return
+    }
     if ($dlResult.ResultCode -notin 2, 3) {
+        Write-UpdateOperationResults -Result $dlResult -Updates $coll -Stage 'Download'
         Write-Line 'Result: Download failed.'
         $script:ExitCode = 2
         return
@@ -393,22 +631,37 @@ function Install-WindowsUpdates {
     $installer = $Session.CreateUpdateInstaller()
     $installer.Updates = $coll
     $inst = $installer.Install()
-    Write-Line ("Install ResultCode: {0} (2=Succeeded 3=SucceededWithErrors)" -f $inst.ResultCode)
+    Write-Line ("Install ResultCode: {0} (1=InProgress 2=Succeeded 3=SucceededWithErrors 4=Failed)" -f $inst.ResultCode)
     Write-Line ("RebootRequired: {0}" -f $inst.RebootRequired)
     if ($inst.ResultCode -eq 4 -or $inst.ResultCode -eq 5) {
-        Write-Line 'Result: Install failed or aborted.'
+        Write-UpdateOperationResults -Result $inst -Updates $coll -Stage 'Install'
+        Write-Line 'Result: Install failed or aborted. Not rebooting.'
         $script:ExitCode = 2
+        return
+    }
+    if ($inst.ResultCode -eq 1 -and -not $inst.RebootRequired) {
+        Write-Line 'Result: Install is still in progress. A reboot is not required yet. Not starting another copy.'
+        $script:ExitCode = 1
         return
     }
     if ($inst.RebootRequired) {
         Write-Line 'PENDING_REBOOT'
+        if ($script:QualityFirst) {
+            Write-Line 'Build 22631: reboot finishes the cumulative updates. Run -Feature again after the PC is back for the version upgrade.'
+        }
+        if ($script:DriversFirst) {
+            Write-Line 'Driver updates need a restart before the version upgrade. Run -Feature again after the PC is back.'
+        }
         if ($Reboot) {
-            Write-Line 'Reboot: restarting now (ScreenConnect session will drop).'
+            Write-Line 'Reboot: restarting now because this update requires it (ScreenConnect session will drop).'
             $script:ExitCode = 3
             Restart-Computer -Force
             return
         }
-        Write-Line 'Result: Installed. Reboot required (not rebooting).'
+        Write-Line 'Result: Installed. Reboot is required. Not rebooting.'
+        if ($script:QualityFirst) {
+            Write-Line 'Build 22631: reboot, then run -Feature again for the version upgrade.'
+        }
         $script:ExitCode = 1
         return
     }
@@ -418,10 +671,16 @@ function Install-WindowsUpdates {
         return
     }
     Write-Line 'Result: Installed. No reboot required.'
+    if ($script:QualityFirst) {
+        Write-Line 'Build 22631: cumulative updates installed. Run -Feature again for the version upgrade.'
+    }
     $script:ExitCode = 0
 }
 
 Write-Section ("Windows Update {0}" -f $script:Channel)
+if ($script:IsBuild22631 -and -not $CheckOnly) {
+    Invoke-Build22631Prep
+}
 Invoke-UpdatePreCheck
 
 $blockApply = $false
@@ -445,6 +704,30 @@ if ($script:PreCheckFails -gt 0) {
     }
 }
 
+if ($Feature -and -not $CheckOnly -and -not $blockApply -and (Test-FeatureInstallInProgress)) {
+    $realReboot = @(@(Test-PendingReboot) | Where-Object { $_ -ne 'PendingFileRenameOperations' })
+    if ((Test-FeatureSetupRunning) -or $realReboot.Count -gt 0) {
+        Write-Line 'Result: A version upgrade is already in progress. Not starting another.'
+        if ($realReboot.Count -gt 0) {
+            Write-Line 'PENDING_REBOOT'
+            if ($Reboot) {
+                Write-Line 'Reboot: restarting now because a reboot is already required (ScreenConnect session will drop).'
+                $script:ExitCode = 3
+                Restart-Computer -Force
+            } else {
+                Write-Line 'Result: Reboot is required to finish the upgrade. Not rebooting.'
+                $script:ExitCode = 1
+            }
+        } else {
+            Write-Line 'Result: Setup is still running. A reboot is not required yet.'
+            $script:ExitCode = 1
+        }
+        if ($Exit) { exit $script:ExitCode }
+        return
+    }
+    Write-Line 'Warning: Update history still says the version upgrade is in progress, but setup is not running and no reboot is pending. Continuing.'
+}
+
 try {
     $found = Search-WindowsUpdates
 } catch {
@@ -463,6 +746,9 @@ if ($CheckOnly) {
     } elseif ($found.Updates.Count -gt 0) {
         Write-Line ("Result: {0} {1} update(s) available." -f $found.Updates.Count, $script:Channel.ToLower())
         $script:ExitCode = 1
+    } elseif ($Feature -and @($found.Drivers).Count -gt 0) {
+        Write-Line ("Result: {0} driver update(s) pending before a version upgrade." -f @($found.Drivers).Count)
+        $script:ExitCode = 1
     } else {
         Write-Line 'Result: Nothing to install.'
         $script:ExitCode = 0
@@ -474,11 +760,26 @@ if ($CheckOnly) {
 if ($blockApply) {
     Write-Line 'Action: Install skipped (pre-check FAIL).'
     if ($found.Updates.Count -gt 0) {
-        Write-Line ("Pending (not installed): {0} {1} update(s)." -f $found.Updates.Count, $script:Channel.ToLower())
+        $kind = $(if ($script:QualityFirst) { 'quality' } else { $script:Channel.ToLower() })
+        Write-Line ("Pending (not installed): {0} {1} update(s)." -f $found.Updates.Count, $kind)
     }
     $script:ExitCode = 4
     if ($Exit) { exit $script:ExitCode }
     return
+}
+
+$driverQueue = @()
+if ($Feature -and $found.Drivers) { $driverQueue = @($found.Drivers) }
+if ($Feature -and $driverQueue.Count -gt 0 -and -not $script:QualityFirst) {
+    Write-Line 'Action: Install driver updates before the version upgrade.'
+    $script:DriversFirst = $true
+    Install-WindowsUpdates -Session $found.Session -Updates $driverQueue
+    $script:DriversFirst = $false
+    if ($script:ExitCode -ne 0) {
+        if ($Exit) { exit $script:ExitCode }
+        return
+    }
+    Write-Line 'Driver updates finished and did not require a reboot. Continuing with the version upgrade.'
 }
 
 Write-Line 'Action: Install'

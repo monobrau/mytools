@@ -22,6 +22,24 @@ Scan and Apply always run a pre-check:
 Apply stops on Fail unless `-Force`. Critical disk (under 5 GB quality / 10 GB
 feature) always stops.
 
+## Windows 11 23H2 (build 22631)
+
+Version upgrades from build 22631 fail more often than later builds. Apply
+(not a scan) on that build:
+
+- Sets `wuauserv`, `bits`, `dosvc`, `UsoSvc`, and `WaaSMedicSvc` to Manual and
+  starts them, unless `DisableWindowsUpdateAccess` is set
+- Runs `reagentc /enable` when Windows RE is disabled
+- Installs pending cumulative and servicing-stack updates before a feature
+  update, then stops so you can reboot and run `-Feature` again
+- Prints the Windows Update `HResult` when a download or install fails.
+  `0x80070643` on this build is usually WinRE
+
+A feature scan reports those cumulative updates and any safeguard hold
+(`GStatus=0`) or red upgrade block, and does not change the PC.
+`PendingFileRenameOperations` alone is not treated as a reboot that blocks
+the install.
+
 ## Parameters
 
 | Switch | Meaning |
@@ -39,3 +57,10 @@ feature) always stops.
 Use ScToolLauncher (**Software updates** → Windows Update quality / feature).
 Scan first. Prefer elevated. Feature installs can take hours — use Backstage
 or a long Commands timeout (4 hours). Reload the launcher after pull (`1.0.0`).
+
+A feature install from Backstage does not need someone signed in at the desktop.
+It installs pending driver updates first, because those keep the version upgrade
+at "Downloading 0%". It will not start a second copy while one is already in
+progress. `-Reboot` restarts the PC only when Windows Update sets
+`RebootRequired`. Leave that switch off to stop and report a required reboot
+without restarting.
