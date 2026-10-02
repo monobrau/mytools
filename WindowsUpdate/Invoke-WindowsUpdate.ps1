@@ -642,7 +642,27 @@ function Install-WindowsUpdates {
     Write-Section 'Install'
     $installer = $Session.CreateUpdateInstaller()
     $installer.Updates = $coll
-    $inst = $installer.Install()
+    $inst = $null
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Stop'
+    try {
+        $inst = $installer.Install()
+    } catch {
+        $hr = $_.Exception.HResult
+        Write-Line ("Install failed: 0x{0:X8}" -f ([uint32]($hr -band 0xFFFFFFFF)))
+        $hint = Get-WuResultHint $hr
+        if ($hint) { Write-Line $hint }
+        Write-Line 'Result: Install did not start. Not rebooting.'
+        $script:ExitCode = 2
+        return
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    if (-not $inst) {
+        Write-Line 'Result: Install did not return a result. Not rebooting.'
+        $script:ExitCode = 2
+        return
+    }
     Write-Line ("Install ResultCode: {0} (1=InProgress 2=Succeeded 3=SucceededWithErrors 4=Failed)" -f $inst.ResultCode)
     Write-Line ("RebootRequired: {0}" -f $inst.RebootRequired)
     if ($inst.ResultCode -eq 4 -or $inst.ResultCode -eq 5) {
