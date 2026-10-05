@@ -7,6 +7,7 @@ Public collection of work tools and scripts.
 | Tool | Description |
 | --- | --- |
 | [AutomateGpoDeploy](AutomateGpoDeploy/) | Download Automate MSI+MST, bake transform, stage on NETLOGON, create a startup-script GPO |
+| [AutomateUninstall](AutomateUninstall/) | Scan, remove, or reinstall the ConnectWise Automate (LabTech) remote agent from the config already on the PC. Leaves ScreenConnect installed |
 | [DellSupportAssistUpdate](DellSupportAssistUpdate/) | Update an already-installed Dell SupportAssist (Dell bootstrapper). Does not install when absent |
 | [DellTechHubCleanup](DellTechHubCleanup/) | Scan/remove Dell TechHub (`DellTechHub` service, `techhub.dll`) — common SentinelOne false positive |
 | [DotNetUpdate](DotNetUpdate/) | Patch installed .NET 6+ Runtime/Desktop/ASP.NET/SDK to latest same-major security release |

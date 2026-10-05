@@ -30,7 +30,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        Url (optional) overrides the constructed GitHub raw URL — use for gists
 ; Category: groups tools in the TreeView (order = CategoryOrder below)
 ; Folder: optional subfolder under Category (same as Client= for Client-specific)
-; Flags: CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Product ProductList
+;        CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Reinstall Product ProductList
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
@@ -59,7 +59,7 @@ CategoryOrder := [
     "ScreenConnect — GPO/MSI finder, temp cleanup",
     "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
     "AV — Defender repair, Cylance/Webroot, McAfee remnants",
-    "Agents — SentinelOne, ConnectSecure, Huntress",
+    "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — admin PC (Inky rules, vendor apps)",
     "Untested",
@@ -448,7 +448,7 @@ HP Support Assistant AppX
     ),
     ; --- Agents ---
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Name", "SentinelOne silent install",
         "Summary", "Paste site/group token → silent install for SC Commands or PowerShell. Optional download URL; else installer must already be on disk.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/SentinelOneInstall",
@@ -464,7 +464,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell. v1.0.1 auto-detects MSI downloads."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Folder", "ConnectSecure",
         "Name", "ConnectSecure silent install",
         "Summary", "Silent install with -c/-e/-j/-i. Defaults to Windows (agentlink + leftover cleanup). Mac, Linux, ARM, and ARM-32 copy the portal shell command. Paste IDs/token at copy time — never stored.",
@@ -481,7 +481,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Folder", "ConnectSecure",
         "Name", "ConnectSecure agent repair + reinstall",
         "Summary", "Wipe leftover agent (uninstall.bat + service registry), then reinstall. Paste company/env/token at copy time — never stored.",
@@ -498,7 +498,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Folder", "Huntress",
         "Name", "Huntress silent install",
         "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Account key is built in. Org key is per-client. Force = rip and replace. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
@@ -515,7 +515,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet. Do not paste into tickets/git. Prefer elevated PowerShell. Uses /ACCT_KEY=. PS2-safe inline download."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Folder", "Huntress",
         "Name", "Verify scheduled reboot",
         "Summary", "Read-only: host time, recent User32 1074 shutdown initiations, and HuntressSC task status.",
@@ -527,7 +527,7 @@ HP Support Assistant AppX
         "Note", "Read-only. Prefer elevated PowerShell."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress",
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Folder", "Huntress",
         "Name", "Cancel scheduled reboot",
         "Summary", "Aborts a pending shutdown.exe reboot countdown on the endpoint.",
@@ -537,6 +537,40 @@ HP Support Assistant AppX
         "TimeoutUpdate", 30000,
         "Flags", "RunOnly",
         "Note", "Prefer elevated PowerShell if the reboot was armed as SYSTEM."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Folder", "Automate",
+        "Name", "Automate agent uninstall",
+        "Summary", "Scan or remove the ConnectWise Automate (LabTech) remote agent. ScreenConnect and the Automate Control Center stay. Probe agents need Force.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/AutomateUninstall",
+        "Fetch", "Contents",
+        "Path", "AutomateUninstall",
+        "Script", "Uninstall-AutomateAgent.ps1",
+        "UaPrefix", "AutomateUninstall-bootstrap",
+        "UaVer", "1.1.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 600000,
+        "Flags", "CheckOnly Remediate Force AlwaysNote",
+        "Note", "Prefer elevated PowerShell. Scan first. Apply removes LTService / LTSvc / the remote-agent ARP entry only. ScreenConnect stays. Force is required for a probe agent.",
+        "ClipboardNote", "NOTE: Removes the Automate/LabTech agent only. ScreenConnect stays. Probe agents need Force. Reboot and run again if leftovers remain."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Folder", "Automate",
+        "Name", "Automate agent reinstall",
+        "Summary", "Reinstall the Automate agent from the server, location, and cached MSI already on this PC. No installer token. ScreenConnect stays. The new check-in gets a new agent ID in the same location.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/AutomateUninstall",
+        "Fetch", "Contents",
+        "Path", "AutomateUninstall",
+        "Script", "Uninstall-AutomateAgent.ps1",
+        "UaPrefix", "AutomateUninstall-bootstrap",
+        "UaVer", "1.1.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 900000,
+        "Flags", "CheckOnly Reinstall Force AlwaysNote",
+        "Note", "Prefer elevated PowerShell. Scan shows the server, location, and cached MSI. Apply copies that MSI (or downloads one from the recorded server), uninstalls, then installs with the same server and location. Nothing is removed if no installer can be found. Probe agents need Force.",
+        "ClipboardNote", "NOTE: Reinstalls from this PC only. No token. New agent ID, same location. ScreenConnect stays. Probe agents need Force."
     ),
     Map(
         "Category", "Untested",
@@ -840,7 +874,8 @@ ShowGui(*) {
         gGui := 0
     }
 
-    gGui := Gui("+AlwaysOnTop -MinimizeBox", TrayLabel)
+    ; OwnDialogs keeps the "needs company/token" box in front of this always-on-top window.
+    gGui := Gui("+AlwaysOnTop -MinimizeBox +OwnDialogs", TrayLabel)
     gGui.OnEvent("Close", (*) => gGui.Hide())
     gGui.OnEvent("Escape", (*) => gGui.Hide())
     gGui.SetFont("s9", "Segoe UI")
@@ -1266,6 +1301,12 @@ RefreshOptionEnable(*) {
     if (showHuntress) {
         gCtrls["Force"].Text := "Rip and replace (wipe leftover Huntress, then install now; no reboot)"
         gCtrls["AutoReboot"].Text := "Schedule SYSTEM install + cleanup + reboot at chosen time"
+    } else if ToolHasFlag(t, "Reinstall") {
+        gCtrls["Force"].Text := "Force (reinstall a probe agent)"
+        gCtrls["AutoReboot"].Text := "Auto reboot when required"
+    } else if InStr(ToolGet(t, "Path", ""), "AutomateUninstall") {
+        gCtrls["Force"].Text := "Force (uninstall a probe agent)"
+        gCtrls["AutoReboot"].Text := "Auto reboot when required"
     } else {
         gCtrls["Force"].Text := "Force (skip soft guards / re-run)"
         gCtrls["AutoReboot"].Text := "Auto reboot when required"
@@ -1439,6 +1480,13 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "Scan Acrobat XI + Foxit"
         gCtrls["ModeUpdate"].Text := "Uninstall Acrobat XI"
     }
+    if ToolHasFlag(t, "Reinstall") {
+        gCtrls["ModeScan"].Text := "Scan server, location, cached MSI"
+        gCtrls["ModeUpdate"].Text := "Reinstall from this PC"
+    } else if InStr(ToolGet(t, "Path", ""), "AutomateUninstall") {
+        gCtrls["ModeScan"].Text := "Scan Automate agent"
+        gCtrls["ModeUpdate"].Text := "Uninstall Automate agent"
+    }
     if InStr(ToolGet(t, "Path", ""), "WindowsUpdate") {
         gCtrls["ModeScan"].Text := "Scan pending updates + pre-check"
         gCtrls["ModeUpdate"].Text := "Install (no reboot unless option)"
@@ -1565,6 +1613,8 @@ BuildSwitches(tool, isScan, isCommands) {
 
     if ToolHasFlag(tool, "Remediate") && !isScan
         sw.Push("-Remediate")
+    if ToolHasFlag(tool, "Reinstall") && !isScan
+        sw.Push("-Reinstall")
     if CtrlActive(gCtrls["Detailed"]) && gCtrls["Detailed"].Value
         sw.Push("-Detailed")
 
@@ -2044,6 +2094,17 @@ DescribeSelection(tool, isScan) {
         else
             mode := "Install"
     }
+    if ToolHasFlag(tool, "Reinstall") {
+        if isScan
+            mode := "Scan local config"
+        else
+            mode := "Reinstall from this PC"
+    } else if InStr(ToolGet(tool, "Path", ""), "AutomateUninstall") {
+        if isScan
+            mode := "Scan agent"
+        else
+            mode := "Uninstall agent"
+    }
     if ToolHasFlag(tool, "AutomateGpo") {
         if isScan
             mode := "Dry-run transform"
@@ -2121,7 +2182,9 @@ DescribeSelection(tool, isScan) {
 }
 
 DoCopy(*) {
-    global gCtrls, AppName
+    global gCtrls, AppName, gGui
+    if gGui
+        gGui.Opt("+OwnDialogs")
     tool := SelectedTool()
     if ToolHasFlag(tool, "Help") {
         gCtrls["Status"].Value := "Select a tool from a category, then Copy."
@@ -2138,6 +2201,7 @@ DoCopy(*) {
 
     if ToolHasFlag(tool, "ConnectSecure") && !isScan {
         if (Trim(gCtrls["CsCompanyId"].Value) = "" || Trim(gCtrls["CsEnvironmentId"].Value) = "" || Trim(gCtrls["CsInstallToken"].Value) = "") {
+            gCtrls["Status"].Value := "Not copied. Needs Company ID, Environment ID, and Install Token."
             MsgBox("Needs Company ID, Environment ID, and Install Token.`nFill the fields (nothing is saved in the launcher), then copy again.", AppName, "Icon!")
             return
         }
@@ -2180,11 +2244,20 @@ DoCopy(*) {
         }
     }
 
-    snippet := BuildSnippet(tool, isScan, isCommands)
-    A_Clipboard := snippet
-    ClipWait(1)
+    try {
+        snippet := BuildSnippet(tool, isScan, isCommands)
+        if (snippet = "")
+            throw Error("Copy produced an empty snippet.")
+        A_Clipboard := snippet
+        if !ClipWait(1)
+            throw Error("Clipboard did not accept the snippet.")
+    } catch as e {
+        gCtrls["Status"].Value := "Copy failed: " e.Message
+        MsgBox("Copy failed.`n`n" e.Message, AppName, "Icon!")
+        return
+    }
     desc := DescribeSelection(tool, isScan)
-    gCtrls["Status"].Value := "Copied: " desc
+    gCtrls["Status"].Value := "Copied (" StrLen(snippet) " chars): " desc
     TrayTip("Copied to clipboard", desc, "Iconi")
     SetTimer(() => TrayTip(), -2500)
 }

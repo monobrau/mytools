@@ -12,12 +12,12 @@ Copies a ready-to-paste Commands `#!ps` (or PowerShell one-liner) bootstrap onto
 - Layout: **two columns** — tool tree on the left, mode/options/actions on the right (fits shorter screens)
 - Formats: Commands tab `#!ps` (default) or PowerShell one-liner
 - Modes/options depend on the tool (Scan, Update/Remediate/Delete, Force, etc.)
-- Tool list is a **TreeView** grouped by category, with subfolders (Webroot, Huntress, HP, Dell, …)
+- Tool list is a **TreeView** grouped by category, with subfolders (Webroot, Huntress, Automate, HP, Dell, …)
 - Each selection shows a short **About** blurb and **Open docs in browser** (GitHub README / folder)
 
 ## Catalog (GUI groups)
 
-Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Huntress, ConnectSecure, HP, Dell, Windows Update). Labels list what is under each group:
+Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Huntress, ConnectSecure, Automate, HP, Dell, Windows Update). Labels list what is under each group:
 
 ### Software updates — vuln catalog, M365, .NET, HPSA, Teams
 
@@ -61,7 +61,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
-### Agents — SentinelOne, ConnectSecure, Huntress
+### Agents — SentinelOne, ConnectSecure, Huntress, Automate
 
 | Tool | Source |
 | --- | --- |
@@ -71,6 +71,8 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Huntress → silent install | mytools `HuntressInstall` — account key built in; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
 | Huntress → Verify scheduled reboot | Inline — host time, recent User32 1074 shutdown events, HuntressSC task query |
 | Huntress → Cancel scheduled reboot | Inline `shutdown.exe /a` — aborts a pending shutdown.exe countdown (use if Huntress schedule armed a reboot) |
+| Automate → agent uninstall | mytools `AutomateUninstall` — scan or remove the LabTech / Automate remote agent. ScreenConnect stays. Force = allow a probe agent |
+| Automate → agent reinstall | mytools `AutomateUninstall` — reinstall from the server, location, and cached MSI already on the PC. No token. New agent ID, same location |
 
 Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, SentinelOne tokens, and Automate installer tokens stay GUI-only. Do not paste live tokens into tickets or git.
 
