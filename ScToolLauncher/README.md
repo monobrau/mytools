@@ -33,10 +33,11 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
 | Windows Update → feature | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot |
 
-### ScreenConnect — GPO/MSI finder, temp cleanup
+### ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup
 
 | Tool | Repo |
 | --- | --- |
+| Rogue instance IDs | mytools `ScreenConnectRogueHunt` — one line per distinct instance ID; ROGUE if it is not on the allow list |
 | GPO / MSI finder | [screenconnect-gpo-msi-finder](https://github.com/monobrau/screenconnect-gpo-msi-finder) |
 | Temp file cleanup | [screenconnect-temp-cleanup](https://github.com/monobrau/screenconnect-temp-cleanup) **v1.7.1** — CVE-2026-84869 advisory is report-only; in-use/installed clients are never deleted |
 

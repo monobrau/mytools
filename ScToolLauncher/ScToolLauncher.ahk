@@ -56,7 +56,7 @@ Tips
 )", HotkeyLabel)
 CategoryOrder := [
     "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
-    "ScreenConnect — GPO/MSI finder, temp cleanup",
+    "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
     "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
     "AV — Defender repair, Cylance/Webroot, McAfee remnants",
     "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
@@ -262,7 +262,21 @@ Mozilla Firefox
     ),
     ; --- ScreenConnect ---
     Map(
-        "Category", "ScreenConnect — GPO/MSI finder, temp cleanup",
+        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
+        "Name", "Rogue instance IDs",
+        "Summary", "Read-only. Prints each distinct ScreenConnect instance ID once and flags IDs that are not on the allow list.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectRogueHunt",
+        "Fetch", "Contents",
+        "Path", "ScreenConnectRogueHunt",
+        "Script", "Find-RogueScreenConnect.ps1",
+        "UaPrefix", "ScreenConnectRogueHunt-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 300000,
+        "Flags", "ScanOnly NoExit"
+    ),
+    Map(
+        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
         "Name", "GPO / MSI finder",
         "Summary", "Finds GPOs that deploy ScreenConnect/Control and related MSI share paths (domain join helpful).",
         "DocsUrl", "https://github.com/monobrau/screenconnect-gpo-msi-finder",
@@ -292,7 +306,7 @@ Mozilla Firefox
         "ClipboardNote", "NOTE: Run on a DC/RSAT box as Domain Admin. Dry-run first. The MSI path is on that machine. Workstations install at the next gpupdate when the client service is missing."
     ),
     Map(
-        "Category", "ScreenConnect — GPO/MSI finder, temp cleanup",
+        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
         "Name", "Temp file cleanup",
         "Summary", "Removes stale ScreenConnect temp leftovers; reports CVE-2026-84869 client version; cleans Huntress staging IOCs. Dry-run first.",
         "DocsUrl", "https://github.com/monobrau/screenconnect-temp-cleanup",
