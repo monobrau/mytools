@@ -749,6 +749,38 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     Map(
         "Category", "Untested",
+        "Name", "WinVerifyTrust padding check",
+        "Summary", "Enable the CVE-2013-3900 Authenticode padding check. Writes EnableCertPaddingCheck=1 in the 64-bit and 32-bit registry views. Does not restart the PC.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WinVerifyTrustPadding",
+        "Fetch", "Contents",
+        "Path", "WinVerifyTrustPadding",
+        "Script", "Enable-WinVerifyTrustPaddingCheck.ps1",
+        "UaPrefix", "WinVerifyTrustPadding-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 120000,
+        "TimeoutUpdate", 120000,
+        "Flags", "CheckOnly Remediate NoExit",
+        "Note", "Prefer elevated PowerShell. Scan reports both registry views. Apply writes DWORD 1 where it is missing. Restart before the check takes effect. Signed installers with extra signature data are treated as unsigned after that restart.",
+        "ClipboardNote", "NOTE: Scan is dry-run. Apply sets EnableCertPaddingCheck. Does not reboot. Restart before the stricter check is active."
+    ),
+    Map(
+        "Category", "Untested",
+        "Name", "Speculative Store Bypass",
+        "Summary", "Enable the Windows CVE-2018-3639 SSBD mitigation by OR-ing bit 8 into FeatureSettingsOverride. Other mitigation bits stay. Does not install updates or reboot.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/SpeculativeStoreBypass",
+        "Fetch", "Contents",
+        "Path", "SpeculativeStoreBypass",
+        "Script", "Enable-SpeculativeStoreBypass.ps1",
+        "UaPrefix", "SpeculativeStoreBypass-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 120000,
+        "TimeoutUpdate", 120000,
+        "Flags", "CheckOnly Remediate NoExit",
+        "Note", "Prefer elevated PowerShell. Scan reports the registry bits and a microcode hint. Apply does not install Windows updates or OEM firmware, and it does not reboot. A finding that still says Updates Required needs the Windows Update quality tool and the PC maker firmware.",
+        "ClipboardNote", "NOTE: Scan is dry-run. Apply sets the SSBD registry bits only. Does not install updates or reboot."
+    ),
+    Map(
+        "Category", "Untested",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
@@ -1525,6 +1557,14 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "Scan profiles and cache size"
         gCtrls["ModeUpdate"].Text := "Force online mode and delete cache"
     }
+    if InStr(ToolGet(t, "Path", ""), "WinVerifyTrustPadding") {
+        gCtrls["ModeScan"].Text := "Check padding registry"
+        gCtrls["ModeUpdate"].Text := "Enable strict signature check"
+    }
+    if InStr(ToolGet(t, "Path", ""), "SpeculativeStoreBypass") {
+        gCtrls["ModeScan"].Text := "Check SSBD mitigation"
+        gCtrls["ModeUpdate"].Text := "Enable SSBD mitigation"
+    }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
         gCtrls["ModeUpdate"].Text := "Delete matching rules"
@@ -2133,6 +2173,18 @@ DescribeSelection(tool, isScan) {
             mode := "Scan profiles and cache"
         else
             mode := "Force online mode and delete cache"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "WinVerifyTrustPadding") {
+        if isScan
+            mode := "Check padding registry"
+        else
+            mode := "Enable strict signature check"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "SpeculativeStoreBypass") {
+        if isScan
+            mode := "Check SSBD mitigation"
+        else
+            mode := "Enable SSBD mitigation"
     }
     if ToolHasFlag(tool, "Reinstall") {
         if isScan

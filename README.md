@@ -17,6 +17,8 @@ Public collection of work tools and scripts.
 | [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
 | [M365AppsUpdate](M365AppsUpdate/) | Silent M365 Apps Click-to-Run check/update; clear up-to-date verdict; does not close Office apps by default |
 | [OutlookDisableCache](OutlookDisableCache/) | Force classic Outlook online-only on a shared lab PC: every profile plus Default, optional delete of `.ost` / `.nst` |
+| [SpeculativeStoreBypass](SpeculativeStoreBypass/) | Enable the Windows SSBD mitigation for CVE-2018-3639 without clearing other CPU mitigation bits. Does not install updates or reboot |
+| [WinVerifyTrustPadding](WinVerifyTrustPadding/) | Enable the CVE-2013-3900 Authenticode padding check (`EnableCertPaddingCheck`) in both registry views |
 | [RmmAgentDeploy](RmmAgentDeploy/) | Coverage CSV of Automate/Huntress on recent AD computers, then a non-GPO push to hosts that are missing one |
 | [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep (Ask Toolbar, MediaArena/PDF converters, AppSuite, Wave, OneLaunch, Browser Assistant). Dry-run by default; `-Remove` deletes remnants |
 | [ScreenConnectGpoDeploy](ScreenConnectGpoDeploy/) | Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task GPO |
