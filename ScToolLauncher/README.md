@@ -106,6 +106,7 @@ Park tools here until they have been validated on a host. Add `"Category", "Unte
 | Automate GPO deploy | mytools `AutomateGpoDeploy` — bake the location MSI and create the install GPO |
 | Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT Immediate Task plus leftover sweep |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration |
+| Outlook disable local cache | mytools `OutlookDisableCache` — scan every profile, or force classic Outlook online-only and delete `.ost` / `.nst` |
 
 ### Client-specific
 

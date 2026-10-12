@@ -733,6 +733,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ; --- Untested (move here until validated) ---
     Map(
         "Category", "Untested",
+        "Name", "Outlook disable local cache",
+        "Summary", "Force classic Outlook online-only for every profile on a shared lab PC, including the Default profile. Clean up also deletes .ost and .nst files. PST archives stay.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/OutlookDisableCache",
+        "Fetch", "Contents",
+        "Path", "OutlookDisableCache",
+        "Script", "Disable-OutlookLocalCache.ps1",
+        "UaPrefix", "OutlookDisableCache-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 600000,
+        "Flags", "CheckOnly Remediate NoExit",
+        "Note", "Prefer elevated PowerShell. Scan lists each profile and the cache size. Clean up writes the online-mode policy and deletes .ost/.nst. Classic Outlook closes first. A domain GPO that turns Cached Exchange Mode back on will overwrite this.",
+        "ClipboardNote", "NOTE: Scan is dry-run. Clean up forces online mode and deletes .ost/.nst. PST archives are kept. Run elevated."
+    ),
+    Map(
+        "Category", "Untested",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
@@ -1505,6 +1521,10 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "Scan pending updates + pre-check"
         gCtrls["ModeUpdate"].Text := "Install (no reboot unless option)"
     }
+    if InStr(ToolGet(t, "Path", ""), "OutlookDisableCache") {
+        gCtrls["ModeScan"].Text := "Scan profiles and cache size"
+        gCtrls["ModeUpdate"].Text := "Force online mode and delete cache"
+    }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
         gCtrls["ModeUpdate"].Text := "Delete matching rules"
@@ -2107,6 +2127,12 @@ DescribeSelection(tool, isScan) {
             mode := "Scan + pre-check"
         else
             mode := "Install"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "OutlookDisableCache") {
+        if isScan
+            mode := "Scan profiles and cache"
+        else
+            mode := "Force online mode and delete cache"
     }
     if ToolHasFlag(tool, "Reinstall") {
         if isScan
