@@ -16,7 +16,7 @@ Matches stay specific (`Ask Toolbar`, `Ask.com`, `AskToolbar`, `APN`). A bare `A
 | `MediaArena` | PdfPower / PdfMagic / zip-gif converters, `searchpoweronline.com` hijack, Desktop/Downloads leftovers |
 | `AppSuitePdf` | AppSuite-PDF.msi / TamperedChef `PDF Editor` / ManualFinderApp (not Foxit or Adobe) |
 | `WaveBrowser` | Wavesor Wave Browser (`WaveBrowser-StartAtLogin`) |
-| `OneLaunch` | OneLaunch / OneStart launcher adware |
+| `OneLaunch` | OneLaunch / OneStart launcher adware, including OneBUpdate and `%LocalAppData%\ob\onebupdate` |
 | `FakePdfConverter` | ConvertMate, Easy2Convert, UpdateRetriever, PDFConvertSetup, and related malvertising converter installers |
 | `BrowserAssistant` | Per-user `AppData\Roaming\Browser Assistant` (Blaze Media helper PUP), updater, `BAv*.msi`, `NetTwoUpdater` |
 

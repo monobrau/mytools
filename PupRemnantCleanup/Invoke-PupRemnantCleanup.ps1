@@ -66,7 +66,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.3.1'
+$ScriptVersion = '1.3.2'
 $script:ExitCode = 0
 $script:Findings = New-Object System.Collections.Generic.List[object]
 $script:Seen = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -228,28 +228,35 @@ function Get-PupCatalog {
         OneLaunch = @{
             Id          = 'OneLaunch'
             DisplayName = 'OneLaunch / OneStart'
-            Notes       = 'Launcher/adware browser often dropped with AppSuite PDF Editor (OneLaunchLaunchTask).'
-            FolderNameMatch = '(?i)^OneLaunch$|^OneStart$'
-            LooseFileMatch  = '(?i)^(OneLaunch|OneStart)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            Notes       = 'Launcher/adware browser often dropped with AppSuite PDF Editor (OneLaunchLaunchTask). OneStart.ai also persists as scheduled task OneBUpdate and %LocalAppData%\ob\onebupdate\onebupdateservice.exe. The parent folder name ob is not matched on its own.'
+            UserFolders = @(
+                'AppData\Local\ob\onebupdate'
+                'AppData\Roaming\ob\onebupdate'
+            )
+            FolderNameMatch = '(?i)^OneLaunch$|^OneStart$|^OneBUpdate$'
+            LooseFileMatch  = '(?i)^(OneLaunch|OneStart|OneBUpdate(Service)?)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
             RegistryKeys = @(
                 'HKLM:\SOFTWARE\OneLaunch'
                 'HKLM:\SOFTWARE\WOW6432Node\OneLaunch'
                 'HKLM:\SOFTWARE\OneStart'
                 'HKLM:\SOFTWARE\WOW6432Node\OneStart'
+                'HKLM:\SOFTWARE\OneBUpdate'
+                'HKLM:\SOFTWARE\WOW6432Node\OneBUpdate'
             )
             UserRegistryKeys = @(
                 'SOFTWARE\OneLaunch'
                 'SOFTWARE\OneStart'
+                'SOFTWARE\OneBUpdate'
             )
-            TaskMatch                 = '(?i)OneLaunchLaunchTask|OneStart|OneLaunch'
-            ServiceMatch              = '(?i)OneLaunch|OneStart'
-            UninstallDisplayNameMatch = '(?i)^OneLaunch$|^OneStart$'
-            UninstallPublisherMatch   = '(?i)^OneLaunch$|^OneStart$'
-            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(onelaunch|onestart)\.com'
-            SearchDisplayNameMatch    = '(?i)OneLaunch|OneStart'
-            RunValueMatch             = '(?i)OneLaunch|OneStart'
-            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(onelaunch|onestart)\.com'
-            ProcessMatch              = '(?i)^OneLaunch$|^OneStart$'
+            TaskMatch                 = '(?i)OneLaunchLaunchTask|OneStart|OneLaunch|OneBUpdate'
+            ServiceMatch              = '(?i)OneLaunch|OneStart|OneBUpdate|\\ob\\onebupdate\\'
+            UninstallDisplayNameMatch = '(?i)^OneLaunch$|^OneStart$|^OneBUpdate$'
+            UninstallPublisherMatch   = '(?i)^OneLaunch$|^OneStart$|^OneBUpdate$'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(onelaunch|onestart)\.(com|ai)'
+            SearchDisplayNameMatch    = '(?i)OneLaunch|OneStart|OneBUpdate'
+            RunValueMatch             = '(?i)OneLaunch|OneStart|OneBUpdate|\\ob\\onebupdate\\'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(onelaunch|onestart)\.(com|ai)'
+            ProcessMatch              = '(?i)^OneLaunch$|^OneStart$|^OneBUpdate(Service)?$|\\ob\\onebupdate\\'
             SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
         }
 
