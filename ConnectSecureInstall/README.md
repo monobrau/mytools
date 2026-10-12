@@ -19,8 +19,10 @@ For stuck agents (wipe + reinstall), use
 ## Safety
 
 - **Never commit** real `-CompanyId`, `-EnvironmentId`, or `-InstallToken` values.
-  Pass them at run time (ScToolLauncher fields or placeholders in
-  [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1)).
+  In ScToolLauncher, paste the official portal install script. Company (`-c`),
+  environment (`-e`), and token (`-j`) are read from it and are not saved.
+  Placeholders in [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1) are
+  the other way to pass them.
 - Prefer elevated ScreenConnect **Backstage** / SYSTEM.
 
 ## ScreenConnect

@@ -6,6 +6,7 @@ Public collection of work tools and scripts.
 
 | Tool | Description |
 | --- | --- |
+| [ActiveDirectoryReview](ActiveDirectoryReview/) | Read-only AD review of a client domain from this PC over a RemoteOps tunnel (WinRM): DCs, privileged groups, stale accounts, krbtgt age, trusts |
 | [AutomateGpoDeploy](AutomateGpoDeploy/) | Download Automate MSI+MST, bake transform, stage on NETLOGON, create a startup-script GPO |
 | [AutomateUninstall](AutomateUninstall/) | Scan, remove, or reinstall the ConnectWise Automate (LabTech) remote agent from the config already on the PC. Leaves ScreenConnect installed |
 | [DellSupportAssistUpdate](DellSupportAssistUpdate/) | Update an already-installed Dell SupportAssist (Dell bootstrapper). Does not install when absent |
@@ -15,6 +16,7 @@ Public collection of work tools and scripts.
 | [EntraVendorAppRemoval](EntraVendorAppRemoval/) | Delete INKY, usecure, and Skout enterprise apps from the signed-in Entra tenant (matched by name; ids differ per tenant) |
 | [ForensicInvestigator](ForensicInvestigator/) | Sysinternals + Harkins EVTX + all-user Downloads (Zone.ID), PS history, hives, browser History, admins/RMM, Defender; `C:\SecurityReports` |
 | [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
+| [KeeperSsh](KeeperSsh/) | Run SSH commands on switches, firewalls, and Linux hosts with the Keeper login for that IP; the password stays in a local helper process |
 | [M365AppsUpdate](M365AppsUpdate/) | Silent M365 Apps Click-to-Run check/update; clear up-to-date verdict; does not close Office apps by default |
 | [OutlookDisableCache](OutlookDisableCache/) | Force classic Outlook online-only on a shared lab PC: every profile plus Default, optional delete of `.ost` / `.nst` |
 | [SpeculativeStoreBypass](SpeculativeStoreBypass/) | Enable the Windows SSBD mitigation for CVE-2018-3639 without clearing other CPU mitigation bits. Does not install updates or reboot |

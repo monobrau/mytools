@@ -6,6 +6,8 @@ Desktop.ini
 *~
 .vscode/
 .idea/
+__pycache__/
+*.pyc
 
 # Secrets and local config
 ScToolLauncher/local-defaults.ini

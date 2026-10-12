@@ -1,0 +1,19 @@
+---
+description: Log in to network devices over SSH with the Keeper credential, without seeing the password
+alwaysApply: false
+---
+
+# Device logins through Keeper
+
+To investigate a switch, firewall, or Linux host by IP, use `py C:\Git\mytools\KeeperSsh\keeper_ssh.py`.
+
+- `find <ip>` lists matching Keeper records with their `hosts=` (address and port, no secrets). `find` also takes a client or site name. `run <ip> "<command>" ...` runs over SSH and prints only the device output.
+- Output that stops at a `--More--` pager is rerun in shell mode automatically. `ENC` values and type 5/7/8/9 secrets are masked.
+- If `run` exits 2, the IP matches several records. Show the list, ask which client, then rerun with `--record <UID>`.
+- If a device refuses exec or prints nothing, retry with `--shell`.
+- If `run` reports no saved SSH host key, show the user the fingerprint and wait for them to confirm before rerunning with `--trust-new-host`. Never add that flag on your own. If a host key changed, stop and tell the user.
+- Only connect to the IP the user named. With `--record`, the IP must be the same device you looked up.
+- To reach a client LAN device through a RemoteOps port forward, keep the device's LAN IP as the target and add `--via <tunnel-ip>:<port>`. Never use a client's public IP.
+- The first call can take about a minute while the vault loads. Allow at least 300 seconds.
+- Run read-only commands only. Do not change device configuration unless the user asks for that change.
+- Never run `keeper get`, `keepercommander get`, or anything else that prints a password. Never ask the user for the password.

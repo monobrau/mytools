@@ -481,7 +481,7 @@ HP Support Assistant AppX
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Folder", "ConnectSecure",
         "Name", "ConnectSecure silent install",
-        "Summary", "Silent install with -c/-e/-j/-i. Defaults to Windows (agentlink + leftover cleanup). Mac, Linux, ARM, and ARM-32 copy the portal shell command. Paste IDs/token at copy time — never stored.",
+        "Summary", "Silent install with -c/-e/-j/-i. Paste the portal install script; company, environment, and token are read from it and are not saved. Windows is the default. Mac, Linux, ARM, and ARM-32 copy the portal shell command.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureInstall",
         "Fetch", "Contents",
         "Path", "ConnectSecureInstall",
@@ -491,14 +491,14 @@ HP Support Assistant AppX
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly ConnectSecure SkipIfRunning AlwaysNote",
-        "Note", "Needs Company ID (-c), Environment ID (-e), and Install Token (-j). Windows is the default and skips if CyberCNSAgent is Running. Mac, Linux, ARM, and ARM-32 are root shell commands.",
+        "Note", "Paste the official install script. Company ID (-c), environment ID (-e), and install token (-j) are filled from it and are not saved. Windows skips if CyberCNSAgent is Running. Mac, Linux, ARM, and ARM-32 are root shell commands.",
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
         "Folder", "ConnectSecure",
         "Name", "ConnectSecure agent repair + reinstall",
-        "Summary", "Wipe leftover agent (uninstall.bat + service registry), then reinstall. Paste company/env/token at copy time — never stored.",
+        "Summary", "Wipe leftover agent (uninstall.bat + service registry), then reinstall. Paste the same official install script; company, environment, and token are read from it and are not saved.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ConnectSecureAgentRepair",
         "Fetch", "Contents",
         "Path", "ConnectSecureAgentRepair",
@@ -508,7 +508,7 @@ HP Support Assistant AppX
         "TimeoutScan", 120000,
         "TimeoutUpdate", 600000,
         "Flags", "CheckOnly Remediate ConnectSecure SkipIfRunning AlwaysNote",
-        "Note", "Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Uncheck to always wipe + reinstall. Needs Company ID, Environment ID, and Install Token. Prefer PowerShell.",
+        "Note", "Default: skip if CyberCNSAgent is Running (fleet / scan-prep). Uncheck to always wipe + reinstall. Paste the official install script to fill company, environment, and token. Prefer PowerShell.",
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
@@ -664,7 +664,7 @@ Ask Toolbar — Ask.com / Ask Toolbar / APN
 MediaArena — PdfPower, PdfMagic, and related converters
 AppSuite PDF — AppSuite-PDF, PDF Editor, ManualFinder (not Foxit or Adobe)
 Wave Browser
-OneLaunch / OneStart
+OneLaunch / OneStart / OneBUpdate
 Fake PDF converters — ConvertMate, Easy2Convert, UpdateRetriever, PDFConvertSetup
 Browser Assistant — Blaze Media helper, updater, BAv MSI
 )",
@@ -673,7 +673,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Path", "PupRemnantCleanup",
         "Script", "Invoke-PupRemnantCleanup.ps1",
         "UaPrefix", "PupRemnantCleanup-bootstrap",
-        "UaVer", "1.3.1",
+        "UaVer", "1.3.2",
         "TimeoutScan", 180000,
         "TimeoutUpdate", 300000,
         "Flags", "CheckOnly Remediate ProductList NoExit",
@@ -794,6 +794,45 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "TimeoutUpdate", 300000,
         "Flags", "Delete Force Vendor",
         "Note", "Use when offboarding the vendor or cleaning remnants after cutover — not for managing an active AV install. Prefer deactivate in the vendor console first. Delete needs elevation (PowerShell/SYSTEM). Password/keycode only if Vendor is Cylance or Webroot (not All). Reboot if drivers stay locked."
+    ),
+    Map(
+        "Category", "Untested",
+        "Folder", "RemoteOps",
+        "Name", "RemoteOps enroll (token)",
+        "Summary", "Connect the client host to the RemoteOps WireGuard tunnel with a one-time token from the portal. The portal then shows its Peer IP.",
+        "Fetch", "Inline",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 300000,
+        "Flags", "RunOnly RemoteOpsEnroll AlwaysNote",
+        "Note", "Issue a token on the RemoteOps portal first. It is single-use, valid 1 hour, and not saved here. Set Portal= under [RemoteOps] in local-defaults.ini to prefill the URL.",
+        "ClipboardNote", "NOTE: RemoteOps token is single-use and only in this snippet. Do not paste it into tickets or git."
+    ),
+    Map(
+        "Category", "Untested",
+        "Folder", "RemoteOps",
+        "Name", "RemoteOps remove",
+        "Summary", "Disconnect the host from RemoteOps: stop the transport, delete the peer, and remove WireGuard and the firewall exceptions when no other tunnels exist.",
+        "Fetch", "Inline",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 300000,
+        "Flags", "RunOnly RemoteOpsRemove",
+        "Note", "Runs remoteops-remove.ps1 from the portal. If the portal is unreachable, it runs the copy in C:\ProgramData\RemoteOps instead."
+    ),
+    Map(
+        "Category", "Untested",
+        "Folder", "RemoteOps",
+        "Name", "Active Directory review (over tunnel)",
+        "Summary", "Read-only AD review of an enrolled host's domain from this PC over WinRM: DCs, privileged groups, stale and never-expiring accounts, krbtgt age, trusts.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ActiveDirectoryReview",
+        "Fetch", "Contents",
+        "Path", "ActiveDirectoryReview",
+        "Script", "Invoke-ADReview.ps1",
+        "UaPrefix", "ActiveDirectoryReview-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 600000,
+        "Flags", "RunOnly BackstageOnly AdReview",
+        "Note", "Paste into an elevated PowerShell window on this PC, not a client session. Enroll the host in RemoteOps first. Prompts for DOMAIN\user. Writes CSVs and Summary.txt under Documents\ADReview."
     ),
     ; --- Client-specific campaigns ---
     Map(
@@ -1007,11 +1046,14 @@ ShowGui(*) {
     gCtrls["CsOs"].Choose(1)
     gCtrls["CsOs"].OnEvent("Change", (*) => RefreshOptionEnable())
 
-    gCtrls["LblCsCompany"] := gGui.Add("Text", "Section", "ConnectSecure company ID (-c)")
+    gCtrls["LblCsScript"] := gGui.Add("Text", "Section", "Paste the official install script (reads -c, -e, and -j)")
+    gCtrls["CsInstallScript"] := gGui.Add("Edit", "w" UiContentW " r4 WantReturn vCsInstallScript", "")
+    gCtrls["CsInstallScript"].OnEvent("Change", (*) => ApplyConnectSecureInstallScript(false))
+    gCtrls["LblCsCompany"] := gGui.Add("Text", , "ConnectSecure company ID (-c)")
     gCtrls["CsCompanyId"] := gGui.Add("Edit", "w" UiContentW " vCsCompanyId", "")
     gCtrls["LblCsEnv"] := gGui.Add("Text", , "ConnectSecure environment ID (-e)")
     gCtrls["CsEnvironmentId"] := gGui.Add("Edit", "w" UiContentW " vCsEnvironmentId", "")
-    gCtrls["LblCsToken"] := gGui.Add("Text", , "ConnectSecure install token (-j) — not saved; paste each time")
+    gCtrls["LblCsToken"] := gGui.Add("Text", , "ConnectSecure install token (-j) — not saved")
     gCtrls["CsInstallToken"] := gGui.Add("Edit", "w" UiContentW " Password vCsInstallToken", "")
 
     gCtrls["LblS1Token"] := gGui.Add("Text", "Section", "SentinelOne site/group token — not saved; paste each time")
@@ -1050,6 +1092,16 @@ ShowGui(*) {
     gCtrls["LblWebrootKeyCode"] := gGui.Add("Text", , "Optional Webroot keycode (written to SYSVOL if set)")
     gCtrls["WebrootKeyCode"] := gGui.Add("Edit", "w" UiContentW " Password vWebrootKeyCode", "")
 
+    gCtrls["LblRoPortal"] := gGui.Add("Text", "Section", "RemoteOps portal URL (prefill: local-defaults.ini [RemoteOps] Portal=)")
+    gCtrls["RoPortal"] := gGui.Add("Edit", "w" UiContentW " vRoPortal", LoadRemoteOpsPortal())
+    gCtrls["LblRoToken"] := gGui.Add("Text", , "One-time token from the portal — not saved; paste each time")
+    gCtrls["RoToken"] := gGui.Add("Edit", "w" UiContentW " Password vRoToken", "")
+
+    gCtrls["LblAdTarget"] := gGui.Add("Text", "Section", "Target tunnel address (Peer IP on the RemoteOps portal)")
+    gCtrls["AdTarget"] := gGui.Add("Edit", "w" UiContentW " vAdTarget", "")
+    gCtrls["LblAdInactiveDays"] := gGui.Add("Text", , "Stale after this many days without a logon")
+    gCtrls["AdInactiveDays"] := gGui.Add("Edit", "w" UiContentW " Number vAdInactiveDays", "90")
+
     gCtrls["LblPaste"] := gGui.Add("Text", "Section", "Paste format")
     gCtrls["FmtCommands"] := gGui.Add("Radio", "Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
     gCtrls["FmtBackstage"] := gGui.Add("Radio", "vFmtBackstage", "PowerShell (one line)")
@@ -1076,6 +1128,7 @@ ShowGui(*) {
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
         "LblCsOs", "CsOs",
+        "LblCsScript", "CsInstallScript",
         "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
         "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
         "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
@@ -1083,6 +1136,8 @@ ShowGui(*) {
         "LblAutomateClient", "AutomateClientName", "LblAutomateLocation", "AutomateLocationName",
         "LblAutomateDomain", "AutomateDomain", "LblAutomateOu", "AutomateTargetOu", "AutomateLinkToDomain",
         "LblWebrootKeyCode", "WebrootKeyCode",
+        "LblRoPortal", "RoPortal", "LblRoToken", "RoToken",
+        "LblAdTarget", "AdTarget", "LblAdInactiveDays", "AdInactiveDays",
         "LblPaste", "FmtCommands", "FmtBackstage",
         "Note", "Status"
     ]
@@ -1132,7 +1187,9 @@ ReflowGui() {
 
         ch := 18
         cw := contentW
-        if (key = "Summary")
+        if (key = "CsInstallScript")
+            ch := 72
+        else if (key = "Summary")
             ch := 52
         else if (key = "HelpBody")
             ch := 280
@@ -1151,7 +1208,8 @@ ReflowGui() {
             || key = "HuntressRebootAt"
             || key = "AutomateServer" || key = "AutomateLocationId" || key = "AutomateToken"
             || key = "AutomateClientName" || key = "AutomateLocationName" || key = "AutomateDomain"
-            || key = "AutomateTargetOu" || key = "WebrootKeyCode")
+            || key = "AutomateTargetOu" || key = "WebrootKeyCode"
+            || key = "RoPortal" || key = "RoToken" || key = "AdTarget" || key = "AdInactiveDays")
             ch := 22
         else if (InStr(key, "Lbl") = 1)
             ch := 16
@@ -1223,6 +1281,44 @@ LoadAutomateServer() {
             return ini
     }
     return default
+}
+
+; Official portal script: cybercnsagent.exe -c COMPANY -e ENVIRONMENT -j TOKEN -i
+; Nothing from this paste is written to disk.
+ParseConnectSecureInstallScript(text) {
+    company := ""
+    envId := ""
+    token := ""
+    ; \x22 and \x27 are quote characters. AutoHotkey does not treat a doubled quote as an escape here.
+    if RegExMatch(text, "i)(?:^|[\s;])-c(?:=|\s+)[\x22\x27]?(\d+)", &mCompany)
+        company := mCompany[1]
+    if RegExMatch(text, "i)(?:^|[\s;])-e(?:=|\s+)[\x22\x27]?(\d+)", &mEnv)
+        envId := mEnv[1]
+    if RegExMatch(text, "i)(?:^|[\s;])-j(?:=|\s+)[\x22\x27]?([^\s\x22\x27;]+)", &mToken)
+        token := mToken[1]
+    return Map("company", company, "env", envId, "token", token)
+}
+
+ApplyConnectSecureInstallScript(requireComplete) {
+    global gCtrls
+    raw := gCtrls["CsInstallScript"].Value
+    if (Trim(raw) = "")
+        return !requireComplete
+    parsed := ParseConnectSecureInstallScript(raw)
+    if (parsed["company"] = "" || parsed["env"] = "" || parsed["token"] = "")
+        return false
+    gCtrls["CsCompanyId"].Value := parsed["company"]
+    gCtrls["CsEnvironmentId"].Value := parsed["env"]
+    gCtrls["CsInstallToken"].Value := parsed["token"]
+    gCtrls["Status"].Value := "Parsed company " parsed["company"] ", environment " parsed["env"] ", token set. Not saved."
+    return true
+}
+
+LoadRemoteOpsPortal() {
+    global LocalDefaultsPath
+    if FileExist(LocalDefaultsPath)
+        return Trim(IniRead(LocalDefaultsPath, "RemoteOps", "Portal", ""))
+    return ""
 }
 
 ToolHasFlag(tool, flag) {
@@ -1302,6 +1398,7 @@ RefreshOptionEnable(*) {
             "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
             "LblDomainController", "DomainController", "LblDomain", "Domain",
             "LblCsOs", "CsOs",
+            "LblCsScript", "CsInstallScript",
             "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
             "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
             "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
@@ -1309,6 +1406,8 @@ RefreshOptionEnable(*) {
             "LblAutomateToken", "AutomateToken", "LblAutomateClient", "AutomateClientName",
             "LblAutomateLocation", "AutomateLocationName", "LblAutomateDomain", "AutomateDomain",
             "LblAutomateOu", "AutomateTargetOu", "AutomateLinkToDomain", "LblWebrootKeyCode", "WebrootKeyCode",
+            "LblRoPortal", "RoPortal", "LblRoToken", "RoToken",
+            "LblAdTarget", "AdTarget", "LblAdInactiveDays", "AdInactiveDays",
             "LblPaste", "FmtCommands", "FmtBackstage", "Note", "BtnAffects"
         ]
         for key in hideKeys
@@ -1418,6 +1517,8 @@ RefreshOptionEnable(*) {
     showCsFields := showConnectSecure && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     SetCtrlShown(gCtrls["LblCsOs"], showCsOs)
     SetCtrlShown(gCtrls["CsOs"], showCsOs)
+    SetCtrlShown(gCtrls["LblCsScript"], showCsFields)
+    SetCtrlShown(gCtrls["CsInstallScript"], showCsFields)
     SetCtrlShown(gCtrls["LblCsCompany"], showCsFields)
     SetCtrlShown(gCtrls["CsCompanyId"], showCsFields)
     SetCtrlShown(gCtrls["LblCsEnv"], showCsFields)
@@ -1462,6 +1563,17 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["AutomateLinkToDomain"], showGpoLink)
     SetCtrlShown(gCtrls["LblWebrootKeyCode"], showWebrootGpo)
     SetCtrlShown(gCtrls["WebrootKeyCode"], showWebrootGpo)
+    showRoPortal := ToolHasFlag(t, "RemoteOpsEnroll") || ToolHasFlag(t, "RemoteOpsRemove")
+    showRoToken := ToolHasFlag(t, "RemoteOpsEnroll")
+    showAdReview := ToolHasFlag(t, "AdReview")
+    SetCtrlShown(gCtrls["LblRoPortal"], showRoPortal)
+    SetCtrlShown(gCtrls["RoPortal"], showRoPortal)
+    SetCtrlShown(gCtrls["LblRoToken"], showRoToken)
+    SetCtrlShown(gCtrls["RoToken"], showRoToken)
+    SetCtrlShown(gCtrls["LblAdTarget"], showAdReview)
+    SetCtrlShown(gCtrls["AdTarget"], showAdReview)
+    SetCtrlShown(gCtrls["LblAdInactiveDays"], showAdReview)
+    SetCtrlShown(gCtrls["AdInactiveDays"], showAdReview)
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning || showResetPlatform
@@ -1576,6 +1688,9 @@ RefreshOptionEnable(*) {
     if ToolHasFlag(t, "RunOnly") && InStr(ToolGet(t, "Path", ""), "EntraIntuneEvidence") {
         gCtrls["ModeUpdate"].Text := "Export to OneDrive"
     }
+    if ToolHasFlag(t, "AdReview") {
+        gCtrls["ModeUpdate"].Text := "Review AD over the tunnel"
+    }
     if ToolHasFlag(t, "AutomateGpo") {
         gCtrls["ModeScan"].Text := "Dry-run (transform only)"
         gCtrls["ModeUpdate"].Text := "Stage MSI + create GPO"
@@ -1598,7 +1713,7 @@ RefreshOptionEnable(*) {
 
     note := ToolGet(t, "Note", "")
     if (csOsShell)
-        note := csOs " copies the ConnectSecure portal shell command. Company ID, environment ID, and install token come from the fields above and are not saved. Run as root."
+        note := csOs " copies the ConnectSecure portal shell command. Paste the Windows install script above; company, environment, and token are read from it and are not saved. Run as root."
     gCtrls["Note"].Value := note
     SetCtrlShown(gCtrls["Note"], note != "")
 
@@ -1872,6 +1987,15 @@ BuildSwitches(tool, isScan, isCommands) {
             sw.Push("-LinkToDomain")
     }
 
+    if ToolHasFlag(tool, "AdReview") {
+        target := Trim(gCtrls["AdTarget"].Value)
+        days := Trim(gCtrls["AdInactiveDays"].Value)
+        if (target != "")
+            sw.Push("-ComputerName '" StrReplace(target, "'", "''") "'")
+        if (days != "")
+            sw.Push("-InactiveDays " days)
+    }
+
     fetch := ToolGet(tool, "Fetch", "Contents")
     if (fetch = "Contents") {
         if isCommands
@@ -2002,6 +2126,16 @@ BuildHuntressScheduleBody(isCommands) {
     return p
 }
 
+BuildRemoteOpsBody(tool, ps5, tls) {
+    global gCtrls
+    portal := StrReplace(RTrim(Trim(gCtrls["RoPortal"].Value), "/"), "'", "''")
+    if ToolHasFlag(tool, "RemoteOpsEnroll") {
+        token := StrReplace(Trim(gCtrls["RoToken"].Value), "'", "''")
+        return ps5 tls "; irm '" portal "/s.ps1' | iex; Start-RemoteOps -Token '" token "'"
+    }
+    return ps5 tls "; $f=Join-Path $env:ProgramData 'RemoteOps\remoteops-remove.ps1'; try{$s=irm '" portal "/remoteops-remove.ps1'}catch{$s=$null}; if($s){iex $s} elseif(Test-Path -LiteralPath $f){& $f} else {throw 'Portal unreachable and no local remoteops-remove.ps1'}"
+}
+
 ShellSingleQuote(value) {
     return "'" StrReplace(value, "'", "'\''") "'"
 }
@@ -2044,6 +2178,8 @@ BuildSnippet(tool, isScan, isCommands) {
     ; WebClient so ScreenConnect's v2 engine can still install the agent.
     if ToolHasFlag(tool, "HuntressInstall") {
         body := BuildHuntressBody(isCommands)
+    } else if ToolHasFlag(tool, "RemoteOpsEnroll") || ToolHasFlag(tool, "RemoteOpsRemove") {
+        body := BuildRemoteOpsBody(tool, ps5, tls)
     } else if (fetch = "Inline") {
         body := ToolGet(tool, "Body", "")
     } else if (fetch = "DownloadExe") {
@@ -2142,6 +2278,8 @@ DescribeSelection(tool, isScan) {
             mode := "Remove HP bloat"
         else if InStr(ToolGet(tool, "Path", ""), "EntraIntuneEvidence")
             mode := "Export evidence"
+        else if ToolHasFlag(tool, "AdReview")
+            mode := "AD review of " Trim(gCtrls["AdTarget"].Value)
         else
             mode := "Download and run"
     } else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "Inline")
@@ -2292,9 +2430,14 @@ DoCopy(*) {
         isCommands := false
 
     if ToolHasFlag(tool, "ConnectSecure") && !isScan {
+        if (Trim(gCtrls["CsInstallScript"].Value) != "" && !ApplyConnectSecureInstallScript(true)) {
+            gCtrls["Status"].Value := "Not copied. Could not read -c, -e, and -j from the install script."
+            MsgBox("Could not find -c, -e, and -j in that install script.`nPaste the portal PowerShell command, or clear the script box and fill the three fields.", AppName, "Icon!")
+            return
+        }
         if (Trim(gCtrls["CsCompanyId"].Value) = "" || Trim(gCtrls["CsEnvironmentId"].Value) = "" || Trim(gCtrls["CsInstallToken"].Value) = "") {
             gCtrls["Status"].Value := "Not copied. Needs Company ID, Environment ID, and Install Token."
-            MsgBox("Needs Company ID, Environment ID, and Install Token.`nFill the fields (nothing is saved in the launcher), then copy again.", AppName, "Icon!")
+            MsgBox("Paste the official install script, or fill Company ID, Environment ID, and Install Token.`nNothing is saved in the launcher.", AppName, "Icon!")
             return
         }
     }
@@ -2332,6 +2475,28 @@ DoCopy(*) {
         }
         if !isScan && (client = "") {
             MsgBox("Set the client name so the GPO and NETLOGON folder are identifiable.", AppName, "Icon!")
+            return
+        }
+    }
+    if ToolHasFlag(tool, "RemoteOpsEnroll") || ToolHasFlag(tool, "RemoteOpsRemove") {
+        if !RegExMatch(Trim(gCtrls["RoPortal"].Value), "i)^https://[^\s'/]+/?$") {
+            MsgBox("Set the RemoteOps portal URL (https://host). Put it under [RemoteOps] Portal= in local-defaults.ini to prefill it.", AppName, "Icon!")
+            return
+        }
+        if ToolHasFlag(tool, "RemoteOpsEnroll") && (Trim(gCtrls["RoToken"].Value) = "") {
+            MsgBox("Paste the one-time token from the RemoteOps portal (nothing is saved), then copy again.", AppName, "Icon!")
+            return
+        }
+    }
+    if ToolHasFlag(tool, "AdReview") {
+        target := Trim(gCtrls["AdTarget"].Value)
+        days := Trim(gCtrls["AdInactiveDays"].Value)
+        if (target = "" || RegExMatch(target, "[\s']")) {
+            MsgBox("Set the target's tunnel address (Peer IP on the RemoteOps portal).", AppName, "Icon!")
+            return
+        }
+        if !RegExMatch(days, "^\d+$") || (Integer(days) < 1) || (Integer(days) > 3650) {
+            MsgBox("Inactive days must be a number from 1 to 3650.", AppName, "Icon!")
             return
         }
     }
