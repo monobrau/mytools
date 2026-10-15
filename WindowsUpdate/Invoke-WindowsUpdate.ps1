@@ -658,7 +658,7 @@ function Install-WindowsUpdates {
         $title = [string]$u.Title
         try {
             if ($u.InstallationBehavior.CanRequestUserInput) {
-                if ($Feature) {
+                if ($Feature -or $Firmware) {
                     Write-Line ("No desktop prompt in Backstage. Continuing: {0}" -f $title)
                 } elseif (-not $Force) {
                     Write-Line ("Skip (may prompt; use -Force): {0}" -f $title)
