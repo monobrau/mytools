@@ -31,7 +31,7 @@ Public collection of work tools and scripts.
 | [WebrootUninstallGpo](WebrootUninstallGpo/) | Immediate Task uninstall + leftover sweep; `Get-WebrootFleetStatus.ps1` checks AD PCs via C$ |
 | [VisualCppUpdate](VisualCppUpdate/) | Patch installed Visual C++ 2005-2013 redistributables to the last security build for that year |
 | [WindowsDefenderRepair](WindowsDefenderRepair/) | Re-enable Defender real-time protection and start WinDefend / WdNisSvc |
-| [WindowsUpdate](WindowsUpdate/) | Scan/install quality or feature Windows Updates; pre-check for disk, WinRE, WU policy; default no reboot |
+| [WindowsUpdate](WindowsUpdate/) | Scan/install quality, feature, or BIOS/firmware Windows Updates; pre-check for disk, WinRE, WU policy; default no reboot |
 | [ClientSpecific](ClientSpecific/) | Per-client campaign tools (ScToolLauncher: Client-specific → client name) |
 
 ## Layout

@@ -235,7 +235,7 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.1.0",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 3600000,
         "DefaultArgs", "-Quality",
@@ -253,12 +253,29 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.1.0",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 14400000,
         "DefaultArgs", "-Feature",
         "Flags", "CheckOnly Force AutoReboot NoExit",
         "Note", "Backstage is fine. No desktop login. Driver updates install first. Auto reboot restarts only when Windows Update requires it; leave it off to stop instead. Do not start a second run while one is in progress. 4-hour timeout."
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Folder", "Windows Update",
+        "Name", "Windows Update (BIOS / firmware)",
+        "Summary", "Pre-check then scan/install BIOS, UEFI, and system-firmware drivers only. Other drivers stay. Default does not reboot.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsUpdate",
+        "Fetch", "Contents",
+        "Path", "WindowsUpdate",
+        "Script", "Invoke-WindowsUpdate.ps1",
+        "UaPrefix", "WindowsUpdate-bootstrap",
+        "UaVer", "1.1.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 3600000,
+        "DefaultArgs", "-Firmware",
+        "Flags", "CheckOnly Force AutoReboot NoExit",
+        "Note", "Only firmware published to Windows Update. Leave Auto reboot off to stage the capsule and stop. The new BIOS does not load until the next restart. A BIOS that is not in Windows Update will not appear."
     ),
     ; --- ScreenConnect ---
     Map(
@@ -1662,8 +1679,13 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Uninstall Automate agent"
     }
     if InStr(ToolGet(t, "Path", ""), "WindowsUpdate") {
-        gCtrls["ModeScan"].Text := "Scan pending updates + pre-check"
-        gCtrls["ModeUpdate"].Text := "Install (no reboot unless option)"
+        if InStr(ToolGet(t, "DefaultArgs", ""), "-Firmware") {
+            gCtrls["ModeScan"].Text := "Scan BIOS / firmware"
+            gCtrls["ModeUpdate"].Text := "Install firmware (no reboot unless option)"
+        } else {
+            gCtrls["ModeScan"].Text := "Scan pending updates + pre-check"
+            gCtrls["ModeUpdate"].Text := "Install (no reboot unless option)"
+        }
     }
     if InStr(ToolGet(t, "Path", ""), "OutlookDisableCache") {
         gCtrls["ModeScan"].Text := "Scan profiles and cache size"
@@ -2301,10 +2323,17 @@ DescribeSelection(tool, isScan) {
             mode := "Repair Defender"
     }
     if InStr(ToolGet(tool, "Path", ""), "WindowsUpdate") {
-        if isScan
-            mode := "Scan + pre-check"
-        else
-            mode := "Install"
+        if InStr(ToolGet(tool, "DefaultArgs", ""), "-Firmware") {
+            if isScan
+                mode := "Scan BIOS / firmware"
+            else
+                mode := "Install firmware"
+        } else {
+            if isScan
+                mode := "Scan + pre-check"
+            else
+                mode := "Install"
+        }
     }
     if InStr(ToolGet(tool, "Path", ""), "OutlookDisableCache") {
         if isScan

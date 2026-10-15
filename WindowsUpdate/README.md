@@ -1,11 +1,16 @@
-# Windows Update (quality + feature)
+# Windows Update (quality + feature + BIOS/firmware)
 
-Scan or install **quality** (non-feature) Windows Updates, or **feature**
-updates / enablement packages. Uses the Windows Update Agent COM API (no
-extra module).
+Scan or install **quality** (non-feature) Windows Updates, **feature**
+updates / enablement packages, or **BIOS / system firmware** only. Uses the
+Windows Update Agent COM API (no extra module).
+
+Firmware mode searches driver updates and keeps titles or driver classes that
+are BIOS, UEFI, or system firmware. Other drivers are listed and skipped.
+A BIOS that is not published to Windows Update will not appear.
 
 Default install does **not** reboot. `-Reboot` restarts when the installer
-reports `RebootRequired` (ScreenConnect session will drop).
+reports `RebootRequired` (ScreenConnect session will drop). Firmware staged
+this way does not load until that restart.
 
 ## Pre-check
 
@@ -47,6 +52,7 @@ the install.
 | `-CheckOnly` | Search and report only |
 | `-Quality` | Cumulative / security / SSU (default) |
 | `-Feature` | Feature Update / Enablement Package only |
+| `-Firmware` | BIOS, UEFI, and system-firmware drivers only |
 | `-Reboot` | Auto-reboot when required |
 | `-Force` | Include Preview; continue after non-critical pre-check Fail |
 | `-NoExit` | Keep the host open (Backstage). Accepted so the launcher does not fail |
@@ -62,9 +68,9 @@ Exit `0` means setup is running or the OS download grew. Exit `1` means a featur
 
 ## ScreenConnect
 
-Use ScToolLauncher (**Software updates** → Windows Update quality / feature).
+Use ScToolLauncher (**Software updates** → Windows Update quality / feature / BIOS).
 Scan first. Prefer elevated. Feature installs can take hours — use Backstage
-or a long Commands timeout (4 hours). Reload the launcher after pull (`1.0.0`).
+or a long Commands timeout (4 hours). Reload the launcher after pull (`1.1.0`).
 
 A feature install skips the download call when Windows Update already marks the update downloaded. That call prints nothing until it returns, so a second run was sitting on `=== Download ===` even after the files were on disk.
 

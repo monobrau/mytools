@@ -32,6 +32,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | Classic Teams remnants | mytools |
 | Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
 | Windows Update → feature | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot |
+| Windows Update → BIOS / firmware | mytools `WindowsUpdate` — BIOS, UEFI, and system firmware only. Other drivers stay. Default no reboot |
 
 ### ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup
 

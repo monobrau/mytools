@@ -1,12 +1,13 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Scan or install Windows Update quality (non-feature) or feature updates.
+    Scan or install Windows Update quality, feature, or BIOS/firmware updates.
 
 .DESCRIPTION
     Uses the Windows Update Agent COM API (no PSWindowsUpdate module).
     Quality: cumulative / security / SSU / .NET  -  excludes Feature Update titles.
     Feature: Feature Update and Enablement Package only.
+    Firmware: BIOS, UEFI, and system-firmware drivers only. Other drivers stay.
 
     Always runs a pre-check (disk space, recovery partition, WU services,
     policy, pending reboot). Default install does not reboot. -Reboot
@@ -24,6 +25,9 @@
 
 .PARAMETER Feature
     Target feature updates / enablement packages only.
+
+.PARAMETER Firmware
+    Target BIOS, UEFI, and system-firmware driver updates only.
 
 .PARAMETER Reboot
     Restart automatically when the install reports a reboot is required.
@@ -43,6 +47,7 @@ param(
     [switch]$CheckOnly,
     [switch]$Quality,
     [switch]$Feature,
+    [switch]$Firmware,
     [switch]$Reboot,
     [switch]$Force,
     [switch]$NoExit,
@@ -55,13 +60,17 @@ $script:ExitCode = 0
 $script:PreCheckFails = 0
 $script:PreCheckWarns = 0
 
-if ($Quality -and $Feature) {
-    Write-Error 'Specify only one of -Quality or -Feature.'
+$modeCount = 0
+if ($Quality) { $modeCount++ }
+if ($Feature) { $modeCount++ }
+if ($Firmware) { $modeCount++ }
+if ($modeCount -gt 1) {
+    Write-Error 'Specify only one of -Quality, -Feature, or -Firmware.'
     if ($Exit) { exit 2 }
     return
 }
-if (-not $Quality -and -not $Feature) { $Quality = $true }
-$script:Channel = $(if ($Feature) { 'Feature' } else { 'Quality' })
+if ($modeCount -eq 0) { $Quality = $true }
+$script:Channel = $(if ($Firmware) { 'Firmware' } elseif ($Feature) { 'Feature' } else { 'Quality' })
 $script:OsBuild = 0
 $script:IsBuild22631 = $false
 $script:QualityFirst = $false
@@ -342,7 +351,7 @@ function Invoke-UpdatePreCheck {
     if ($os) {
         Write-Line ("OS: {0} ({1}.{2})" -f $os.Caption.Trim(), $os.Version, $os.BuildNumber)
     }
-    if ($script:IsBuild22631) {
+    if ($script:IsBuild22631 -and -not $Firmware) {
         Write-Line 'Note: Build 22631 (Windows 11 23H2). Apply re-enables Windows Update services and WinRE when policy allows. Pending cumulative updates install before a version upgrade.'
     }
     Write-Line ("ComputerName: {0}" -f $env:COMPUTERNAME)
@@ -359,6 +368,9 @@ function Invoke-UpdatePreCheck {
             elseif ($disk.FreeGB -lt 20) { Write-Check Fail 'DiskSpace' ("{0} GB free; feature update typically needs 20+ GB." -f $disk.FreeGB) }
             elseif ($disk.FreeGB -lt 30) { Write-Check Warn 'DiskSpace' ("{0} GB free; 30+ GB recommended for feature update." -f $disk.FreeGB) }
             else { Write-Check Pass 'DiskSpace' ("{0} GB free." -f $disk.FreeGB) }
+        } elseif ($Firmware) {
+            if ($disk.FreeGB -lt 1) { Write-Check Fail 'DiskSpace' ("{0} GB free; firmware install needs at least 1 GB." -f $disk.FreeGB) }
+            else { Write-Check Pass 'DiskSpace' ("{0} GB free." -f $disk.FreeGB) }
         } else {
             if ($disk.FreeGB -lt 5) { Write-Check Fail 'DiskSpace' ("{0} GB free; quality updates need at least 8 GB (critical below 5 GB)." -f $disk.FreeGB) }
             elseif ($disk.FreeGB -lt 8) { Write-Check Fail 'DiskSpace' ("{0} GB free; quality updates typically need 8+ GB." -f $disk.FreeGB) }
@@ -373,11 +385,13 @@ function Invoke-UpdatePreCheck {
     } else {
         foreach ($r in $recs) {
             $label = 'disk{0}p{1} {2} MB' -f $r.Disk, $r.Partition, $r.SizeMB
-            if ($r.SizeMB -gt 0 -and $r.SizeMB -lt 250) {
+            if ($r.SizeMB -gt 0 -and $r.SizeMB -lt 250 -and -not $Firmware) {
                 Write-Check Fail 'RecoveryPartition' ("{0}  -  too small (need 250+ MB; 500+ MB safer). Common CU/WinRE failure." -f $label)
+            } elseif ($r.SizeMB -gt 0 -and $r.SizeMB -lt 250) {
+                Write-Check Warn 'RecoveryPartition' ("{0}  -  small WinRE partition. Firmware install does not use it." -f $label)
             } elseif ($Feature -and $r.SizeMB -lt 750) {
                 Write-Check Warn 'RecoveryPartition' ("{0}  -  under 750 MB; feature updates often fail until WinRE is resized." -f $label)
-            } elseif ($r.SizeMB -lt 500) {
+            } elseif ($r.SizeMB -lt 500 -and -not $Firmware) {
                 Write-Check Warn 'RecoveryPartition' ("{0}  -  under 500 MB; some cumulative updates fail (resize WinRE)." -f $label)
             } else {
                 Write-Check Pass 'RecoveryPartition' $label
@@ -475,6 +489,61 @@ function Invoke-UpdatePreCheck {
     Write-Line ("PreCheckSummary: Fail={0} Warn={1}" -f $script:PreCheckFails, $script:PreCheckWarns)
 }
 
+function Test-IsFirmwareUpdate($Update) {
+    $title = [string]$Update.Title
+    if ($title -match '(?i)\bBIOS\b|\bUEFI\b|System Firmware|\bFirmware\b') { return $true }
+    try {
+        $class = [string]$Update.DriverClass
+        if ($class -match '(?i)Firmware|BIOS|UEFI') { return $true }
+    } catch { }
+    try {
+        foreach ($c in @($Update.Categories)) {
+            if ([string]$c.Name -match '(?i)Firmware|BIOS|UEFI') { return $true }
+        }
+    } catch { }
+    return $false
+}
+
+function Search-FirmwareUpdates {
+    param($Session, $Searcher)
+    Write-Line 'Searching (IsInstalled=0 IsHidden=0 Type=Driver)...'
+    $drivers = @()
+    try {
+        $dResult = $Searcher.Search("IsInstalled=0 and IsHidden=0 and Type='Driver'")
+        for ($i = 0; $i -lt $dResult.Updates.Count; $i++) {
+            $drivers += $dResult.Updates.Item($i)
+        }
+    } catch {
+        throw
+    }
+    $picked = @()
+    $skipped = 0
+    foreach ($u in $drivers) {
+        if (Test-IsFirmwareUpdate $u) {
+            $picked += $u
+            continue
+        }
+        $skipped++
+        Write-Line ("Skip (not BIOS/firmware): {0}" -f $u.Title)
+    }
+    Write-Line ("FirmwareFound: {0}" -f $picked.Count)
+    Write-Line ("OtherDriversSkipped: {0}" -f $skipped)
+    foreach ($u in $picked) {
+        $mb = 0
+        try { $mb = [math]::Round($u.MaxDownloadSize / 1MB, 0) } catch { }
+        $dl = $false
+        try { $dl = [bool]$u.IsDownloaded } catch { }
+        $class = ''
+        try { $class = [string]$u.DriverClass } catch { }
+        if ($class) { $class = " | class $class" }
+        Write-Line ("Update: {0} | {1}{2} | max {3} MB | Downloaded={4}" -f $u.Title, (Get-KbList $u), $class, $mb, $dl)
+    }
+    if ($picked.Count -eq 0) {
+        Write-Line 'Result: No BIOS or system-firmware updates waiting. Other drivers were not selected. A BIOS that is not published to Windows Update will not appear here.'
+    }
+    return @{ Session = $Session; Updates = $picked; Drivers = @() }
+}
+
 function Search-WindowsUpdates {
     Write-Section 'Windows Update search'
     foreach ($n in @('wuauserv', 'bits')) {
@@ -487,6 +556,9 @@ function Search-WindowsUpdates {
     $session = New-Object -ComObject Microsoft.Update.Session
     $session.ClientApplicationID = 'mytools-WindowsUpdate'
     $searcher = $session.CreateUpdateSearcher()
+    if ($Firmware) {
+        return Search-FirmwareUpdates -Session $session -Searcher $searcher
+    }
     Write-Line 'Searching (IsInstalled=0 IsHidden=0 Type=Software)...'
     $result = $searcher.Search("IsInstalled=0 and IsHidden=0 and Type='Software'")
     $all = @()
@@ -684,6 +756,9 @@ function Install-WindowsUpdates {
         if ($script:DriversFirst) {
             Write-Line 'Driver updates need a restart before the version upgrade. Run -Feature again after the PC is back.'
         }
+        if ($Firmware) {
+            Write-Line 'Firmware is staged. It does not load until the next restart.'
+        }
         if ($Reboot) {
             Write-Line 'Reboot: restarting now because this update requires it (ScreenConnect session will drop).'
             $script:ExitCode = 3
@@ -710,7 +785,7 @@ function Install-WindowsUpdates {
 }
 
 Write-Section ("Windows Update {0}" -f $script:Channel)
-if ($script:IsBuild22631 -and -not $CheckOnly) {
+if ($script:IsBuild22631 -and -not $CheckOnly -and -not $Firmware) {
     Invoke-Build22631Prep
 }
 Invoke-UpdatePreCheck
@@ -722,6 +797,7 @@ if ($script:PreCheckFails -gt 0) {
     if ($disk) {
         if ($Feature -and $disk.FreeGB -lt 10) { $criticalDisk = $true }
         if ($Quality -and $disk.FreeGB -lt 5) { $criticalDisk = $true }
+        if ($Firmware -and $disk.FreeGB -lt 1) { $criticalDisk = $true }
     }
     if ($criticalDisk) {
         Write-Line 'Result: Pre-check FAIL  -  not enough disk space. Search will still run; install is blocked.'
