@@ -798,6 +798,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     Map(
         "Category", "Untested",
+        "Name", "Disable PowerShell 2.0",
+        "Summary", "Disable the Windows PowerShell 2.0 optional features (MicrosoftWindowsPowerShellV2 and V2Root). Apply only. Does not restart the PC.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PowerShellV2Disable",
+        "Fetch", "Contents",
+        "Path", "PowerShellV2Disable",
+        "Script", "Disable-PowerShellV2.ps1",
+        "UaPrefix", "PowerShellV2Disable-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 300000,
+        "Flags", "RunOnly NoExit AlwaysNote",
+        "Note", "Prefer elevated PowerShell. No scan/dry-run. DISM disable, no reboot. Already disabled or missing counts as done. Restart later if a scanner finding stays open.",
+        "ClipboardNote", "NOTE: Disables PowerShell 2.0 optional features. Does not reboot. Restart later if the scanner still shows the finding. Prefer elevated PowerShell."
+    ),
+    Map(
+        "Category", "Untested",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
@@ -1699,6 +1715,9 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "Check SSBD mitigation"
         gCtrls["ModeUpdate"].Text := "Enable SSBD mitigation"
     }
+    if InStr(ToolGet(t, "Path", ""), "PowerShellV2Disable") {
+        gCtrls["ModeUpdate"].Text := "Disable PowerShell 2.0"
+    }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
         gCtrls["ModeUpdate"].Text := "Delete matching rules"
@@ -2352,6 +2371,9 @@ DescribeSelection(tool, isScan) {
             mode := "Check SSBD mitigation"
         else
             mode := "Enable SSBD mitigation"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "PowerShellV2Disable") {
+        mode := "Disable PowerShell 2.0"
     }
     if ToolHasFlag(tool, "Reinstall") {
         if isScan
