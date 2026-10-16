@@ -13,9 +13,11 @@
     policy, pending reboot). Default install does not reboot. -Reboot
     restarts when the installer reports RebootRequired.
 
-    On Windows 11 23H2 (build 22631), Apply also turns Windows Update
-    services and WinRE back on when policy allows, and installs pending
-    cumulative updates before a feature update.
+    Apply turns wuauserv, bits, dosvc, UsoSvc, and WaaSMedicSvc back to
+    Manual and starts them when policy allows. If the service stops during
+    search or install (0x8024001E), Apply starts it and tries once more.
+    On Windows 11 23H2 (build 22631), Apply also turns WinRE back on and
+    installs pending cumulative updates before a feature update.
 
 .PARAMETER CheckOnly
     Search and report only. No download or install.
@@ -162,15 +164,22 @@ function Enable-UpdateService {
     }
 }
 
-function Invoke-Build22631Prep {
-    Write-Section 'Prep (build 22631)'
+function Invoke-UpdateServicePrep {
+    param([string]$Reason)
     if (Test-UpdateAccessBlocked) {
         Write-Line 'Prep: DisableWindowsUpdateAccess=1. Leaving services unchanged.'
-    } else {
-        foreach ($n in @('wuauserv', 'bits', 'dosvc', 'UsoSvc', 'WaaSMedicSvc')) {
-            Enable-UpdateService -Name $n
-        }
+        return $false
     }
+    if ($Reason) { Write-Line ("Prep: {0}" -f $Reason) }
+    foreach ($n in @('wuauserv', 'bits', 'dosvc', 'UsoSvc', 'WaaSMedicSvc')) {
+        Enable-UpdateService -Name $n
+    }
+    return $true
+}
+
+function Invoke-Build22631Prep {
+    Write-Section 'Prep (build 22631)'
+    [void](Invoke-UpdateServicePrep)
     $winre = Get-WinReStatus
     if ($winre -and $winre.Enabled -eq 'Disabled') {
         Write-Line 'Prep: Windows RE is disabled. Running reagentc /enable.'
@@ -183,16 +192,33 @@ function Invoke-Build22631Prep {
     }
 }
 
+function ConvertTo-WuHResult {
+    param($HResult)
+    # 0xFFFFFFFF is -1 in Windows PowerShell, so -band against it keeps the sign
+    # and [uint32] then throws on every failure HRESULT.
+    $n = 0L
+    try { $n = [int64]$HResult } catch { return 0L }
+    $n = $n -band 4294967295L
+    if ($n -lt 0) { $n += 4294967296L }
+    return $n
+}
+
+function Format-WuHResult {
+    param($HResult)
+    try { return ('0x{0:X8}' -f (ConvertTo-WuHResult $HResult)) } catch { return '0x????????' }
+}
+
 function Get-WuResultHint {
-    param([int64]$HResult)
-    $code = [uint32]($HResult -band 0xFFFFFFFF)
-    switch ($code) {
-        0x80240016 { return 'A reboot is still required, or another install is already running.' }
-        0x80240034 { return 'Download failed. BITS, Delivery Optimization (dosvc), or access to Windows Update is the usual cause.' }
-        0x80240022 { return 'Every update in the batch failed.' }
-        0x80070643 { return 'On build 22631 this is usually WinRE. Enable it and keep the recovery partition at 250 MB or larger.' }
-        0xC1900208 { return 'The version upgrade is blocked by an incompatible app or driver.' }
-        0xC1900200 { return 'This PC does not meet the requirements for that Windows version.' }
+    param($HResult)
+    switch (ConvertTo-WuHResult $HResult) {
+        0x80240016L { return 'A reboot is still required, or another install is already running.' }
+        0x8024001EL { return 'The Windows Update service stopped during this operation. Apply sets wuauserv to Manual, starts it, and tries once more.' }
+        0x80240034L { return 'Download failed. BITS, Delivery Optimization (dosvc), or access to Windows Update is the usual cause.' }
+        0x80240022L { return 'Every update in the batch failed.' }
+        0x8007045BL { return 'A shutdown or restart is already in progress. Wait until the PC is back, then run the install again.' }
+        0x80070643L { return 'On build 22631 this is usually WinRE. Enable it and keep the recovery partition at 250 MB or larger.' }
+        0xC1900208L { return 'The version upgrade is blocked by an incompatible app or driver.' }
+        0xC1900200L { return 'This PC does not meet the requirements for that Windows version.' }
         default { return $null }
     }
 }
@@ -210,7 +236,7 @@ function Write-UpdateOperationResults {
         if ($one.ResultCode -in 2, 3) { continue }
         $hr = 0
         try { $hr = [int64]$one.HResult } catch { }
-        $hrText = ('0x{0:X8}' -f [uint32]($hr -band 0xFFFFFFFF))
+        $hrText = Format-WuHResult $hr
         Write-Line ("{0} failed: {1} | ResultCode={2} | HResult={3}" -f $Stage, $title, $one.ResultCode, $hrText)
         $hint = Get-WuResultHint -HResult $hr
         if ($hint) { Write-Line ("Hint: {0}" -f $hint) }
@@ -694,10 +720,18 @@ function Install-WindowsUpdates {
         Write-Line 'Already downloaded. Skipping the download call.'
     } else {
         Write-Line 'This call prints nothing until Windows Update finishes.'
+        [void](Invoke-UpdateServicePrep -Reason 'before download')
         $downloader = $Session.CreateUpdateDownloader()
         $downloader.Updates = $coll
         $dlResult = $downloader.Download()
         Write-Line ("Download ResultCode: {0} (1=InProgress 2=Succeeded 3=SucceededWithErrors 4=Failed)" -f $dlResult.ResultCode)
+        $wu = Get-Service -Name 'wuauserv' -ErrorAction SilentlyContinue
+        if ($dlResult.ResultCode -in 3, 4 -and $wu -and $wu.Status -ne 'Running') {
+            Write-Line 'Download ended with errors and wuauserv is stopped. Starting it and downloading once more.'
+            [void](Invoke-UpdateServicePrep -Reason 'download retry')
+            $dlResult = $downloader.Download()
+            Write-Line ("Download ResultCode: {0} (1=InProgress 2=Succeeded 3=SucceededWithErrors 4=Failed)" -f $dlResult.ResultCode)
+        }
         if ($dlResult.ResultCode -eq 1) {
             Write-Line 'Result: Download is still in progress. Not installing and not rebooting.'
             $script:ExitCode = 1
@@ -709,6 +743,26 @@ function Install-WindowsUpdates {
             $script:ExitCode = 2
             return
         }
+        if ($dlResult.ResultCode -eq 3) {
+            Write-Line 'Download finished with errors. Only updates that finished downloading will be installed.'
+            Write-UpdateOperationResults -Result $dlResult -Updates $coll -Stage 'Download'
+        }
+        $ready = New-Object -ComObject Microsoft.Update.UpdateColl
+        foreach ($u in $coll) {
+            $have = $false
+            try { $have = [bool]$u.IsDownloaded } catch { $have = $false }
+            if ($have) {
+                [void]$ready.Add($u)
+            } else {
+                Write-Line ("Skip (not downloaded): {0}" -f $u.Title)
+            }
+        }
+        if ($ready.Count -eq 0) {
+            Write-Line 'Result: Nothing downloaded. Not installing.'
+            $script:ExitCode = 2
+            return
+        }
+        $coll = $ready
     }
 
     Write-Section 'Install'
@@ -717,16 +771,26 @@ function Install-WindowsUpdates {
     $inst = $null
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Stop'
+    $installTry = 0
     try {
-        $inst = $installer.Install()
-    } catch {
-        $hr = $_.Exception.HResult
-        Write-Line ("Install failed: 0x{0:X8}" -f ([uint32]($hr -band 0xFFFFFFFF)))
-        $hint = Get-WuResultHint $hr
-        if ($hint) { Write-Line $hint }
-        Write-Line 'Result: Install did not start. Not rebooting.'
-        $script:ExitCode = 2
-        return
+        while ($installTry -lt 2 -and -not $inst) {
+            $installTry++
+            [void](Invoke-UpdateServicePrep -Reason $(if ($installTry -eq 1) { 'before install' } else { 'Windows Update service stopped. Retrying install.' }))
+            try {
+                $inst = $installer.Install()
+                break
+            } catch {
+                $hr = $_.Exception.HResult
+                Write-Line ("Install failed: {0}" -f (Format-WuHResult $hr))
+                $hint = Get-WuResultHint $hr
+                if ($hint) { Write-Line $hint }
+                $stopped = (ConvertTo-WuHResult $hr) -eq 0x8024001EL
+                if ($stopped -and $installTry -lt 2) { continue }
+                Write-Line 'Result: Install did not start. Not rebooting.'
+                $script:ExitCode = 2
+                return
+            }
+        }
     } finally {
         $ErrorActionPreference = $prevEap
     }
@@ -785,8 +849,13 @@ function Install-WindowsUpdates {
 }
 
 Write-Section ("Windows Update {0}" -f $script:Channel)
-if ($script:IsBuild22631 -and -not $CheckOnly -and -not $Firmware) {
-    Invoke-Build22631Prep
+if (-not $CheckOnly) {
+    if ($script:IsBuild22631 -and -not $Firmware) {
+        Invoke-Build22631Prep
+    } else {
+        Write-Section 'Prep'
+        [void](Invoke-UpdateServicePrep -Reason 'Windows Update has to be running before a search or install.')
+    }
 }
 Invoke-UpdatePreCheck
 
@@ -836,14 +905,29 @@ if ($Feature -and -not $CheckOnly -and -not $blockApply -and (Test-FeatureInstal
     Write-Line 'Warning: Update history still says the version upgrade is in progress, but setup is not running and no reboot is pending. Continuing.'
 }
 
-try {
-    $found = Search-WindowsUpdates
-} catch {
-    Write-Line ("ERROR: Windows Update search failed: {0}" -f $_.Exception.Message)
-    Write-Line 'Exception: WU service/policy/WSUS may be blocking the agent. See pre-check.'
-    $script:ExitCode = 2
-    if ($Exit) { exit $script:ExitCode }
-    return
+$found = $null
+$searchTry = 0
+while ($searchTry -lt 2 -and -not $found) {
+    $searchTry++
+    try {
+        $found = Search-WindowsUpdates
+    } catch {
+        $hr = $_.Exception.HResult
+        $retry = (-not $CheckOnly -and $searchTry -lt 2 -and (ConvertTo-WuHResult $hr) -eq 0x8024001EL)
+        Write-Line ("ERROR: Windows Update search failed: {0}" -f $_.Exception.Message)
+        Write-Line ("HResult: {0}" -f (Format-WuHResult $hr))
+        $hint = Get-WuResultHint $hr
+        if ($hint) { Write-Line $hint }
+        if ($retry) {
+            Write-Line 'Starting the Windows Update service and searching once more.'
+            [void](Invoke-UpdateServicePrep -Reason 'search retry')
+            continue
+        }
+        Write-Line 'Exception: WU service/policy/WSUS may be blocking the agent. See pre-check.'
+        $script:ExitCode = 2
+        if ($Exit) { exit $script:ExitCode }
+        return
+    }
 }
 
 if ($CheckOnly) {

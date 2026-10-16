@@ -27,13 +27,22 @@ Scan and Apply always run a pre-check:
 Apply stops on Fail unless `-Force`. Critical disk (under 5 GB quality / 10 GB
 feature) always stops.
 
+## Windows Update service
+
+Apply (not a scan) sets `wuauserv`, `bits`, `dosvc`, `UsoSvc`, and
+`WaaSMedicSvc` to Manual and starts them, unless `DisableWindowsUpdateAccess`
+is set. A Disabled startup type is why search and install return
+`0x8024001E` (the service stopped). Apply starts the service again and retries
+that search or install once.
+
+A download that finishes with errors installs only the updates that actually
+downloaded. The rest are listed and skipped.
+
 ## Windows 11 23H2 (build 22631)
 
 Version upgrades from build 22631 fail more often than later builds. Apply
 (not a scan) on that build:
 
-- Sets `wuauserv`, `bits`, `dosvc`, `UsoSvc`, and `WaaSMedicSvc` to Manual and
-  starts them, unless `DisableWindowsUpdateAccess` is set
 - Runs `reagentc /enable` when Windows RE is disabled
 - Installs pending cumulative and servicing-stack updates before a feature
   update, then stops so you can reboot and run `-Feature` again
@@ -70,7 +79,7 @@ Exit `0` means setup is running or the OS download grew. Exit `1` means a featur
 
 Use ScToolLauncher (**Software updates** → Windows Update quality / feature / BIOS).
 Scan first. Prefer elevated. Feature installs can take hours — use Backstage
-or a long Commands timeout (4 hours). Reload the launcher after pull (`1.1.0`).
+or a long Commands timeout (4 hours). Reload the launcher after pull (`1.1.1`).
 
 A feature install skips the download call when Windows Update already marks the update downloaded. That call prints nothing until it returns, so a second run was sitting on `=== Download ===` even after the files were on disk.
 

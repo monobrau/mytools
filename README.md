@@ -15,6 +15,7 @@ Public collection of work tools and scripts.
 | [EntraIntuneEvidence](EntraIntuneEvidence/) | Export Entra authorized users, likely service accounts, and Intune BitLocker status per workstation |
 | [EntraVendorAppRemoval](EntraVendorAppRemoval/) | Delete INKY, usecure, and Skout enterprise apps from the signed-in Entra tenant (matched by name; ids differ per tenant) |
 | [ForensicInvestigator](ForensicInvestigator/) | Sysinternals + Harkins EVTX + all-user Downloads (Zone.ID), PS history, hives, browser History, admins/RMM, Defender; `C:\SecurityReports` |
+| [HpImageAssistant](HpImageAssistant/) | Download HP Image Assistant and install only unattended SoftPaqs on HP PCs. Default no reboot |
 | [HpSupportAssistantUpdate](HpSupportAssistantUpdate/) | Check / uninstall (Win10 v-scan remediation) / update HP Support Assistant (ScreenConnect Backstage + `#!ps`) |
 | [KeeperSsh](KeeperSsh/) | Run SSH commands on switches, firewalls, and Linux hosts with the Keeper login for that IP; the password stays in a local helper process |
 | [M365AppsUpdate](M365AppsUpdate/) | Silent M365 Apps Click-to-Run check/update; clear up-to-date verdict; does not close Office apps by default |

@@ -28,6 +28,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | .NET runtime / SDK patches | mytools |
 | Visual C++ 2005-2013 redistributables | mytools `VisualCppUpdate` — last security build per installed year |
 | HP Support Assistant | mytools |
+| HP Image Assistant | mytools `HpImageAssistant` — HP PCs only. Downloads HPIA 5.3.7 and installs unattended (SSM) SoftPaqs. Default no reboot |
 | Dell SupportAssist | mytools `DellSupportAssistUpdate` — update only when already installed; leaves OS Recovery, Remediation, and TechHub |
 | Classic Teams remnants | mytools |
 | Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
@@ -68,6 +69,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Tool | Source |
 | --- | --- |
 | SentinelOne silent install | mytools `SentinelOneInstall` — paste site/group token in GUI; optional URL or on-disk EXE/MSI |
+| SentinelOne unload (passphrase) | Inline — finds `SentinelCtl.exe` and runs `unload -slam -k`. Passphrase is GUI-only and is not saved |
 | ConnectSecure → silent install | mytools `ConnectSecureInstall` — paste the official install script; `-c`, `-e`, and `-j` are filled from it and are not saved. OS dropdown defaults to Windows (agentlink + leftover cleanup). Mac, Linux, ARM, and ARM-32 copy the portal shell command. Default option on Windows: skip if agent is Running |
 | ConnectSecure → agent repair + reinstall | mytools — wipe then reinstall (same pasted script). Default option: skip if agent is Running; uncheck to force wipe |
 | Huntress → silent install | mytools `HuntressInstall` — account key built in; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
@@ -76,7 +78,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | Automate → agent uninstall | mytools `AutomateUninstall` — scan or remove the LabTech / Automate remote agent. ScreenConnect stays. Force = allow a probe agent |
 | Automate → agent reinstall | mytools `AutomateUninstall` — reinstall from the server, location, and cached MSI already on the PC. No token. New agent ID, same location |
 
-Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, SentinelOne tokens, Automate installer tokens, and the RemoteOps enroll token stay GUI-only. The RemoteOps portal URL is `[RemoteOps] Portal=` in `local-defaults.ini`. Do not paste live tokens into tickets or git.
+Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, SentinelOne tokens and uninstall passphrases, Automate installer tokens, and the RemoteOps enroll token stay GUI-only. The RemoteOps portal URL is `[RemoteOps] Portal=` in `local-defaults.ini`. Do not paste live tokens into tickets or git.
 
 ### IR / forensics — event logs, Sysinternals, ADWCleaner, PUP remnants
 

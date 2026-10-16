@@ -33,7 +33,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Reinstall Product ProductList
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
-;        SkipIfRunning ResetPlatform SentinelOneInstall HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
+;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
 ;        BackstageOnly AutoReboot Help
 HelpIntroText := Format("
 (
@@ -200,6 +200,21 @@ Mozilla Firefox
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "HP Image Assistant",
+        "Summary", "HP PCs only. Downloads HPIA, then installs SoftPaqs that can install unattended. Skips updates that need a person. Default does not reboot.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/HpImageAssistant",
+        "Fetch", "Contents",
+        "Path", "HpImageAssistant",
+        "Script", "Invoke-HpImageAssistant.ps1",
+        "UaPrefix", "HpImageAssistant-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 900000,
+        "TimeoutUpdate", 7200000,
+        "Flags", "CheckOnly Force AutoReboot NoExit",
+        "Note", "Non-HP PCs exit without changes. Apply uses /InstallType:AutoInstallable (SSM only). A silent BIOS package can still restart on its own. Leave Auto reboot off to stop on exit 3010. 2-hour timeout. Reload launcher after pull."
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
         "Name", "Dell SupportAssist",
         "Summary", "Updates Dell SupportAssist when it is already installed. Does not install it, and does not touch OS Recovery, Remediation, or TechHub.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DellSupportAssistUpdate",
@@ -235,7 +250,7 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.1.0",
+        "UaVer", "1.1.1",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 3600000,
         "DefaultArgs", "-Quality",
@@ -253,7 +268,7 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.1.0",
+        "UaVer", "1.1.1",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 14400000,
         "DefaultArgs", "-Feature",
@@ -270,7 +285,7 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.1.0",
+        "UaVer", "1.1.1",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 3600000,
         "DefaultArgs", "-Firmware",
@@ -493,6 +508,17 @@ HP Support Assistant AppX
         "Flags", "RunOnly SentinelOneInstall AlwaysNote",
         "Note", "Token + path (and optional URL) below are not saved. Barracuda/XDR MSI download URLs (fileType=.msi) auto-use msiexec even if path ends in .exe. Prefer elevated PowerShell.",
         "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell. v1.0.1 auto-detects MSI downloads."
+    ),
+    Map(
+        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Name", "SentinelOne unload (passphrase)",
+        "Summary", "Find SentinelCtl.exe and run unload -slam with the uninstall passphrase. The passphrase is not saved.",
+        "Fetch", "Inline",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 180000,
+        "Flags", "RunOnly SentinelOneUnload AlwaysNote",
+        "Note", "Passphrase below is not saved. Prefer elevated PowerShell. This unloads the agent with SentinelCtl unload -slam.",
+        "ClipboardNote", "NOTE: Uninstall passphrase is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
         "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
@@ -1096,6 +1122,8 @@ ShowGui(*) {
     gCtrls["LblS1Url"] := gGui.Add("Text", , "Optional download URL (blank = use path already on disk)")
     gCtrls["S1InstallerUrl"] := gGui.Add("Edit", "w" UiContentW " vS1InstallerUrl", "")
     gCtrls["S1Quiet"] := gGui.Add("Checkbox", "Checked vS1Quiet", "Quiet (-q) for EXE installers (older agents)")
+    gCtrls["LblS1Pass"] := gGui.Add("Text", "Section", "SentinelOne uninstall passphrase — not saved")
+    gCtrls["S1Passphrase"] := gGui.Add("Edit", "w" UiContentW " Password vS1Passphrase", "")
 
     huntressAcctDefault := LoadHuntressAccountKey()
     huntressAcctLabel := "Huntress account key (built in; rarely change)"
@@ -1164,6 +1192,7 @@ ShowGui(*) {
         "LblCsScript", "CsInstallScript",
         "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
         "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
+        "LblS1Pass", "S1Passphrase",
         "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
         "LblAutomateServer", "AutomateServer", "LblAutomateLocationId", "AutomateLocationId", "LblAutomateToken", "AutomateToken",
         "LblAutomateClient", "AutomateClientName", "LblAutomateLocation", "AutomateLocationName",
@@ -1236,7 +1265,7 @@ ReflowGui() {
         }
         else if (key = "Product" || key = "PupFamily" || key = "AvSecret" || key = "DomainController" || key = "Domain" || key = "Vendor"
             || key = "CsOs" || key = "CsCompanyId" || key = "CsEnvironmentId" || key = "CsInstallToken"
-            || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl"
+            || key = "S1Token" || key = "S1InstallerPath" || key = "S1InstallerUrl" || key = "S1Passphrase"
             || key = "HuntressAccountKey" || key = "HuntressOrgKey" || key = "HuntressTags"
             || key = "HuntressRebootAt"
             || key = "AutomateServer" || key = "AutomateLocationId" || key = "AutomateToken"
@@ -1434,6 +1463,7 @@ RefreshOptionEnable(*) {
             "LblCsScript", "CsInstallScript",
             "LblCsCompany", "CsCompanyId", "LblCsEnv", "CsEnvironmentId", "LblCsToken", "CsInstallToken",
             "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
+            "LblS1Pass", "S1Passphrase",
             "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
             "LblAutomateServer", "AutomateServer", "LblAutomateLocationId", "AutomateLocationId",
             "LblAutomateToken", "AutomateToken", "LblAutomateClient", "AutomateClientName",
@@ -1486,6 +1516,7 @@ RefreshOptionEnable(*) {
     ; so do not require Apply mode to show the schedule/reboot checkbox.
     showAutoReboot := ToolHasFlag(t, "AutoReboot") && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
+    showSentinelOneUnload := ToolHasFlag(t, "SentinelOneUnload")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
     showAutomate := ToolHasFlag(t, "AutomateGpo")
     showScGpo := ToolHasFlag(t, "ScreenConnectGpo")
@@ -1500,6 +1531,9 @@ RefreshOptionEnable(*) {
         gCtrls["AutoReboot"].Text := "Auto reboot when required"
     } else if InStr(ToolGet(t, "Path", ""), "AutomateUninstall") {
         gCtrls["Force"].Text := "Force (uninstall a probe agent)"
+        gCtrls["AutoReboot"].Text := "Auto reboot when required"
+    } else if InStr(ToolGet(t, "Path", ""), "HpImageAssistant") {
+        gCtrls["Force"].Text := "Re-download HPIA"
         gCtrls["AutoReboot"].Text := "Auto reboot when required"
     } else {
         gCtrls["Force"].Text := "Force (skip soft guards / re-run)"
@@ -1565,6 +1599,8 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["LblS1Url"], showSentinelOne)
     SetCtrlShown(gCtrls["S1InstallerUrl"], showSentinelOne)
     SetCtrlShown(gCtrls["S1Quiet"], showSentinelOne)
+    SetCtrlShown(gCtrls["LblS1Pass"], showSentinelOneUnload)
+    SetCtrlShown(gCtrls["S1Passphrase"], showSentinelOneUnload)
     SetCtrlShown(gCtrls["LblHuntressAcct"], showHuntress)
     SetCtrlShown(gCtrls["HuntressAccountKey"], showHuntress)
     SetCtrlShown(gCtrls["LblHuntressOrg"], showHuntress)
@@ -1639,6 +1675,8 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Remove matched items"
     } else if runOnly && ToolHasFlag(t, "SentinelOneInstall") {
         gCtrls["ModeUpdate"].Text := "Silent install (token)"
+    } else if runOnly && ToolHasFlag(t, "SentinelOneUnload") {
+        gCtrls["ModeUpdate"].Text := "Unload agent (passphrase)"
     } else if runOnly && ToolHasFlag(t, "HuntressInstall") {
         gCtrls["ModeUpdate"].Text := "Silent install (/ACCT_KEY)"
     } else if runOnly && (ToolGet(t, "Fetch", "") = "Inline") {
@@ -1702,6 +1740,10 @@ RefreshOptionEnable(*) {
             gCtrls["ModeScan"].Text := "Scan pending updates + pre-check"
             gCtrls["ModeUpdate"].Text := "Install (no reboot unless option)"
         }
+    }
+    if InStr(ToolGet(t, "Path", ""), "HpImageAssistant") {
+        gCtrls["ModeScan"].Text := "List unattended SoftPaqs"
+        gCtrls["ModeUpdate"].Text := "Install unattended SoftPaqs"
     }
     if InStr(ToolGet(t, "Path", ""), "OutlookDisableCache") {
         gCtrls["ModeScan"].Text := "Scan profiles and cache size"
@@ -2167,6 +2209,17 @@ BuildHuntressScheduleBody(isCommands) {
     return p
 }
 
+SentinelOnePassphraseOk(pass) {
+    return Trim(pass) != ""
+}
+
+BuildSentinelOneUnloadBody() {
+    global gCtrls
+    pass := RegExReplace(Trim(gCtrls["S1Passphrase"].Value), "\s+", " ")
+    pass := StrReplace(pass, "'", "''")
+    return "$ctl=$null; $svc=Get-CimInstance Win32_Service -Filter " Chr(34) "Name='SentinelAgent'" Chr(34) " -EA SilentlyContinue; if($svc.PathName){ $raw=$svc.PathName; if($raw.StartsWith([char]34)){ $exe=$raw.Split([char]34)[1] } else { $exe=($raw -split ' ')[0] }; $cand=Join-Path (Split-Path -Parent $exe) 'SentinelCtl.exe'; if(Test-Path -LiteralPath $cand){ $ctl=Get-Item -LiteralPath $cand } }; if(-not $ctl){ $ctl=Get-ChildItem -LiteralPath 'C:\Program Files\SentinelOne' -Filter SentinelCtl.exe -Recurse -EA SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1 }; if(-not $ctl){ throw 'SentinelCtl.exe was not found' }; & $ctl.FullName unload -slam -k '" pass "'; if($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0){ exit $LASTEXITCODE }"
+}
+
 BuildRemoteOpsBody(tool, ps5, tls) {
     global gCtrls
     portal := StrReplace(RTrim(Trim(gCtrls["RoPortal"].Value), "/"), "'", "''")
@@ -2219,6 +2272,8 @@ BuildSnippet(tool, isScan, isCommands) {
     ; WebClient so ScreenConnect's v2 engine can still install the agent.
     if ToolHasFlag(tool, "HuntressInstall") {
         body := BuildHuntressBody(isCommands)
+    } else if ToolHasFlag(tool, "SentinelOneUnload") {
+        body := BuildSentinelOneUnloadBody()
     } else if ToolHasFlag(tool, "RemoteOpsEnroll") || ToolHasFlag(tool, "RemoteOpsRemove") {
         body := BuildRemoteOpsBody(tool, ps5, tls)
     } else if (fetch = "Inline") {
@@ -2299,6 +2354,8 @@ DescribeSelection(tool, isScan) {
     if ToolHasFlag(tool, "RunOnly") {
         if ToolHasFlag(tool, "SentinelOneInstall")
             mode := "Silent install"
+        else if ToolHasFlag(tool, "SentinelOneUnload")
+            mode := "Unload agent (passphrase)"
         else if ToolHasFlag(tool, "HuntressInstall") {
             if (CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value)
                 mode := "Scheduled install + reboot " FormatHuntressRebootAt()
@@ -2353,6 +2410,12 @@ DescribeSelection(tool, isScan) {
             else
                 mode := "Install"
         }
+    }
+    if InStr(ToolGet(tool, "Path", ""), "HpImageAssistant") {
+        if isScan
+            mode := "List unattended SoftPaqs"
+        else
+            mode := "Install unattended SoftPaqs"
     }
     if InStr(ToolGet(tool, "Path", ""), "OutlookDisableCache") {
         if isScan
@@ -2489,6 +2552,12 @@ DoCopy(*) {
         if (Trim(gCtrls["CsCompanyId"].Value) = "" || Trim(gCtrls["CsEnvironmentId"].Value) = "" || Trim(gCtrls["CsInstallToken"].Value) = "") {
             gCtrls["Status"].Value := "Not copied. Needs Company ID, Environment ID, and Install Token."
             MsgBox("Paste the official install script, or fill Company ID, Environment ID, and Install Token.`nNothing is saved in the launcher.", AppName, "Icon!")
+            return
+        }
+    }
+    if ToolHasFlag(tool, "SentinelOneUnload") {
+        if !SentinelOnePassphraseOk(gCtrls["S1Passphrase"].Value) {
+            MsgBox("Enter the SentinelOne uninstall passphrase (nothing is saved), then copy again.", AppName, "Icon!")
             return
         }
     }
