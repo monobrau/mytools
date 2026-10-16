@@ -193,7 +193,7 @@ Mozilla Firefox
         "Path", "HpSupportAssistantUpdate",
         "Script", "Update-HpSupportAssistant.ps1",
         "UaPrefix", "HpSupportAssistantUpdate-bootstrap",
-        "UaVer", "1.2.0",
+        "UaVer", "1.2.1",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 600000,
         "Flags", "CheckOnly Uninstall Force NoExit"

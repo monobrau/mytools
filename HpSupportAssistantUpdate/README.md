@@ -6,7 +6,7 @@ ScreenConnect tool for HP Support Assistant remediation.
 
 | OS | Default action (no switches) |
 | --- | --- |
-| **Windows 11** | **Update** to patched SoftPaq (≥ 9.47 via winget-pkgs) |
+| **Windows 11** | **Update** to a patched SoftPaq (≥ 9.47). Looks up `HP.SupportAssistant` in winget-pkgs, then a pinned 9.55.10.0 SoftPaq if GitHub cannot be read. Does not install the old Windows 10 SoftPaq. |
 | **Windows 10** | **Uninstall** HPSA + Support Solutions Framework |
 
 Optional flags: `-CheckOnly`, `-Uninstall` (also on Win11), `-Update` (refused on Win10).
@@ -49,10 +49,10 @@ Paste **one entire line**.
 **Default (recommended)**
 
 ```powershell
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.2.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?ref=main'); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script))
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','HpSupportAssistantUpdate-bootstrap/1.2.1'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/HpSupportAssistantUpdate/Update-HpSupportAssistant.ps1?ref=main'); Write-Host ('Downloaded '+$script.Length+' chars'); & ([scriptblock]::Create($script))
 ```
 
-Expect `HpSupportAssistantUpdate 1.2.0` and either `Default action (Windows 11): Update` or `Default action (Windows 10): Uninstall`.
+Expect `HpSupportAssistantUpdate 1.2.1` and either `Default action (Windows 11): Update` or `Default action (Windows 10): Uninstall`.
 
 **Check only** — append `-CheckOnly`  
 **Force uninstall on Win11** — append `-Uninstall`

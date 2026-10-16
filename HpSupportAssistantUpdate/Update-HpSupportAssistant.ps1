@@ -61,9 +61,20 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.2.0'
-$WingetPackageId = 'HPInc.HPSupportAssistant'
-$WingetManifestApi = 'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
+$ScriptVersion = '1.2.1'
+# winget moved this package from HPInc.HPSupportAssistant to HP.SupportAssistant.
+$WingetPackageIds = @('HP.SupportAssistant', 'HPInc.HPSupportAssistant')
+$WingetManifestApis = @(
+    'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HP/SupportAssistant'
+    'https://api.github.com/repos/microsoft/winget-pkgs/contents/manifests/h/HPInc/HPSupportAssistant'
+)
+# Used only when GitHub winget-pkgs cannot be read. Must stay at or above $PatchedMinimumVersion.
+$Win11PatchedSoftPaq = [pscustomobject]@{
+    Version      = '9.55.10.0'
+    InstallerUrl = 'https://ftp.hp.com/pub/softpaq/sp174001-174500/sp174448.exe'
+    SoftPaq      = 'sp174448'
+    Note         = 'Pinned HPSA 9.55.10.0 when winget-pkgs cannot be read'
+}
 # Do NOT match "HP Support Solutions Framework" - that is a companion with a different version scheme (12.x vs HPSA 9.x).
 $HpsaDisplayNamePattern = '^HP Support Assistant(\s|$)'
 $FrameworkDisplayNamePattern = '^HP Support Solutions Framework(\s|$)'
@@ -321,41 +332,45 @@ function Get-LatestHpSupportAssistantFromWingetCli {
     $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
     if (-not $winget) { return $null }
 
-    $out = & winget.exe show --id $WingetPackageId --exact --accept-source-agreements 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($out)) { return $null }
+    foreach ($packageId in $WingetPackageIds) {
+        $out = & winget.exe show --id $packageId --exact --accept-source-agreements 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($out)) { continue }
 
-    $ver = $null
-    $url = $null
-    foreach ($line in ($out -split "`r?`n")) {
-        if ($line -match '^\s*Version:\s*(.+)\s*$') { $ver = $Matches[1].Trim() }
-        if ($line -match '^\s*Installer Url:\s*(.+)\s*$') { $url = $Matches[1].Trim() }
-    }
-    if (-not $ver -or -not $url) { return $null }
+        $ver = $null
+        $url = $null
+        foreach ($line in ($out -split "`r?`n")) {
+            if ($line -match '^\s*Version:\s*(.+)\s*$') { $ver = $Matches[1].Trim() }
+            if ($line -match '^\s*Installer Url:\s*(.+)\s*$') { $url = $Matches[1].Trim() }
+        }
+        if (-not $ver -or -not $url) { continue }
 
-    return [pscustomobject]@{
-        Version      = $ver
-        VersionObj   = ConvertTo-HpsaVersion -Text $ver
-        InstallerUrl = $url
-        Sha256       = $null
-        Source       = 'winget-cli'
-        PackageId    = $WingetPackageId
+        return [pscustomobject]@{
+            Version      = $ver
+            VersionObj   = ConvertTo-HpsaVersion -Text $ver
+            InstallerUrl = $url
+            Sha256       = $null
+            Source       = 'winget-cli'
+            PackageId    = $packageId
+        }
     }
+    return $null
 }
 
-function Get-LatestHpSupportAssistantFromWingetPkgs {
-    $dirs = @(Invoke-GitHubJson -Uri $WingetManifestApi)
+function Get-HpsaPackageFromWingetManifestApi {
+    param([Parameter(Mandatory)][string]$Uri)
+    $dirs = @(Invoke-GitHubJson -Uri $Uri)
     $versionNames = @(
         $dirs |
             Where-Object { $_.type -eq 'dir' -and $_.name -match '^\d' } |
             ForEach-Object { [string]$_.name }
     )
     if ($versionNames.Count -eq 0) {
-        throw 'No version folders found in winget-pkgs for HPInc.HPSupportAssistant.'
+        throw "No version folders at $Uri."
     }
 
     $sorted = @($versionNames | Sort-Object { ConvertTo-HpsaVersion -Text $_ } -Descending)
     $latestName = [string]$sorted[0]
-    $files = @(Invoke-GitHubJson -Uri "$WingetManifestApi/$latestName")
+    $files = @(Invoke-GitHubJson -Uri "$Uri/$latestName")
     $installer = $files | Where-Object { $_.name -like '*.installer.yaml' } | Select-Object -First 1
     if (-not $installer) {
         throw "No installer.yaml found for winget package version $latestName."
@@ -363,12 +378,13 @@ function Get-LatestHpSupportAssistantFromWingetPkgs {
 
     $yamlUrl = [string]$installer.download_url
     if (-not $yamlUrl) {
-        $yamlUrl = "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/h/HPInc/HPSupportAssistant/$latestName/$($installer.name)"
+        throw "No download URL for installer.yaml $latestName."
     }
     $yamlResp = Invoke-HpsaWebRequest -Uri $yamlUrl -TimeoutSec 60
     $yaml = ConvertTo-HpsaText -Content $yamlResp.Content
     $urlMatch = [regex]::Match($yaml, 'InstallerUrl:\s*(\S+)')
     $hashMatch = [regex]::Match($yaml, 'InstallerSha256:\s*([A-Fa-f0-9]{64})')
+    $idMatch = [regex]::Match($yaml, 'PackageIdentifier:\s*(\S+)')
     if (-not $urlMatch.Success) {
         throw "InstallerUrl missing from manifest $latestName."
     }
@@ -379,7 +395,33 @@ function Get-LatestHpSupportAssistantFromWingetPkgs {
         InstallerUrl = $urlMatch.Groups[1].Value.Trim()
         Sha256       = if ($hashMatch.Success) { $hashMatch.Groups[1].Value.ToUpperInvariant() } else { $null }
         Source       = 'winget-pkgs'
-        PackageId    = $WingetPackageId
+        PackageId    = if ($idMatch.Success) { $idMatch.Groups[1].Value.Trim() } else { $WingetPackageIds[0] }
+    }
+}
+
+function Get-LatestHpSupportAssistantFromWingetPkgs {
+    $failures = New-Object System.Collections.Generic.List[string]
+    foreach ($api in $WingetManifestApis) {
+        try {
+            return (Get-HpsaPackageFromWingetManifestApi -Uri $api)
+        }
+        catch {
+            [void]$failures.Add("$($_.Exception.Message)")
+        }
+    }
+    throw ($failures -join ' | ')
+}
+
+function Get-PinnedWin11HpSupportAssistant {
+    return [pscustomobject]@{
+        Version      = [string]$Win11PatchedSoftPaq.Version
+        VersionObj   = ConvertTo-HpsaVersion -Text ([string]$Win11PatchedSoftPaq.Version)
+        InstallerUrl = [string]$Win11PatchedSoftPaq.InstallerUrl
+        Sha256       = $null
+        Source       = ("pinned:{0}" -f $Win11PatchedSoftPaq.SoftPaq)
+        PackageId    = $WingetPackageIds[0]
+        SoftPaq      = [string]$Win11PatchedSoftPaq.SoftPaq
+        Note         = [string]$Win11PatchedSoftPaq.Note
     }
 }
 
@@ -395,7 +437,7 @@ function Get-LatestHpSupportAssistantFromWin10Catalog {
         InstallerUrl = [string]$c.InstallerUrl
         Sha256       = $null
         Source       = ("win10-catalog:{0}" -f $c.SoftPaq)
-        PackageId    = $WingetPackageId
+        PackageId    = $WingetPackageIds[0]
         SoftPaq      = [string]$c.SoftPaq
         Note         = [string]$c.Note
         CatalogIndex = $Index
@@ -431,13 +473,14 @@ function Get-LatestHpSupportAssistantPackage {
     }
     catch { [void]$errors.Add("winget-cli: $($_.Exception.Message)") }
 
-    Write-HpsaLog 'Win11 winget resolve failed; falling back to Win10 SoftPaq catalog.' 'WARN'
-    try {
-        return (Get-LatestHpSupportAssistantFromWin10Catalog -Index 0)
+    foreach ($err in $errors) { Write-HpsaLog $err 'WARN' }
+    $pinned = Get-PinnedWin11HpSupportAssistant
+    if (-not $pinned.VersionObj -or $pinned.VersionObj -lt $PatchedMinimumVersion) {
+        throw ("Unable to resolve a patched HP Support Assistant package. " + ($errors -join ' | '))
     }
-    catch { [void]$errors.Add("win10-catalog: $($_.Exception.Message)") }
-
-    throw ("Unable to resolve latest HP Support Assistant package. " + ($errors -join ' | '))
+    Write-HpsaLog 'Win11 winget resolve failed. Using the pinned patched SoftPaq instead of the Windows 10 catalog.' 'WARN'
+    if ($pinned.Note) { Write-HpsaLog ("SoftPaq note: {0}" -f $pinned.Note) }
+    return $pinned
 }
 
 function Get-FileSha256 {
@@ -729,6 +772,9 @@ if (-not (Test-IsWindowsHost)) {
 
 $osInfo = Get-HpsaOsInfo
 Write-HpsaLog ("OS: {0} [{1}]" -f $osInfo.Summary, $osInfo.Channel)
+if ($osInfo.IsWindows11 -and $osInfo.ProductName -match 'Windows 10') {
+    Write-HpsaLog 'Registry ProductName still says Windows 10. Build 22000 or newer is Windows 11, so the update path is used.'
+}
 
 # OS defaults when no action switch was passed.
 if (-not $explicitCheckOnly -and -not $explicitUninstall -and -not $explicitUpdate) {
@@ -798,7 +844,7 @@ try {
             InstallerUrl = $SoftPaqUrl
             Sha256       = $null
             Source       = 'override'
-            PackageId    = $WingetPackageId
+            PackageId    = $WingetPackageIds[0]
             CatalogIndex = $null
         }
     }
