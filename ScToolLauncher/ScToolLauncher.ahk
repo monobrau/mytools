@@ -34,7 +34,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
-;        BackstageOnly AutoReboot Help
+;        BackstageOnly AutoReboot AllowServer Help
 HelpIntroText := Format("
 (
 SC Tool Launcher copies a ScreenConnect-ready snippet to the clipboard.
@@ -250,13 +250,13 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.1.1",
+        "UaVer", "1.1.2",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 3600000,
         "DefaultArgs", "-Quality",
         "Folder", "Windows Update",
-        "Flags", "CheckOnly Force AutoReboot NoExit",
-        "Note", "Pre-check: disk, WinRE/recovery size, WU services/policy, pending reboot. Feature updates are a separate tool. Reload launcher after pull."
+        "Flags", "CheckOnly Force AutoReboot AllowServer NoExit",
+        "Note", "Pre-check: disk, WinRE/recovery size, WU services/policy, pending reboot. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Reload launcher after pull."
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
@@ -268,12 +268,12 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.1.1",
+        "UaVer", "1.1.2",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 14400000,
         "DefaultArgs", "-Feature",
-        "Flags", "CheckOnly Force AutoReboot NoExit",
-        "Note", "Backstage is fine. No desktop login. Driver updates install first. Auto reboot restarts only when Windows Update requires it; leave it off to stop instead. Do not start a second run while one is in progress. 4-hour timeout."
+        "Flags", "CheckOnly Force AutoReboot AllowServer NoExit",
+        "Note", "Backstage is fine. No desktop login. Driver updates install first. Auto reboot restarts only when Windows Update requires it; leave it off to stop instead. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Do not start a second run while one is in progress. 4-hour timeout."
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
@@ -285,12 +285,12 @@ Mozilla Firefox
         "Path", "WindowsUpdate",
         "Script", "Invoke-WindowsUpdate.ps1",
         "UaPrefix", "WindowsUpdate-bootstrap",
-        "UaVer", "1.1.1",
+        "UaVer", "1.1.2",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 3600000,
         "DefaultArgs", "-Firmware",
-        "Flags", "CheckOnly Force AutoReboot NoExit",
-        "Note", "Only firmware published to Windows Update. Leave Auto reboot off to stage the capsule and stop. The new BIOS does not load until the next restart. A BIOS that is not in Windows Update will not appear."
+        "Flags", "CheckOnly Force AutoReboot AllowServer NoExit",
+        "Note", "Only firmware published to Windows Update. Leave Auto reboot off to stage the capsule and stop. The new BIOS does not load until the next restart. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. A BIOS that is not in Windows Update will not appear."
     ),
     ; --- ScreenConnect ---
     Map(
@@ -1023,6 +1023,8 @@ OnToolTreeSelect(*) {
     if (idx = gLastToolIndex)
         return
     gLastToolIndex := idx
+    if gCtrls.Has("AllowServer")
+        gCtrls["AllowServer"].Value := 0
     RefreshOptionEnable()
 }
 
@@ -1080,6 +1082,7 @@ ShowGui(*) {
     gCtrls["ResetPlatform"] := gGui.Add("Checkbox", "vOptResetPlatform", "Nuclear: MpCmdRun -ResetPlatform")
     gCtrls["AutoReboot"] := gGui.Add("Checkbox", "vOptAutoReboot", "Auto reboot when required")
     gCtrls["AutoReboot"].OnEvent("Click", OnAutoRebootOptClick)
+    gCtrls["AllowServer"] := gGui.Add("Checkbox", "vOptAllowServer", "Allow Windows Server (asks before copy)")
     gCtrls["LblHuntressRebootAt"] := gGui.Add("Text", "Section", "Reboot at (endpoint local time)")
     gCtrls["HuntressRebootAt"] := gGui.Add("DateTime", "w220 vHuntressRebootAt", "yyyy-MM-dd HH:mm")
     gCtrls["HuntressRebootAt"].Value := DefaultHuntressRebootAt()
@@ -1183,7 +1186,7 @@ ShowGui(*) {
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
-        "AutoReboot", "LblHuntressRebootAt", "HuntressRebootAt",
+        "AutoReboot", "AllowServer", "LblHuntressRebootAt", "HuntressRebootAt",
         "LblProduct", "Product",
         "LblPupFamily", "PupFamily",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
@@ -1278,7 +1281,7 @@ ReflowGui() {
         else if (InStr(key, "Mode") = 1 || InStr(key, "Fmt") = 1 || key = "Force" || key = "ForceAppShutdown"
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
             || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "SkipIfRunning"
-            || key = "ResetPlatform" || key = "AutoReboot"
+            || key = "ResetPlatform" || key = "AutoReboot" || key = "AllowServer"
             || key = "S1Quiet" || key = "AutomateLinkToDomain")
             ch := 20
 
@@ -1455,7 +1458,7 @@ RefreshOptionEnable(*) {
             "LblMode", "ModeScan", "ModeUpdate", "LblOptions",
             "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
             "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning",
-            "ResetPlatform", "AutoReboot", "LblHuntressRebootAt", "HuntressRebootAt",
+            "ResetPlatform", "AutoReboot", "AllowServer", "LblHuntressRebootAt", "HuntressRebootAt",
             "LblProduct", "Product", "LblPupFamily", "PupFamily",
             "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
             "LblDomainController", "DomainController", "LblDomain", "Domain",
@@ -1515,6 +1518,7 @@ RefreshOptionEnable(*) {
     ; RunOnly tools (Huntress) keep ModeScan checked until later in this function,
     ; so do not require Apply mode to show the schedule/reboot checkbox.
     showAutoReboot := ToolHasFlag(t, "AutoReboot") && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
+    showAllowServer := ToolHasFlag(t, "AllowServer")
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showSentinelOneUnload := ToolHasFlag(t, "SentinelOneUnload")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
@@ -1552,6 +1556,9 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["SkipIfRunning"], showSkipIfRunning)
     SetCtrlShown(gCtrls["ResetPlatform"], showResetPlatform)
     SetCtrlShown(gCtrls["AutoReboot"], showAutoReboot)
+    SetCtrlShown(gCtrls["AllowServer"], showAllowServer)
+    if !showAllowServer
+        gCtrls["AllowServer"].Value := 0
     if (showHuntress) {
         if gCtrls["Force"].Value && gCtrls["AutoReboot"].Value
             gCtrls["AutoReboot"].Value := 0
@@ -1980,6 +1987,8 @@ BuildSwitches(tool, isScan, isCommands) {
         sw.Push("-ResetPlatform")
     if ToolHasFlag(tool, "AutoReboot") && !isScan && CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value
         sw.Push("-Reboot")
+    if ToolHasFlag(tool, "AllowServer") && CtrlActive(gCtrls["AllowServer"]) && gCtrls["AllowServer"].Value
+        sw.Push("-AllowServer")
 
     if ToolHasFlag(tool, "SentinelOneInstall") {
         token := Trim(gCtrls["S1Token"].Value)
@@ -2492,6 +2501,8 @@ DescribeSelection(tool, isScan) {
         parts.Push("ResetPlatform")
     if CtrlActive(gCtrls["AutoReboot"]) && gCtrls["AutoReboot"].Value && !ToolHasFlag(tool, "HuntressInstall")
         parts.Push("Auto reboot")
+    if CtrlActive(gCtrls["AllowServer"]) && gCtrls["AllowServer"].Value
+        parts.Push("Allow Server")
     if ToolHasFlag(tool, "BackupsOnlyDefault") {
         if CtrlActive(gCtrls["ClearAllBackupContent"]) && gCtrls["ClearAllBackupContent"].Value
             parts.Push("All Backup content")
@@ -2533,6 +2544,13 @@ DoCopy(*) {
     if ToolHasFlag(tool, "Help") {
         gCtrls["Status"].Value := "Select a tool from a category, then Copy."
         return
+    }
+    if ToolHasFlag(tool, "AllowServer") && CtrlActive(gCtrls["AllowServer"]) && gCtrls["AllowServer"].Value {
+        answer := MsgBox("This command will run Windows Update on a Windows Server or domain controller.`n`nWithout this confirmation the script exits and changes nothing on a server.`n`nCopy it with -AllowServer?", AppName, "YesNo Icon! Default2")
+        if (answer != "Yes") {
+            gCtrls["Status"].Value := "Not copied. Server confirmation was declined."
+            return
+        }
     }
     if ToolHasFlag(tool, "ScanOnly")
         gCtrls["ModeScan"].Value := 1

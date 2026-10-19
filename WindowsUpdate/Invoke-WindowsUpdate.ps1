@@ -16,6 +16,10 @@
     Apply turns wuauserv, bits, dosvc, UsoSvc, and WaaSMedicSvc back to
     Manual and starts them when policy allows. If the service stops during
     search or install (0x8024001E), Apply starts it and tries once more.
+
+    Windows Server and domain controllers exit before any change unless
+    -AllowServer is set. The launcher adds that switch only after a
+    confirmation.
     On Windows 11 23H2 (build 22631), Apply also turns WinRE back on and
     installs pending cumulative updates before a feature update.
 
@@ -38,6 +42,10 @@
     Include Preview updates. Continue Apply after non-critical pre-check
     Fail. Still stops on critical disk (under 5 GB quality / 10 GB feature).
 
+.PARAMETER AllowServer
+    Run on Windows Server and domain controllers. Without this switch the
+    script exits before it changes services or searches for updates.
+
 .PARAMETER NoExit
     Keep the PowerShell host open (Backstage). Does not call exit.
 
@@ -52,6 +60,7 @@ param(
     [switch]$Firmware,
     [switch]$Reboot,
     [switch]$Force,
+    [switch]$AllowServer,
     [switch]$NoExit,
     [switch]$Exit
 )
@@ -89,6 +98,21 @@ function Write-Line([string]$Message) {
 
 function Write-Section([string]$Message) {
     Write-Line "=== $Message ==="
+}
+
+function Test-IsWindowsServer {
+    $productType = 0
+    try {
+        $os = Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop
+        $productType = [int]$os.ProductType
+    } catch { }
+    # 1 = workstation, 2 = domain controller, 3 = server.
+    if ($productType -eq 2 -or $productType -eq 3) { return $true }
+    try {
+        $kind = [string](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction Stop).InstallationType
+        if ($kind -eq 'Server' -or $kind -eq 'Server Core') { return $true }
+    } catch { }
+    return $false
 }
 
 function Write-Check {
@@ -849,6 +873,16 @@ function Install-WindowsUpdates {
 }
 
 Write-Section ("Windows Update {0}" -f $script:Channel)
+if (Test-IsWindowsServer) {
+    if (-not $AllowServer) {
+        Write-Line 'Result: This is a Windows Server. Nothing was changed.'
+        Write-Line 'Windows Update does not run here unless -AllowServer was confirmed in the launcher.'
+        $script:ExitCode = 5
+        if ($Exit) { exit $script:ExitCode }
+        return
+    }
+    Write-Line 'AllowServer: this Windows Server is included.'
+}
 if (-not $CheckOnly) {
     if ($script:IsBuild22631 -and -not $Firmware) {
         Invoke-Build22631Prep

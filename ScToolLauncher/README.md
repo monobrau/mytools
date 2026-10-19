@@ -31,9 +31,9 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | HP Image Assistant | mytools `HpImageAssistant` — HP PCs only. Downloads HPIA 5.3.7 and installs unattended (SSM) SoftPaqs. Default no reboot |
 | Dell SupportAssist | mytools `DellSupportAssistUpdate` — update only when already installed; leaves OS Recovery, Remediation, and TechHub |
 | Classic Teams remnants | mytools |
-| Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot |
-| Windows Update → feature | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot |
-| Windows Update → BIOS / firmware | mytools `WindowsUpdate` — BIOS, UEFI, and system firmware only. Other drivers stay. Default no reboot |
+| Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot. Servers skipped unless Allow Windows Server is confirmed |
+| Windows Update → feature | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot. Servers skipped unless confirmed |
+| Windows Update → BIOS / firmware | mytools `WindowsUpdate` — BIOS, UEFI, and system firmware only. Other drivers stay. Default no reboot. Servers skipped unless confirmed |
 
 ### ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup
 
