@@ -34,6 +34,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
+;        PowerIdle FastStartup EolAudit
 ;        BackstageOnly AutoReboot AllowServer Help
 HelpIntroText := Format("
 (
@@ -60,6 +61,7 @@ CategoryOrder := [
     "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
     "AV — Defender repair, Cylance/Webroot, McAfee remnants",
     "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+    "Power — plugged-in sleep, hibernate, Fast Startup",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — admin PC (Inky rules, vendor apps)",
     "Untested",
@@ -183,6 +185,21 @@ Mozilla Firefox
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force NoExit"
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "EOL dependency use",
+        "Summary", "Reports whether out-of-support runtimes are loaded (VC++ 2005-2013, .NET 3.1/5/6/7, Silverlight, old SQL client). Scan only measures the Security log. Apply audits sentinel DLLs and keeps process hit counts.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EolDependencyAudit",
+        "Fetch", "Contents",
+        "Path", "EolDependencyAudit",
+        "Script", "Invoke-EolDependencyAudit.ps1",
+        "UaPrefix", "EolDependencyAudit-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 600000,
+        "Flags", "EolAudit Force NoExit",
+        "Note", "Scan does not change auditing. Apply turns on File System success auditing and an execute audit on each sentinel DLL, then records which process loaded it. Event text is not saved. Apply stops if 4663 traffic is already over 64 MB/day unless Force is checked. Add a dependency by extending the catalog. Private DLL copies outside the catalog paths are not seen."
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
@@ -642,7 +659,7 @@ HP Support Assistant AppX
         "TimeoutScan", 900000,
         "TimeoutUpdate", 900000,
         "Flags", "AutomateGpo AlwaysNote",
-        "Note", "Run elevated as Domain Admin on the client DC or RSAT box, not on a workstation. Token is not saved. Startup scripts run at boot. Prefer elevated PowerShell.",
+        "Note", "Paste deployment ticket reads the clipboard and fills the server, location, client, and Windows MSI token. Nothing is saved. Run elevated as Domain Admin on the client DC or RSAT box, not on a workstation.",
         "ClipboardNote", "NOTE: Installer token is in this snippet. Do not paste into tickets/git. Run on a DC/RSAT box as Domain Admin. Dry-run first. Clients need a reboot after the GPO is linked."
     ),
     ; --- IR / forensics ---
@@ -911,6 +928,32 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Note", "Client campaign. Scan first. Apply uninstalls XI only (10+ min). Waits for MSI mutex; retries 1618. Force = uninstall even if Foxit is missing. Prefer elevated PowerShell. Do not rerun or Force while msiexec is running.",
         "ClipboardNote", "NOTE: Scan first. Uninstall can take 10+ minutes — do not rerun or Force while it runs. Default skips hosts with no Foxit. Prefer elevated PowerShell. Log: C:\\Windows\\Temp\\AcrobatXi-uninstall.log"
     ),
+    Map(
+        "Category", "Power — plugged-in sleep, hibernate, Fast Startup",
+        "Name", "No sleep or hibernate while plugged in",
+        "Summary", "Sets the active power plan so a plugged-in PC does not sleep or hibernate on idle. Battery, display, lid, and power buttons stay as they are.",
+        "Fetch", "Inline",
+        "ScanBody", "$scheme=(powercfg /getactivescheme) -join ' '; Write-Output $scheme; foreach($a in @(@('STANDBYIDLE','Sleep'),@('HIBERNATEIDLE','Hibernate'))){ $raw=powercfg /q SCHEME_CURRENT SUB_SLEEP $a[0] 2>&1 | Out-String; $m=[regex]::Match($raw,'Current AC Power Setting Index:\s*0x([0-9a-fA-F]+)'); if(-not $m.Success){ Write-Output ($a[1]+' on AC: not in this plan') } else { $n=[Convert]::ToInt32($m.Groups[1].Value,16); Write-Output ($a[1]+' on AC: '+$(if($n -eq 0){'Never'}else{[string]$n+' min'})) } }; Write-Output 'No changes. Battery, display, lid, and power buttons were not read for a change.'",
+        "ApplyBody", "foreach($pair in @(@('standby-timeout-ac','Sleep'),@('hibernate-timeout-ac','Hibernate'))){ $err=powercfg /change $pair[0] 0 2>&1 | Out-String; if($LASTEXITCODE -ne 0){ Write-Output ($pair[1]+' on AC was not changed: '+$err.Trim()) } }; $scheme=(powercfg /getactivescheme) -join ' '; Write-Output $scheme; foreach($a in @(@('STANDBYIDLE','Sleep'),@('HIBERNATEIDLE','Hibernate'))){ $raw=powercfg /q SCHEME_CURRENT SUB_SLEEP $a[0] 2>&1 | Out-String; $m=[regex]::Match($raw,'Current AC Power Setting Index:\s*0x([0-9a-fA-F]+)'); if(-not $m.Success){ Write-Output ($a[1]+' on AC: not in this plan') } else { $n=[Convert]::ToInt32($m.Groups[1].Value,16); Write-Output ($a[1]+' on AC: '+$(if($n -eq 0){'Never'}else{[string]$n+' min'})) } }; Write-Output 'Battery, display, lid, and power buttons were left alone.'",
+        "TimeoutScan", 60000,
+        "TimeoutUpdate", 60000,
+        "Flags", "PowerIdle AlwaysNote",
+        "Note", "Prefer elevated PowerShell. Show first. Apply changes only the active plan: plugged-in sleep and hibernate idle become Never. A domain power policy can put the timeouts back.",
+        "ClipboardNote", "NOTE: Active plan only. Plugged-in sleep and hibernate idle set to Never. Battery, display, lid, and buttons are unchanged. A domain power policy can overwrite this."
+    ),
+    Map(
+        "Category", "Power — plugged-in sleep, hibernate, Fast Startup",
+        "Name", "Turn Fast Startup off",
+        "Summary", "Sets HiberbootEnabled to 0 so shutdown does a full shutdown. Does not turn hibernate off and does not remove the hibernation file.",
+        "Fetch", "Inline",
+        "ScanBody", "$p='HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'; $v=(Get-ItemProperty -LiteralPath $p -Name HiberbootEnabled -ErrorAction SilentlyContinue).HiberbootEnabled; if($null -eq $v){ Write-Output 'HiberbootEnabled: missing (Fast Startup off)' } elseif([int]$v -eq 0){ Write-Output 'HiberbootEnabled: 0 (Fast Startup off)' } else { Write-Output ('HiberbootEnabled: '+[string]([int]$v)+' (Fast Startup on)') }; Write-Output 'Hibernate was not turned off.'",
+        "ApplyBody", "$p='HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power'; if(-not (Test-Path -LiteralPath $p)){ New-Item -Path $p -Force | Out-Null }; New-ItemProperty -LiteralPath $p -Name HiberbootEnabled -PropertyType DWord -Value 0 -Force | Out-Null; $v=[int](Get-ItemProperty -LiteralPath $p -Name HiberbootEnabled).HiberbootEnabled; Write-Output ('HiberbootEnabled: '+[string]$v+' (Fast Startup '+$(if($v -eq 0){'off'}else{'still on'})+')'); Write-Output 'Takes effect on the next shutdown. Hibernate was not turned off.'",
+        "TimeoutScan", 60000,
+        "TimeoutUpdate", 60000,
+        "Flags", "FastStartup AlwaysNote",
+        "Note", "Prefer elevated PowerShell. Show first. Apply writes HiberbootEnabled 0 only. Hibernate stays available. The next shutdown is a full shutdown. A domain policy can turn Fast Startup back on.",
+        "ClipboardNote", "NOTE: HiberbootEnabled set to 0. Hibernate stays available. Takes effect on the next shutdown. A domain policy can turn Fast Startup back on."
+    ),
 ]
 
 gToolByNode := Map()   ; TreeView item id -> Tools index (1-based)
@@ -1138,6 +1181,8 @@ ShowGui(*) {
     gCtrls["HuntressTags"] := gGui.Add("Edit", "w" UiContentW " vHuntressTags", "")
 
     automateServerDefault := LoadAutomateServer()
+    gCtrls["BtnAutomateTicket"] := gGui.Add("Button", "w240", "Paste deployment ticket")
+    gCtrls["BtnAutomateTicket"].OnEvent("Click", (*) => PasteAutomateTicket())
     gCtrls["LblAutomateServer"] := gGui.Add("Text", "Section", "Automate server hostname")
     gCtrls["AutomateServer"] := gGui.Add("Edit", "w" UiContentW " vAutomateServer", automateServerDefault)
     gCtrls["LblAutomateLocationId"] := gGui.Add("Text", , "Location ID (from the deployment ticket)")
@@ -1197,6 +1242,7 @@ ShowGui(*) {
         "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
         "LblS1Pass", "S1Passphrase",
         "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
+        "BtnAutomateTicket",
         "LblAutomateServer", "AutomateServer", "LblAutomateLocationId", "AutomateLocationId", "LblAutomateToken", "AutomateToken",
         "LblAutomateClient", "AutomateClientName", "LblAutomateLocation", "AutomateLocationName",
         "LblAutomateDomain", "AutomateDomain", "LblAutomateOu", "AutomateTargetOu", "AutomateLinkToDomain",
@@ -1262,7 +1308,7 @@ ReflowGui() {
             ch := 48
         else if (key = "Status")
             ch := 36
-        else if (key = "BtnDocs" || key = "BtnAffects") {
+        else if (key = "BtnDocs" || key = "BtnAffects" || key = "BtnAutomateTicket") {
             ch := 26
             cw := 200
         }
@@ -1379,6 +1425,71 @@ ApplyConnectSecureInstallScript(requireComplete) {
     return true
 }
 
+ParseAutomateDeploymentTicket(text) {
+    server := "", locId := "", token := "", client := "", locName := ""
+    section := ""
+    for line in StrSplit(text, "`n", "`r") {
+        line := Trim(line)
+        if (line = "")
+            continue
+        heading := Trim(RegExReplace(line, "[#*]+"))
+        if RegExMatch(line, "i)^Client:\s*(.+)$", &mClient)
+            client := Trim(mClient[1])
+        else if RegExMatch(line, "i)^Location:\s*(.+?)\s*\((\d+)\)\s*$", &mLoc) {
+            locName := Trim(mLoc[1])
+            locId := mLoc[2]
+        }
+        else if RegExMatch(heading, "i)^MSI$")
+            section := "msi"
+        else if RegExMatch(heading, "i)^(Linux|Mac)\b")
+            section := "other"
+        else if (section = "msi" && token = "" && RegExMatch(line, "i)^https?://([^/\s]+)/\S*InstallerToken=([0-9A-Fa-f]+)", &mUrl)) {
+            server := mUrl[1]
+            token := mUrl[2]
+        }
+    }
+    if (server = "" && RegExMatch(text, "i)-Server\s+'([^']+)'", &mServer))
+        server := mServer[1]
+    if (server = "" && RegExMatch(text, 'i)-Server\s+"([^"]+)"', &mServer))
+        server := mServer[1]
+    if (locId = "" && RegExMatch(text, "i)-LocationID\s+(\d+)", &mId))
+        locId := mId[1]
+    if (token = "" && RegExMatch(text, "i)-Token\s+'([0-9A-Fa-f]+)'", &mTok))
+        token := mTok[1]
+    if (token = "" && RegExMatch(text, 'i)-Token\s+"([0-9A-Fa-f]+)"', &mTok))
+        token := mTok[1]
+    return Map("server", server, "locationId", locId, "token", token, "client", client, "locationName", locName)
+}
+
+PasteAutomateTicket() {
+    global gCtrls, AppName
+    text := ""
+    try text := A_Clipboard
+    if (Trim(text) = "") {
+        MsgBox("Copy the deployment ticket first.", AppName, "Icon!")
+        return
+    }
+    parsed := ParseAutomateDeploymentTicket(text)
+    if (parsed["server"] = "" || parsed["locationId"] = "" || parsed["token"] = "") {
+        MsgBox("That clipboard text is not a deployment ticket.`nIt needs the MSI installer link, or an Install-Automate line with the server, location ID, and token.", AppName, "Icon!")
+        return
+    }
+    gCtrls["AutomateServer"].Value := parsed["server"]
+    gCtrls["AutomateLocationId"].Value := parsed["locationId"]
+    gCtrls["AutomateToken"].Value := parsed["token"]
+    if (parsed["client"] != "")
+        gCtrls["AutomateClientName"].Value := parsed["client"]
+    if (parsed["locationName"] != "")
+        gCtrls["AutomateLocationName"].Value := parsed["locationName"]
+    who := parsed["client"]
+    if (who = "")
+        who := "client not in ticket"
+    where := parsed["locationName"]
+    if (where = "")
+        where := "location"
+    gCtrls["Status"].Value := "Ticket: " who " / " where " (" parsed["locationId"] "). Windows MSI token set. Not saved."
+}
+
 LoadRemoteOpsPortal() {
     global LocalDefaultsPath
     if FileExist(LocalDefaultsPath)
@@ -1468,6 +1579,7 @@ RefreshOptionEnable(*) {
             "LblS1Token", "S1Token", "LblS1Path", "S1InstallerPath", "LblS1Url", "S1InstallerUrl", "S1Quiet",
             "LblS1Pass", "S1Passphrase",
             "LblHuntressAcct", "HuntressAccountKey", "LblHuntressOrg", "HuntressOrgKey", "LblHuntressTags", "HuntressTags",
+            "BtnAutomateTicket",
             "LblAutomateServer", "AutomateServer", "LblAutomateLocationId", "AutomateLocationId",
             "LblAutomateToken", "AutomateToken", "LblAutomateClient", "AutomateClientName",
             "LblAutomateLocation", "AutomateLocationName", "LblAutomateDomain", "AutomateDomain",
@@ -1614,6 +1726,7 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["HuntressOrgKey"], showHuntress)
     SetCtrlShown(gCtrls["LblHuntressTags"], showHuntress)
     SetCtrlShown(gCtrls["HuntressTags"], showHuntress)
+    SetCtrlShown(gCtrls["BtnAutomateTicket"], showAutomate)
     SetCtrlShown(gCtrls["LblAutomateServer"], showAutomate)
     SetCtrlShown(gCtrls["AutomateServer"], showAutomate)
     SetCtrlShown(gCtrls["LblAutomateLocationId"], showAutomate)
@@ -1697,6 +1810,15 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Remove HP bloat / Wolf"
     } else if runOnly {
         gCtrls["ModeUpdate"].Text := "Download and run"
+    } else if ToolHasFlag(t, "PowerIdle") {
+        gCtrls["ModeScan"].Text := "Show plugged-in sleep and hibernate"
+        gCtrls["ModeUpdate"].Text := "Set plugged-in sleep and hibernate to Never"
+    } else if ToolHasFlag(t, "FastStartup") {
+        gCtrls["ModeScan"].Text := "Show Fast Startup"
+        gCtrls["ModeUpdate"].Text := "Turn Fast Startup off"
+    } else if ToolHasFlag(t, "EolAudit") {
+        gCtrls["ModeScan"].Text := "Measure log space (no audit changes)"
+        gCtrls["ModeUpdate"].Text := "Audit sentinel DLLs"
     } else if scanOnly && (ToolGet(t, "Fetch", "") = "Inline") {
         gCtrls["ModeScan"].Text := "Check pending reboot"
     } else if scanOnly {
@@ -1889,6 +2011,12 @@ BuildSwitches(tool, isScan, isCommands) {
 
     if ToolHasFlag(tool, "CheckOnly") && isScan
         sw.Push("-CheckOnly")
+    if ToolHasFlag(tool, "EolAudit") {
+        if isScan
+            sw.Push("-Action Measure")
+        else
+            sw.Push("-Action Watch")
+    }
 
     if ToolHasFlag(tool, "Remediate") && !isScan
         sw.Push("-Remediate")
@@ -2112,7 +2240,7 @@ BootstrapTls() {
 ; Wow64-redirects to the same 2.0 host. Probe SysNative (64-bit) first, then
 ; System32 / SysWOW64, and only relaunch an exe that reports Major >= 5.
 BootstrapPs5Relaunch() {
-    return "if($PSVersionTable.PSVersion.Major -lt 5){$exe=$null; foreach($c in @(`"$env:SystemRoot\SysNative\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\SysWOW64\WindowsPowerShell\v1.0\powershell.exe`")){if(Test-Path -LiteralPath $c){try{$v=& $c -NoProfile -Command '$PSVersionTable.PSVersion.Major'}catch{$v=0}; if(($v -as [int]) -ge 5){$exe=$c; break}}}; if(-not $exe){throw 'PowerShell 5.1 required (this host has only 2.0). Install WMF 5.1 or use Huntress inline install.'}; & $exe -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path; exit $LASTEXITCODE}; "
+    return "if($PSVersionTable.PSVersion.Major -lt 5){$exe=$null; foreach($c in @(`"$env:SystemRoot\SysNative\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe`",`"$env:SystemRoot\SysWOW64\WindowsPowerShell\v1.0\powershell.exe`")){if(Test-Path -LiteralPath $c){try{$v=& $c -NoProfile -Command '$PSVersionTable.PSVersion.Major'}catch{$v=0}; if(($v -as [int]) -ge 5){$exe=$c; break}}}; if(-not $exe){throw 'PowerShell 5.1 required (this host has only 2.0). Install WMF 5.1.'}; & $exe -NoProfile -ExecutionPolicy Bypass -File $MyInvocation.MyCommand.Path; exit $LASTEXITCODE}; "
 }
 
 DefaultHuntressRebootAt() {
@@ -2286,7 +2414,14 @@ BuildSnippet(tool, isScan, isCommands) {
     } else if ToolHasFlag(tool, "RemoteOpsEnroll") || ToolHasFlag(tool, "RemoteOpsRemove") {
         body := BuildRemoteOpsBody(tool, ps5, tls)
     } else if (fetch = "Inline") {
-        body := ToolGet(tool, "Body", "")
+        scanBody := ToolGet(tool, "ScanBody", "")
+        applyBody := ToolGet(tool, "ApplyBody", "")
+        if isScan && (scanBody != "")
+            body := scanBody
+        else if !isScan && (applyBody != "")
+            body := applyBody
+        else
+            body := ToolGet(tool, "Body", "")
     } else if (fetch = "DownloadExe") {
         url := ToolGet(tool, "Url", "")
         outFile := ToolGet(tool, "OutFile", "C:\Windows\Temp\tool.exe")
@@ -2393,8 +2528,12 @@ DescribeSelection(tool, isScan) {
         mode := "Check pending reboot"
     else if ToolHasFlag(tool, "ScanOnly") && (ToolGet(tool, "Fetch", "") = "IrmOutFile")
         mode := "Collect / run"
+    else if isScan && ToolHasFlag(tool, "EolAudit")
+        mode := "Measure log space"
     if !isScan && !ToolHasFlag(tool, "RunOnly") {
-        if ToolHasFlag(tool, "Delete") || ToolHasFlag(tool, "PositionalDry")
+        if ToolHasFlag(tool, "EolAudit")
+            mode := "Audit sentinels"
+        else if ToolHasFlag(tool, "Delete") || ToolHasFlag(tool, "PositionalDry")
             mode := "Remove"
         else if ToolHasFlag(tool, "Remediate")
             mode := "Clean up"
@@ -2446,6 +2585,18 @@ DescribeSelection(tool, isScan) {
     }
     if InStr(ToolGet(tool, "Path", ""), "PowerShellV2Disable") {
         mode := "Disable PowerShell 2.0"
+    }
+    if ToolHasFlag(tool, "PowerIdle") {
+        if isScan
+            mode := "Show plugged-in sleep and hibernate"
+        else
+            mode := "Never sleep or hibernate on AC"
+    }
+    if ToolHasFlag(tool, "FastStartup") {
+        if isScan
+            mode := "Show Fast Startup"
+        else
+            mode := "Turn Fast Startup off"
     }
     if ToolHasFlag(tool, "Reinstall") {
         if isScan

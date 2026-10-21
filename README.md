@@ -31,6 +31,7 @@ Public collection of work tools and scripts.
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet/VC++ 2005-2013 delegates + winget; ScreenConnect `#!ps`) |
 | [WebrootUninstallGpo](WebrootUninstallGpo/) | Immediate Task uninstall + leftover sweep; `Get-WebrootFleetStatus.ps1` checks AD PCs via C$ |
+| [EolDependencyAudit](EolDependencyAudit/) | See which processes load EOL runtimes. Script or GPO. Measures Security-log growth; stores hit counts, not event text |
 | [VisualCppUpdate](VisualCppUpdate/) | Patch installed Visual C++ 2005-2013 redistributables to the last security build for that year |
 | [WindowsDefenderRepair](WindowsDefenderRepair/) | Re-enable Defender real-time protection and start WinDefend / WdNisSvc |
 | [WindowsUpdate](WindowsUpdate/) | Scan/install quality, feature, or BIOS/firmware Windows Updates; pre-check for disk, WinRE, WU policy; default no reboot. Servers exit unless `-AllowServer` |

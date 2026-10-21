@@ -27,6 +27,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | Microsoft 365 Apps (Click-to-Run) | mytools |
 | .NET runtime / SDK patches | mytools |
 | Visual C++ 2005-2013 redistributables | mytools `VisualCppUpdate` — last security build per installed year |
+| EOL dependency use | mytools `EolDependencyAudit` — which processes load EOL runtimes. Scan measures Security-log size; apply audits sentinel DLLs and keeps hit counts |
 | HP Support Assistant | mytools |
 | HP Image Assistant | mytools `HpImageAssistant` — HP PCs only. Downloads HPIA 5.3.7 and installs unattended (SSM) SoftPaqs. Default no reboot |
 | Dell SupportAssist | mytools `DellSupportAssistUpdate` — update only when already installed; leaves OS Recovery, Remediation, and TechHub |
