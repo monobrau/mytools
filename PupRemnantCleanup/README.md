@@ -47,6 +47,21 @@ To add a family: copy a hashtable in `Get-PupCatalog`, change `Id` / paths / reg
 
 Prefer **elevated / Backstage** so every profile folder and loaded hive is visible.
 
+## Install block
+
+`Install-PupInstallBlock.ps1` stops the catalog programs from starting. It reads the literal `.exe` names in `LooseFileMatch` and `ProcessMatch`. When a person opens one, Windows shows a warning and does not run the program.
+
+Scan lists the names. `-Enable` arms the block. `-Disable` removes only entries this script created. Re-run `-Enable` after adding a family. A renamed installer, an MSI started by `msiexec`, or a browser extension is not blocked. A legitimate program with the same file name is also stopped. EDR may alert on these block entries.
+
+```powershell
+.\Install-PupInstallBlock.ps1 -CheckOnly
+.\Install-PupInstallBlock.ps1 -Enable
+.\Install-PupInstallBlock.ps1 -Enable -Name FakePdfConverter
+.\Install-PupInstallBlock.ps1 -Disable
+```
+
+The launcher entry is **PUP install block**. The cleanup script is still the tool for leftovers that are already installed.
+
 ## Exit codes
 
 | Code | Meaning |

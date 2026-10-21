@@ -24,7 +24,7 @@ Public collection of work tools and scripts.
 | [SpeculativeStoreBypass](SpeculativeStoreBypass/) | Enable the Windows SSBD mitigation for CVE-2018-3639 without clearing other CPU mitigation bits. Does not install updates or reboot |
 | [WinVerifyTrustPadding](WinVerifyTrustPadding/) | Enable the CVE-2013-3900 Authenticode padding check (`EnableCertPaddingCheck`) in both registry views |
 | [RmmAgentDeploy](RmmAgentDeploy/) | Coverage CSV of Automate/Huntress on recent AD computers, then a non-GPO push to hosts that are missing one |
-| [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep (Ask Toolbar, MediaArena/PDF converters, AppSuite, Wave, OneLaunch, Browser Assistant). Dry-run by default; `-Remove` deletes remnants |
+| [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep, plus a block that stops those installer names and shows a warning. Dry-run by default; `-Remove` deletes remnants |
 | [ScreenConnectGpoDeploy](ScreenConnectGpoDeploy/) | Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task GPO |
 | [ScreenConnectRogueHunt](ScreenConnectRogueHunt/) | Read-only hunt that prints each distinct ScreenConnect instance ID once and flags IDs that are not on the allow list |
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |

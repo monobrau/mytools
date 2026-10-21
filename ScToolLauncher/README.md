@@ -90,6 +90,7 @@ Huntress account key is built into the launcher and `HuntressInstall/ScreenConne
 | Forensic Investigator (Sysinternals) | mytools `ForensicInvestigator` **v3.1.3** — zip under `C:\SecurityReports`, then the loose CSVs and EventLogs/Artifacts folders are deleted |
 | Malwarebytes ADWCleaner | [ADWCleaner](https://www.malwarebytes.com/adwcleaner) — silent `/eula /clean /noreboot` |
 | PUP remnant cleanup | mytools `PupRemnantCleanup` — family dropdown (All on host, or one catalog id). Dry-run reports what is present; Remediate deletes those families |
+| PUP install block | mytools `PupRemnantCleanup` — stops those catalog program names and shows a warning. Re-apply after a family is added |
 
 Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypass` plus `Invoke-RestMethod -OutFile` then `&` run. ADWCleaner downloads the vendor EXE and runs `Start-Process -Wait`. Prefer elevated PowerShell.
 

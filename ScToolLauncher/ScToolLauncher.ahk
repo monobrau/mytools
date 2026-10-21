@@ -34,7 +34,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
-;        PowerIdle FastStartup EolAudit EolAuditGpo
+;        PowerIdle FastStartup EolAudit EolAuditGpo PupBlock
 ;        BackstageOnly AutoReboot AllowServer Help
 HelpIntroText := Format("
 (
@@ -756,6 +756,23 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ProductList", "All on host|AskToolbar|MediaArena|AppSuitePdf|WaveBrowser|OneLaunch|FakePdfConverter|BrowserAssistant",
         "Note", "Prefer elevated PowerShell. Scan first. Family list is the catalog. All on host = every family that is actually present.",
         "ClipboardNote", "NOTE: Family dropdown — All on host scans the whole catalog. Pick one id to limit. Scan is dry-run. Remove deletes folders/tasks/registry; browser prefs stay report-only."
+    ),
+    Map(
+        "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
+        "Name", "PUP install block",
+        "Summary", "Stops the catalog installers from running and shows the person a warning. Uses the same families as PUP remnant cleanup. Re-apply after a family is added.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PupRemnantCleanup",
+        "Fetch", "Contents",
+        "Path", "PupRemnantCleanup",
+        "Script", "Install-PupInstallBlock.ps1",
+        "UaPrefix", "PupInstallBlock-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 180000,
+        "Flags", "PupBlock ProductList NoExit",
+        "ProductList", "All catalog|AskToolbar|MediaArena|AppSuitePdf|WaveBrowser|OneLaunch|FakePdfConverter|BrowserAssistant",
+        "Note", "Prefer elevated PowerShell. Scan lists the program names and changes nothing. Apply blocks those .exe names. The person who opens one sees a warning and the program does not start. Re-apply after adding a family to the cleanup catalog. A renamed installer is not blocked. EDR may alert on the block entries.",
+        "ClipboardNote", "NOTE: Same catalog as PUP remnant cleanup. Scan lists names only. Apply blocks them and shows a warning. Re-apply after a new family is added. Renamed installers are not blocked."
     ),
     ; --- M365 / Exchange ---
     Map(
@@ -1702,7 +1719,10 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["LblProduct"], showProduct)
     SetCtrlShown(gCtrls["Product"], showProduct)
     if showPupFamily {
-        gCtrls["LblPupFamily"].Text := "PUP family (All on host = whatever is present)"
+        if ToolHasFlag(t, "PupBlock")
+            gCtrls["LblPupFamily"].Text := "PUP family (All catalog = every family)"
+        else
+            gCtrls["LblPupFamily"].Text := "PUP family (All on host = whatever is present)"
         FillPupFamilyList(t)
     }
     SetCtrlShown(gCtrls["LblPupFamily"], showPupFamily)
@@ -1843,6 +1863,9 @@ RefreshOptionEnable(*) {
     } else if ToolHasFlag(t, "EolAuditGpo") {
         gCtrls["ModeScan"].Text := "Dry-run (no download, no GPO)"
         gCtrls["ModeUpdate"].Text := "Download script and create GPO"
+    } else if ToolHasFlag(t, "PupBlock") {
+        gCtrls["ModeScan"].Text := "List program names (no block)"
+        gCtrls["ModeUpdate"].Text := "Block these programs and warn"
     } else if scanOnly && (ToolGet(t, "Fetch", "") = "Inline") {
         gCtrls["ModeScan"].Text := "Check pending reboot"
     } else if scanOnly {
@@ -1987,7 +2010,7 @@ ShowAffectsPopup(*) {
     }
     if ToolHasFlag(tool, "ProductList") && CtrlActive(gCtrls["PupFamily"]) {
         fam := Trim(gCtrls["PupFamily"].Text)
-        if (fam != "" && fam != "All on host")
+        if (fam != "" && fam != "All on host" && fam != "All catalog")
             scope .= "This copy is limited to family: " fam "`r`n`r`n"
     }
     if ToolHasFlag(tool, "IncludeBrowsers") {
@@ -2035,6 +2058,12 @@ BuildSwitches(tool, isScan, isCommands) {
 
     if ToolHasFlag(tool, "CheckOnly") && isScan
         sw.Push("-CheckOnly")
+    if ToolHasFlag(tool, "PupBlock") {
+        if isScan
+            sw.Push("-CheckOnly")
+        else
+            sw.Push("-Enable")
+    }
     if ToolHasFlag(tool, "EolAudit") {
         if isScan
             sw.Push("-Action Measure")
@@ -2122,7 +2151,7 @@ BuildSwitches(tool, isScan, isCommands) {
 
     if ToolHasFlag(tool, "ProductList") && CtrlActive(gCtrls["PupFamily"]) {
         fam := Trim(gCtrls["PupFamily"].Text)
-        if (fam != "" && fam != "All on host")
+        if (fam != "" && fam != "All on host" && fam != "All catalog")
             sw.Push("-Name " fam)
     }
 
@@ -2665,6 +2694,12 @@ DescribeSelection(tool, isScan) {
             mode := "Create GPO (domain link)"
         else
             mode := "Create GPO (unlinked)"
+    }
+    if ToolHasFlag(tool, "PupBlock") {
+        if isScan
+            mode := "List program names"
+        else
+            mode := "Block programs and warn"
     }
     if ToolHasFlag(tool, "EolAuditGpo") {
         if isScan

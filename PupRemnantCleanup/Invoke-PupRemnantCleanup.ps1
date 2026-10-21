@@ -76,6 +76,8 @@ $script:LogPath = Join-Path $env:TEMP ("PupRemnantCleanup_{0}_{1}.log" -f (Get-D
 # Catalog — copy an entry and change Id / paths / match strings to add a PUP.
 # Keep regexes specific. Do not use a bare "Ask" / "Update" / vendor-generic word.
 # Domain matches need a lookbehind, e.g. (?<![A-Za-z0-9])ask\.com, so hydroflask.com does not hit.
+# Install-PupInstallBlock.ps1 blocks the literal .exe names in LooseFileMatch and ProcessMatch.
+# Re-run that script after adding a family. A renamed installer is not blocked.
 # ---------------------------------------------------------------------------
 function Get-PupCatalog {
     [ordered]@{

@@ -27,3 +27,24 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 #timeout=300000
 #maxlength=200000
 $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','PupRemnantCleanup-bootstrap/1.3.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/PupRemnantCleanup/Invoke-PupRemnantCleanup.ps1?ref=main'); & ([scriptblock]::Create($script)) -Remove -Exit
+
+# Install block. Stops catalog .exe names and shows a warning. Does not remove leftovers.
+# Re-run Enable after adding a family to the catalog.
+
+# COMMANDS — list names, no changes
+#!ps
+#timeout=180000
+#maxlength=200000
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','PupInstallBlock-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/PupRemnantCleanup/Install-PupInstallBlock.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+
+# COMMANDS — block the catalog programs
+#!ps
+#timeout=180000
+#maxlength=200000
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','PupInstallBlock-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/PupRemnantCleanup/Install-PupInstallBlock.ps1?ref=main'); & ([scriptblock]::Create($script)) -Enable -Exit
+
+# COMMANDS — remove the block
+#!ps
+#timeout=180000
+#maxlength=200000
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','PupInstallBlock-bootstrap/1.0.0'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/PupRemnantCleanup/Install-PupInstallBlock.ps1?ref=main'); & ([scriptblock]::Create($script)) -Disable -Exit
