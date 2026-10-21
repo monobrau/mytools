@@ -737,7 +737,7 @@ HP Support Assistant AppX
 (Join`r`n
 Scan reports matches. Remove deletes folders, tasks, services, uninstall entries, and leftover installers. Browser preference files are reported only.
 Ask Toolbar — Ask.com / Ask Toolbar / APN
-MediaArena — PdfPower, PdfMagic, and related converters
+MediaArena — PdfPower, PdfMagic, Blazer Browser, and related converters
 AppSuite PDF — AppSuite-PDF, PDF Editor, ManualFinder (not Foxit or Adobe)
 Wave Browser
 OneLaunch / OneStart / OneBUpdate

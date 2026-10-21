@@ -183,6 +183,21 @@ function Get-BlockImages {
                 }
                 if ($wrapped -and $depth -eq 0) { $work = $inner }
             }
+            foreach ($listed in @($family.BlockImages)) {
+                $listed = [string]$listed
+                if (-not $listed) { continue }
+                $image = $listed.Trim()
+                if ($image -notmatch '\.exe$') { $image = $image + '.exe' }
+                $imageKey = $image.ToLowerInvariant()
+                if ($seen.ContainsKey($imageKey)) { continue }
+                if ($image -notmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{2,70}\.exe$') { continue }
+                $seen[$imageKey] = $true
+                $rows.Add([pscustomobject]@{
+                    Id          = $id
+                    DisplayName = [string]$family.DisplayName
+                    Image       = $image
+                }) | Out-Null
+            }
             foreach ($piece in (Split-TopLevel $work)) {
                 foreach ($stem in (Expand-ImageStem $piece)) {
                     $stem = $stem.Trim()

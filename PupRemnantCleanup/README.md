@@ -13,7 +13,7 @@ Matches stay specific (`Ask Toolbar`, `Ask.com`, `AskToolbar`, `APN`). A bare `A
 | Id | What it targets |
 | --- | --- |
 | `AskToolbar` | Ask.com / Ask Toolbar / APN folders, ARP, registry, leftover tasks/services, IE search scopes, Run keys, `ask.com` prefs |
-| `MediaArena` | PdfPower / PdfMagic / zip-gif converters, `searchpoweronline.com` hijack, Desktop/Downloads leftovers |
+| `MediaArena` | PdfPower / PdfMagic / zip-gif converters, Blazer Browser (`blazer.exe`, `blazer_updater.exe`, `blazer_proxy.exe`, `blazer_installer.exe`, `BlazerSetup.exe`), `searchpoweronline.com` hijack, Desktop/Downloads leftovers |
 | `AppSuitePdf` | AppSuite-PDF.msi / TamperedChef `PDF Editor` / ManualFinderApp (not Foxit or Adobe) |
 | `WaveBrowser` | Wavesor Wave Browser (`WaveBrowser-StartAtLogin`) |
 | `OneLaunch` | OneLaunch / OneStart launcher adware, including OneBUpdate and `%LocalAppData%\ob\onebupdate` |

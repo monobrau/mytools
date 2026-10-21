@@ -76,7 +76,7 @@ $script:LogPath = Join-Path $env:TEMP ("PupRemnantCleanup_{0}_{1}.log" -f (Get-D
 # Catalog — copy an entry and change Id / paths / match strings to add a PUP.
 # Keep regexes specific. Do not use a bare "Ask" / "Update" / vendor-generic word.
 # Domain matches need a lookbehind, e.g. (?<![A-Za-z0-9])ask\.com, so hydroflask.com does not hit.
-# Install-PupInstallBlock.ps1 blocks the literal .exe names in LooseFileMatch and ProcessMatch.
+# Install-PupInstallBlock.ps1 blocks BlockImages plus the literal .exe names in LooseFileMatch and ProcessMatch.
 # Re-run that script after adding a family. A renamed installer is not blocked.
 # ---------------------------------------------------------------------------
 function Get-PupCatalog {
@@ -138,15 +138,32 @@ function Get-PupCatalog {
 
         MediaArena = @{
             Id          = 'MediaArena'
-            DisplayName = 'MediaArena (PdfPower / PdfMagic / search hijack converters)'
-            Notes       = 'BrowserModifier:Win32/MediaArena. Fake PDF/GIF/zip converters from malvertising. Uninstaller often only deletes a desktop shortcut. Huntress/Defender may already quarantine the exe.'
+            DisplayName = 'MediaArena (PdfPower / PdfMagic / Blazer / search hijack converters)'
+            Notes       = 'BrowserModifier:Win32/MediaArena. Fake PDF/GIF/zip converters from malvertising, plus Blazer Browser (blazer.exe, blazer_updater.exe, blazer_proxy.exe, blazer_installer.exe, BlazerSetup.exe). Uninstaller often only deletes a desktop shortcut. Huntress/Defender may already quarantine the exe.'
             Folders     = @(
                 '%ProgramFiles%\MediaArena'
                 '%ProgramFiles(x86)%\MediaArena'
                 '%ProgramData%\MediaArena'
+                '%ProgramFiles%\Blazer'
+                '%ProgramFiles(x86)%\Blazer'
+                '%ProgramData%\Blazer'
             )
-            FolderNameMatch = '(?i)^MediaArena$|^Gifsearchutils$|^Gifsmakerpro$|^PdfHub$|^PdfMagic(App)?$|^PdfPower$|^PdfShark$|^Screensearchutils$|^Screensrecorder$|^Searcharchiver$|^Searchpoweronline$|^Searchtoolshub$|^Sharksearchonline$|^Ziplikeapro(app)?$|^Ziprararchiver$|^GiveMeRecipe$|^FoodFormula$|^KitchenCanvas$'
-            LooseFileMatch  = '(?i)^(MediaArena(E|Service)?|Gifsearchutils|Gifsmakerpro|PdfHub|PdfMagic(App)?|PdfPower|PdfShark|Screensearchutils|Screensrecorder|Searcharchiver|Searchpoweronline|Searchtoolshub|Sharksearchonline|Ziplikeapro(app)?|Ziprararchiver|GiveMeRecipe|FoodFormula|KitchenCanvas)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            UserFolders = @(
+                'AppData\Local\Blazer'
+                'AppData\Roaming\Blazer'
+            )
+            FolderNameMatch = '(?i)^MediaArena$|^Blazer$|^Gifsearchutils$|^Gifsmakerpro$|^PdfHub$|^PdfMagic(App)?$|^PdfPower$|^PdfShark$|^Screensearchutils$|^Screensrecorder$|^Searcharchiver$|^Searchpoweronline$|^Searchtoolshub$|^Sharksearchonline$|^Ziplikeapro(app)?$|^Ziprararchiver$|^GiveMeRecipe$|^FoodFormula$|^KitchenCanvas$'
+            LooseFileMatch  = '(?i)^(MediaArena(E|Service)?|blazer([_-][A-Za-z0-9]+)?|BlazerSetup|BlazerInstaller|Gifsearchutils|Gifsmakerpro|PdfHub|PdfMagic(App)?|PdfPower|PdfShark|Screensearchutils|Screensrecorder|Searcharchiver|Searchpoweronline|Searchtoolshub|Sharksearchonline|Ziplikeapro(app)?|Ziprararchiver|GiveMeRecipe|FoodFormula|KitchenCanvas)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            BlockImages = @(
+                'blazer.exe'
+                'blazer_updater.exe'
+                'blazer_update.exe'
+                'blazer_installer.exe'
+                'blazer_setup.exe'
+                'blazer_proxy.exe'
+                'BlazerSetup.exe'
+                'BlazerInstaller.exe'
+            )
             RegistryKeys = @(
                 'HKLM:\SOFTWARE\MediaArena'
                 'HKLM:\SOFTWARE\WOW6432Node\MediaArena'
@@ -154,15 +171,15 @@ function Get-PupCatalog {
             UserRegistryKeys = @(
                 'SOFTWARE\MediaArena'
             )
-            TaskMatch                 = '(?i)MediaArena|PdfPower|PdfMagic|Searchpoweronline|Searcharchiver|Ziprararchiver'
-            ServiceMatch              = '(?i)MediaArena'
-            UninstallDisplayNameMatch = '(?i)^(MediaArena|Gifsearchutils|Gifsmakerpro|PdfHub|PdfMagic(App)?|PdfPower|PdfShark|Screensearchutils|Screensrecorder|Searcharchiver|Searchpoweronline|Searchtoolshub|Sharksearchonline|Ziplikeapro(app)?|Ziprararchiver|GiveMeRecipe|FoodFormula|KitchenCanvas)$'
+            TaskMatch                 = '(?i)MediaArena|Blazer|PdfPower|PdfMagic|Searchpoweronline|Searcharchiver|Ziprararchiver'
+            ServiceMatch              = '(?i)MediaArena|Blazer'
+            UninstallDisplayNameMatch = '(?i)^(MediaArena|Blazer( Browser)?|BlazerSetup|Gifsearchutils|Gifsmakerpro|PdfHub|PdfMagic(App)?|PdfPower|PdfShark|Screensearchutils|Screensrecorder|Searcharchiver|Searchpoweronline|Searchtoolshub|Sharksearchonline|Ziplikeapro(app)?|Ziprararchiver|GiveMeRecipe|FoodFormula|KitchenCanvas)$'
             UninstallPublisherMatch   = '(?i)^Media ?Arena$|^PdfPower$|^PdfMagic$|^Searchpoweronline$'
             SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])(searchpoweronline|searchtoolshub|sharksearchonline)\.com'
-            SearchDisplayNameMatch    = '(?i)AASearchpoweronline|Searchpoweronline|MediaArena'
-            RunValueMatch             = '(?i)MediaArena|PdfPower|PdfMagic|Searchpoweronline|\\MediaArena\\'
+            SearchDisplayNameMatch    = '(?i)AASearchpoweronline|Searchpoweronline|MediaArena|Blazer'
+            RunValueMatch             = '(?i)MediaArena|PdfPower|PdfMagic|Searchpoweronline|\\MediaArena\\|\\Blazer\\|blazer([_-][A-Za-z0-9]+)?'
             BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])(searchpoweronline|searchtoolshub|sharksearchonline)\.com'
-            ProcessMatch              = '(?i)^MediaArena(E|Service)?$|^PdfPower$|^PdfMagic(App)?$|^PdfHub$|^PdfShark$|^Ziprararchiver$|^Ziplikeapro(app)?$'
+            ProcessMatch              = '(?i)^MediaArena(E|Service)?$|^PdfPower$|^PdfMagic(App)?$|^PdfHub$|^PdfShark$|^Ziprararchiver$|^Ziplikeapro(app)?$|^blazer$|^blazer_updater$|^blazer_update$|^blazer_installer$|^blazer_setup$|^blazer_proxy$|^BlazerSetup$|^BlazerInstaller$|^blazer[_-][A-Za-z0-9]+$'
             SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
         }
 
