@@ -311,13 +311,32 @@ function Get-PhpFlagValue {
     return $null
 }
 
+function Test-PhpLegalPath {
+    param([string]$Path)
+    if (-not $Path) { return $false }
+    $invalid = [IO.Path]::GetInvalidPathChars()
+    foreach ($ch in $Path.ToCharArray()) {
+        if ([array]::IndexOf($invalid, $ch) -ge 0) { return $false }
+    }
+    return $true
+}
+
+function Get-PhpFileName {
+    param([string]$Path)
+    if (-not (Test-PhpLegalPath -Path $Path)) { return $null }
+    try { return [IO.Path]::GetFileName($Path) } catch { Write-Debug $_.Exception.Message; return $null }
+}
+
 function Get-PhpExeFromCommand {
     param([string]$CommandLine)
     if (-not $CommandLine) { return $null }
-    if ($CommandLine -match '^"([^"]+\.exe)"') { return $Matches[1] }
-    if ($CommandLine -match "(?i)^'([^']+\.exe)'") { return $Matches[1] }
-    if ($CommandLine -match '(?i)^([A-Za-z]:\\[^\s]+\.exe)') { return $Matches[1] }
-    return $null
+    $command = $CommandLine.Trim()
+    $exe = $null
+    if ($command -match '(?i)^"([^"]+\.exe)"') { $exe = $Matches[1] }
+    elseif ($command -match "(?i)^'([^']+\.exe)'") { $exe = $Matches[1] }
+    elseif ($command -match '(?i)^([A-Za-z]:\\.+?\.exe|\\\\.+?\.exe)(?:"|\s|$)') { $exe = $Matches[1] }
+    if (-not (Test-PhpLegalPath -Path $exe)) { return $null }
+    return $exe
 }
 
 function Add-PhpServerCommand {
@@ -325,8 +344,10 @@ function Add-PhpServerCommand {
         [string]$ExePath,
         [string]$CommandLine
     )
-    if (-not $ExePath -or -not (Test-Path -LiteralPath $ExePath)) { return }
-    $base = [IO.Path]::GetFileName($ExePath)
+    if (-not $ExePath -or -not (Test-PhpLegalPath -Path $ExePath)) { return }
+    if (-not (Test-Path -LiteralPath $ExePath)) { return }
+    $base = Get-PhpFileName -Path $ExePath
+    if (-not $base) { return }
     if ($base -match '(?i)^php(-cgi|-win)?\.exe$') {
         Add-PhpBin $ExePath
         return
@@ -569,8 +590,8 @@ function Get-PhpServiceParameters {
 
 function Get-PhpWinSwCommand {
     param([string]$ExePath)
-    if (-not $ExePath) { return $null }
-    $xmlPath = [IO.Path]::ChangeExtension($ExePath, '.xml')
+    if (-not (Test-PhpLegalPath -Path $ExePath)) { return $null }
+    try { $xmlPath = [IO.Path]::ChangeExtension($ExePath, '.xml') } catch { Write-Debug $_.Exception.Message; return $null }
     $xml = Get-PhpXmlDocument -Path $xmlPath
     if (-not $xml -or -not $xml.service) { return $null }
     $executable = [string]$xml.service.executable
@@ -586,15 +607,22 @@ function Add-PhpWrappedService {
         [string]$ExePath,
         [string]$Arguments
     )
-    $base = [IO.Path]::GetFileName($ExePath)
-    $command = (($ExePath, $Arguments) -join ' ').Trim()
+    $resolved = Get-PhpExeFromCommand -CommandLine $ExePath
+    if (-not $resolved) {
+        $trimmed = $ExePath.Trim().Trim('"')
+        if (Test-PhpLegalPath -Path $trimmed) { $resolved = $trimmed }
+    }
+    if (-not $resolved) { return }
+    $base = Get-PhpFileName -Path $resolved
+    if (-not $base) { return }
+    $command = (($resolved, $Arguments) -join ' ').Trim()
     if ($base -match '(?i)^php(-cgi|-win)?\.exe$') {
-        Add-PhpUse ("Windows service {0} is {1} and starts {2}" -f $ServiceName, $State, $ExePath)
-        Add-PhpBin $ExePath
+        Add-PhpUse ("Windows service {0} is {1} and starts {2}" -f $ServiceName, $State, $resolved)
+        Add-PhpBin $resolved
         return
     }
     if ($base -match '(?i)^(httpd|nginx|caddy)\.exe$') {
-        Add-PhpServerCommand -ExePath $ExePath -CommandLine $command
+        Add-PhpServerCommand -ExePath $resolved -CommandLine $command
     }
 }
 
@@ -798,13 +826,17 @@ function Add-PhpScheduledTasks {
 Get-PhpCim -Class 'Win32_Process' |
     Where-Object { $_.Name -match '^(php|php-cgi|php-win|httpd|nginx|caddy)\.exe$' } |
     ForEach-Object {
-        if ($_.Name -match '^(php|php-cgi|php-win)\.exe$') {
-            [void]$script:Running.Add("Running now: $($_.Name) process $($_.ProcessId)")
-            if ($_.ExecutablePath) { Add-PhpBin $_.ExecutablePath }
+        try {
+            if ($_.Name -match '^(php|php-cgi|php-win)\.exe$') {
+                [void]$script:Running.Add("Running now: $($_.Name) process $($_.ProcessId)")
+                if ($_.ExecutablePath) { Add-PhpBin $_.ExecutablePath }
+            }
+            $exe = $_.ExecutablePath
+            if (-not $exe) { $exe = Get-PhpExeFromCommand -CommandLine $_.CommandLine }
+            Add-PhpServerCommand -ExePath $exe -CommandLine $_.CommandLine
+        } catch {
+            Write-Debug $_.Exception.Message
         }
-        $exe = $_.ExecutablePath
-        if (-not $exe) { $exe = Get-PhpExeFromCommand -CommandLine $_.CommandLine }
-        Add-PhpServerCommand -ExePath $exe -CommandLine $_.CommandLine
     }
 
 foreach ($proc in @(Get-Process -ErrorAction SilentlyContinue)) {
@@ -827,12 +859,14 @@ foreach ($proc in @(Get-Process -ErrorAction SilentlyContinue)) {
 }
 
 Get-PhpCim -Class 'Win32_Service' | ForEach-Object {
+    try {
     $serviceName = [string]$_.Name
     $state = [string]$_.State
     $pathName = [string]$_.PathName
     $exe = Get-PhpExeFromCommand -CommandLine $pathName
     if (-not $exe) { return }
-    $base = [IO.Path]::GetFileName($exe)
+    $base = Get-PhpFileName -Path $exe
+    if (-not $base) { return }
     if ($base -match '(?i)^nssm\.exe$') {
         $param = Get-PhpServiceParameters -ServiceName $serviceName
         if ($param -and $param.Application) {
@@ -859,6 +893,9 @@ Get-PhpCim -Class 'Win32_Service' | ForEach-Object {
     }
     if ($base -match '(?i)^(httpd|nginx|caddy)\.exe$') {
         Add-PhpServerCommand -ExePath $exe -CommandLine $pathName
+    }
+    } catch {
+        Write-Debug $_.Exception.Message
     }
 }
 
