@@ -833,11 +833,11 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Path", "PhpUse",
         "Script", "Get-PhpUse.ps1",
         "UaPrefix", "PhpUse-bootstrap",
-        "UaVer", "1.0.1",
+        "UaVer", "1.1.0",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 300000,
         "Flags", "ScanOnly NoExit AlwaysNote",
-        "Note", "Read-only on workstations and Windows Server. Servers are not skipped. USING PHP means a process, IIS, Apache, nginx, a service, or a scheduled task is set up to run it. INSTALLED means the program was found. IIS site folders outside inetpub are included. A copy in an unusual folder with nothing pointing at it is not listed.",
+        "Note", "Read-only on workstations and Windows Server. Servers are not skipped. The download is pinned to a commit and checked with SHA256. USING PHP means a process, IIS, Apache, nginx, Caddy, a service, or a scheduled task is set up to run it. INSTALLED means the program was found. PHP inside WSL and Docker is not checked.",
         "ClipboardNote", "NOTE: Read-only. USING PHP means it is running or set up to run. INSTALLED means the program files were found. The Note line says what was not searched."
     ),
     Map(
@@ -2452,6 +2452,13 @@ BuildRemoteOpsBody(tool, ps5, tls) {
     return ps5 tls "; $f=Join-Path $env:ProgramData 'RemoteOps\remoteops-remove.ps1'; try{$s=irm '" portal "/remoteops-remove.ps1'}catch{$s=$null}; if($s){iex $s} elseif(Test-Path -LiteralPath $f){& $f} else {throw 'Portal unreachable and no local remoteops-remove.ps1'}"
 }
 
+; 32-bit PowerShell on 64-bit Windows relaunches through SysNative even when it is already
+; version 5. The same one-liner must also start under PowerShell 2.0.
+BuildPhpUseBody(isCommands) {
+    tail := isCommands ? " -Exit" : " -NoExit"
+    return "if (`$env:PROCESSOR_ARCHITEW6432) { `$px = `$env:SystemRoot + '\SysNative\WindowsPowerShell\v1.0\powershell.exe'; if (Test-Path -LiteralPath `$px) { if (`$MyInvocation.MyCommand.Path) { & `$px -NoProfile -ExecutionPolicy Bypass -File `$MyInvocation.MyCommand.Path; exit `$LASTEXITCODE }; if (`$MyInvocation.Line) { & `$px -NoProfile -ExecutionPolicy Bypass -Command `$MyInvocation.Line; exit `$LASTEXITCODE } } }; if (`$PSVersionTable.PSVersion.Major -lt 5) { `$exe = `$null; foreach (`$c in @((`$env:SystemRoot + '\SysNative\WindowsPowerShell\v1.0\powershell.exe'), (`$env:SystemRoot + '\System32\WindowsPowerShell\v1.0\powershell.exe'), (`$env:SystemRoot + '\SysWOW64\WindowsPowerShell\v1.0\powershell.exe'))) { if (Test-Path -LiteralPath `$c) { try { `$v = & `$c -NoProfile -Command '`$PSVersionTable.PSVersion.Major' } catch { `$v = 0 }; if ((`$v -as [int]) -ge 5) { `$exe = `$c; break } } }; if (-not `$exe) { throw 'PowerShell 5.1 required (this host has only 2.0). Install WMF 5.1.' }; if (`$MyInvocation.MyCommand.Path) { & `$exe -NoProfile -ExecutionPolicy Bypass -File `$MyInvocation.MyCommand.Path; exit `$LASTEXITCODE }; if (`$MyInvocation.Line) { & `$exe -NoProfile -ExecutionPolicy Bypass -Command `$MyInvocation.Line; exit `$LASTEXITCODE }; throw 'PowerShell 5.1 is required and this session could not relaunch.' }; `$ProgressPreference='SilentlyContinue'; try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072 } catch { }; `$wc = New-Object Net.WebClient; `$wc.Headers.Add('User-Agent','PhpUse-bootstrap/1.1.0'); `$wc.Headers.Add('Accept','application/vnd.github.raw'); `$url = 'https://api.github.com/repos/monobrau/mytools/contents/PhpUse/Get-PhpUse.ps1?ref=ac21ad231972f3a7543eb8a17edc7f8c7359df4c'; try { `$bytes = `$wc.DownloadData(`$url) } catch { `$detail = `$_.Exception.Message; `$resp = `$_.Exception.Response; if (`$resp) { try { `$reader = New-Object IO.StreamReader(`$resp.GetResponseStream()); `$body = `$reader.ReadToEnd(); `$reader.Close(); if (`$body) { `$detail = `$body } } catch { `$detail = `$_.Exception.Message } }; if (`$detail.Length -gt 300) { `$detail = `$detail.Substring(0,300) }; throw ('GitHub download failed: ' + `$detail) }; `$script = [System.Text.Encoding]::UTF8.GetString(`$bytes); if (`$script.Length -gt 0 -and [int][char]`$script[0] -eq 65279) { `$script = `$script.Substring(1) }; `$preview = `$script; if (`$preview.Length -gt 300) { `$preview = `$preview.Substring(0,300) }; `$q = [string][char]34; if (`$script -match ('^\s*\{') -and `$script -match (`$q + 'message' + `$q)) { throw ('GitHub returned an API error instead of the script: ' + `$preview) }; if (`$script -match '(?i)<html|github.com/login|&redirect') { throw 'Download returned HTML, not a script.' }; `$sha = [System.Security.Cryptography.SHA256]::Create().ComputeHash(`$bytes); `$hex = ''; foreach (`$b in `$sha) { `$hex += `$b.ToString('x2') }; if (`$hex -ne '12b000b5c487d284bd11588583f7210c01b66d1cc8d0710b9848db816df83b23') { throw ('PHP use script hash mismatch. Expected 12b000b5c487d284bd11588583f7210c01b66d1cc8d0710b9848db816df83b23 got ' + `$hex) }; & ([scriptblock]::Create(`$script))" tail
+}
+
 ShellSingleQuote(value) {
     return "'" StrReplace(value, "'", "'\''") "'"
 }
@@ -2492,7 +2499,9 @@ BuildSnippet(tool, isScan, isCommands) {
 
     ; Huntress: no GitHub / no #Requires 5.1. Download the vendor EXE with
     ; WebClient so ScreenConnect's v2 engine can still install the agent.
-    if ToolHasFlag(tool, "HuntressInstall") {
+    if (ToolGet(tool, "Path", "") = "PhpUse") {
+        body := BuildPhpUseBody(isCommands)
+    } else if ToolHasFlag(tool, "HuntressInstall") {
         body := BuildHuntressBody(isCommands)
     } else if ToolHasFlag(tool, "SentinelOneUnload") {
         body := BuildSentinelOneUnloadBody()

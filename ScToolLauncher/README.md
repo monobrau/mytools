@@ -108,7 +108,7 @@ Park tools here until they have been validated on a host. Add `"Category", "Unte
 
 | Tool | Source |
 | --- | --- |
-| PHP use | mytools `PhpUse` — read-only on workstations and Windows Server. Servers are not skipped. Reports USING PHP, INSTALLED, or neither |
+| PHP use | mytools `PhpUse` — read-only on workstations and Windows Server. Servers are not skipped. Download is pinned to commit `ac21ad2` and checked with SHA256 |
 | Deploy ScreenConnect client via GPO | mytools `ScreenConnectGpoDeploy` — stage the instance MSI on NETLOGON; Immediate Task installs when the client service is missing |
 | Automate GPO deploy | mytools `AutomateGpoDeploy` — bake the location MSI and create the install GPO |
 | Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT Immediate Task plus leftover sweep |
