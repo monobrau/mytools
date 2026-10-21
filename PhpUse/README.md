@@ -58,4 +58,4 @@ Prefer an elevated 64-bit PowerShell window so other sessions' processes and loa
 
 See [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1). ScToolLauncher: **Untested → PHP use**.
 
-The bootstrap downloads `Get-PhpUse.ps1` from a pinned commit and checks the SHA256 of the downloaded bytes. A GitHub API error (rate limit, 403, or 404) is thrown instead of being executed. Reload the launcher after this folder is on that commit.
+The bootstrap downloads `Get-PhpUse.ps1` from a pinned commit and checks the SHA256 of the downloaded bytes. A GitHub API error (rate limit, 403, or 404) is thrown instead of being executed. If the connection to GitHub fails, the paste already carries that same script and the SHA256 check still applies. Reload the launcher after this folder is on that commit.
