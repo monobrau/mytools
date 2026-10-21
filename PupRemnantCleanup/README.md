@@ -2,7 +2,7 @@
 
 Definition-driven leftover sweep for toolbars and search hijackers. **Ask Toolbar / Ask.com** is the first family. Add the next PUP as another catalog entry in `Invoke-PupRemnantCleanup.ps1` (`Get-PupCatalog`).
 
-Default is a **dry-run of every catalog family** (Ask Toolbar, MediaArena PDF converters, AppSuite/TamperedChef PDF Editor, Wave Browser, OneLaunch, fake converter installers, Browser Assistant) and reports whatever is actually on the host. Pass **`-Name AskToolbar`** (or several ids) to limit to some families. Pass **`-Remove`** (or **`-Remediate`**) to delete every removable finding for those families. Chromium / Firefox preference files are **reported only** — never rewritten (live JSON / `prefs.js`).
+Default is a **dry-run of every catalog family** (Ask Toolbar, MediaArena PDF converters, AppSuite/TamperedChef PDF Editor, Wave Browser, OneLaunch, fake converter installers, Browser Assistant, PC App Store, PDFStunner, Free PDF Plus) and reports whatever is actually on the host. Pass **`-Name AskToolbar`** (or several ids) to limit to some families. Pass **`-Remove`** (or **`-Remediate`**) to delete every removable finding for those families. Chromium / Firefox preference files are **reported only** — never rewritten (live JSON / `prefs.js`).
 
 Huntress (or similar) often already removed `Scheduled Update for Ask Toolbar` and `updatetask.exe`. This finishes what is typically left behind.
 
@@ -19,6 +19,9 @@ Matches stay specific (`Ask Toolbar`, `Ask.com`, `AskToolbar`, `APN`). A bare `A
 | `OneLaunch` | OneLaunch / OneStart launcher adware, including OneBUpdate and `%LocalAppData%\ob\onebupdate` |
 | `FakePdfConverter` | ConvertMate, Easy2Convert, UpdateRetriever, PDFConvertSetup, and related malvertising converter installers |
 | `BrowserAssistant` | Per-user `AppData\Roaming\Browser Assistant` (Blaze Media helper PUP), updater, `BAv*.msi`, `NetTwoUpdater` |
+| `PCAppStore` | PC App Store (`PCAppStore.exe`, `PcAppStoreSRV.exe`) under the user profile or Program Files. Shared names `Watchdog.exe`, `AutoUpdater.exe`, and `Uninstaller.exe` are not blocked |
+| `PDFStunner` | `PDFStunner.exe` and `pdfstunner.com` |
+| `FreePDFPlus` | `FreePDFPlus.exe` / `free-pdf-plus.exe` in `%AppData%\Roaming\PDFPlus` |
 
 ```powershell
 .\Invoke-PupRemnantCleanup.ps1 -List

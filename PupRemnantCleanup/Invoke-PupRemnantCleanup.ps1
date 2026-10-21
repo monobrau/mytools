@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Scan and remove leftover PUP remnants. Catalog covers Ask Toolbar, MediaArena converters, AppSuite PDF Editor, Wave/OneLaunch, fake PDF installers, and Browser Assistant.
+    Scan and remove leftover PUP remnants. Catalog covers Ask Toolbar, MediaArena converters, AppSuite PDF Editor, Wave/OneLaunch, fake PDF installers, Browser Assistant, PC App Store, PDFStunner, and FreePDFPlus.
 
 .DESCRIPTION
     Definition-driven remnant sweep for toolbars / search hijackers. Default is a dry-run report.
@@ -66,7 +66,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.3.2'
+$ScriptVersion = '1.3.3'
 $script:ExitCode = 0
 $script:Findings = New-Object System.Collections.Generic.List[object]
 $script:Seen = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -322,6 +322,109 @@ function Get-PupCatalog {
             UninstallPublisherMatch   = '(?i)^Blaze Media$'
             RunValueMatch             = '(?i)Browser Assistant|BrowserAssistant|\\Browser Assistant\\'
             ProcessMatch              = '(?i)^Browser Assistant$|^BrowserAssistant$|^Browser Assistant Updater$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        PCAppStore = @{
+            Id          = 'PCAppStore'
+            DisplayName = 'PC App Store (Fast Corporation)'
+            Notes       = 'Adware:Win32/PCAppStore. Seen as %USERPROFILE%\PCAppStore\PCAppStore.exe and as Program Files\PCAppStore, plus service PcAppStoreSRV. Publisher Fast Corporation / Fast Corporate LTD. Do not block Watchdog.exe, AutoUpdater.exe, or Uninstaller.exe. Those names are shared. A Run value is still removed when its path contains \PCAppStore\.'
+            Folders     = @(
+                '%ProgramFiles%\PCAppStore'
+                '%ProgramFiles(x86)%\PCAppStore'
+                '%ProgramData%\PCAppStore'
+            )
+            UserFolders = @(
+                'PCAppStore'
+                'AppData\Local\PCAppStore'
+                'AppData\Roaming\PCAppStore'
+            )
+            FolderNameMatch = '(?i)^PCAppStore$'
+            LooseFileMatch  = '(?i)^(PCAppStore|PcAppStoreSRV|PC App Store)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            BlockImages = @(
+                'PCAppStore.exe'
+                'PcAppStoreSRV.exe'
+            )
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\PCAppStore'
+                'HKLM:\SOFTWARE\WOW6432Node\PCAppStore'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\PCAppStore'
+            )
+            TaskMatch                 = '(?i)PCAppStore|PcAppStoreSRV|PC App Store'
+            ServiceMatch              = '(?i)PcAppStoreSRV|PCAppStore|PC App Store'
+            UninstallDisplayNameMatch = '(?i)^PC App Store$|^PCAppStore$'
+            UninstallPublisherMatch   = '(?i)^Fast Corporat(e|ion)( LTD\.?)?$'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])pcappstore\.com'
+            SearchDisplayNameMatch    = '(?i)^PC App Store$|^PCAppStore$'
+            RunValueMatch             = '(?i)PCAppStore|\\PCAppStore\\'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])pcappstore\.com'
+            ProcessMatch              = '(?i)^PCAppStore$|^PcAppStoreSRV$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        PDFStunner = @{
+            Id          = 'PDFStunner'
+            DisplayName = 'PDFStunner'
+            Notes       = 'Fake PDF campaign. The installer name is PDFStunner.exe and it opens pdfstunner.com. Do not match a bare PDF, and do not delete Windows RAS tracing keys under Microsoft\Tracing.'
+            UserFolders = @(
+                'AppData\Local\PDFStunner'
+                'AppData\Roaming\PDFStunner'
+            )
+            FolderNameMatch = '(?i)^PDFStunner$'
+            LooseFileMatch  = '(?i)^(PDFStunner)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            BlockImages = @(
+                'PDFStunner.exe'
+            )
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\PDFStunner'
+                'HKLM:\SOFTWARE\WOW6432Node\PDFStunner'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\PDFStunner'
+            )
+            TaskMatch                 = '(?i)PDFStunner'
+            ServiceMatch              = '(?i)PDFStunner'
+            UninstallDisplayNameMatch = '(?i)^PDFStunner$|^PDF Stunner$'
+            SearchUrlMatch            = '(?i)(?<![A-Za-z0-9])pdfstunner\.com'
+            SearchDisplayNameMatch    = '(?i)^PDFStunner$|^PDF Stunner$'
+            RunValueMatch             = '(?i)PDFStunner|\\PDFStunner\\'
+            BrowserContentMatch       = '(?i)(?<![A-Za-z0-9])pdfstunner\.com'
+            ProcessMatch              = '(?i)^PDFStunner$'
+            SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
+        }
+
+        FreePDFPlus = @{
+            Id          = 'FreePDFPlus'
+            DisplayName = 'Free PDF Plus'
+            Notes       = 'Nullsoft installer free-pdf-plus.exe / FreePDFPlus.exe. Installs to %AppData%\Roaming\PDFPlus\FreePDFPlus.exe and a Start Menu folder named Free PDF Plus. The folder name is PDFPlus; the program name is FreePDFPlus. Do not match Uninstall.exe or a bare PDF.'
+            UserFolders = @(
+                'AppData\Roaming\PDFPlus'
+                'AppData\Local\PDFPlus'
+                'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Free PDF Plus'
+            )
+            FolderNameMatch = '(?i)^PDFPlus$|^Free PDF Plus$'
+            LooseFileMatch  = '(?i)^(FreePDFPlus|free-pdf-plus|Free PDF Plus)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            BlockImages = @(
+                'FreePDFPlus.exe'
+                'free-pdf-plus.exe'
+            )
+            RegistryKeys = @(
+                'HKLM:\SOFTWARE\FreePDFPlus'
+                'HKLM:\SOFTWARE\WOW6432Node\FreePDFPlus'
+                'HKLM:\SOFTWARE\PDFPlus'
+                'HKLM:\SOFTWARE\WOW6432Node\PDFPlus'
+            )
+            UserRegistryKeys = @(
+                'SOFTWARE\FreePDFPlus'
+                'SOFTWARE\PDFPlus'
+            )
+            TaskMatch                 = '(?i)FreePDFPlus|Free PDF Plus|\\PDFPlus\\'
+            ServiceMatch              = '(?i)FreePDFPlus|Free PDF Plus'
+            UninstallDisplayNameMatch = '(?i)^Free PDF Plus$|^FreePDFPlus$'
+            RunValueMatch             = '(?i)FreePDFPlus|free-pdf-plus|\\PDFPlus\\|Free PDF Plus'
+            ProcessMatch              = '(?i)^FreePDFPlus$|^free-pdf-plus$'
             SkipRemoveTypes           = @('ChromiumPrefs', 'FirefoxPrefs')
         }
     }
