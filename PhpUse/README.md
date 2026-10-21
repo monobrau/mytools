@@ -52,7 +52,7 @@ PHP inside WSL distributions and Docker containers is not checked. A copy in an 
 .\Get-PhpUse.ps1
 ```
 
-Prefer an elevated 64-bit PowerShell window so other sessions' processes and loaded modules are visible. The ScreenConnect bootstrap relaunches through `%SystemRoot%\SysNative\WindowsPowerShell\v1.0\powershell.exe` when it is started as a 32-bit process on 64-bit Windows, including from PowerShell 2.0. It also relaunches when the current PowerShell is older than 5.
+Prefer an elevated 64-bit PowerShell window so other sessions' processes and loaded modules are visible. The check runs on Windows PowerShell 2.0 and later. The ScreenConnect bootstrap relaunches through `%SystemRoot%\SysNative\WindowsPowerShell\v1.0\powershell.exe` when it is started as a 32-bit process on 64-bit Windows. When Windows PowerShell 5.1 is installed, an older session relaunches into it. When this computer only has 2.0, 3.0, or 4.0, the check stays on that version.
 
 ## ScreenConnect
 

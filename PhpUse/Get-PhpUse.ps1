@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+#Requires -Version 2.0
 <#
 .SYNOPSIS
     Report whether this workstation or Windows Server is using PHP.
@@ -19,6 +19,7 @@
 
     PHP inside WSL distributions and Docker containers is not checked.
     The check does not search every folder on the disk.
+    It runs on Windows PowerShell 2.0 and later.
 
     Exit 0: not installed and not in use.
     Exit 1: installed, but nothing is set up to run it.
@@ -39,6 +40,7 @@ param(
 Set-StrictMode -Off
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
+$script:PhpEntryPath = $MyInvocation.MyCommand.Path
 
 $script:Running = New-Object System.Collections.Generic.List[string]
 $script:Use = New-Object System.Collections.Generic.List[string]
@@ -54,13 +56,20 @@ $script:UninstallName = '(?i)^(PHP\s+[0-9]|XAMPP\b|WampServer\b|Zend Server\b|La
 function Test-PhpShouldExit {
     if ($NoExit) { return $false }
     if ($Exit) { return $true }
-    if (-not [string]::IsNullOrEmpty($PSCommandPath)) { return $true }
+    $commandPath = $script:PhpEntryPath
+    if (-not $commandPath) { $commandPath = $PSCommandPath }
+    if (-not [string]::IsNullOrEmpty($commandPath)) { return $true }
     if ([Environment]::UserInteractive) { return $false }
     return $true
 }
 
+function New-PhpObject {
+    param([hashtable]$Values)
+    return New-Object PSObject -Property $Values
+}
+
 function Complete-PhpReport {
-    param([Parameter(Mandatory)][int]$Code)
+    param([Parameter(Mandatory = $true)][int]$Code)
     $global:LASTEXITCODE = $Code
     if (Test-PhpShouldExit) { exit $Code }
 }
@@ -133,13 +142,13 @@ function Get-PhpBraceBlocks {
             $depth--
             if ($depth -eq 0 -and $start -ge 0) {
                 $headerStart = [Math]::Max(0, $start - 240)
-                $blocks.Add([pscustomobject]@{
+                $blocks.Add((New-PhpObject @{
                     Start  = $headerStart
                     Open   = $start
                     End    = $i
                     Header = $Text.Substring($headerStart, $start - $headerStart)
                     Body   = $Text.Substring($start + 1, $i - $start - 1)
-                }) | Out-Null
+                })) | Out-Null
             }
         }
     }
@@ -155,14 +164,14 @@ function Remove-PhpDeniedLocation {
             $lineBreak = $block.Header.LastIndexOf("`n")
             $spanStart = $block.Start
             if ($lineBreak -ge 0) { $spanStart = $block.Start + $lineBreak + 1 }
-            $spans.Add([pscustomobject]@{ Start = $spanStart; End = $block.End }) | Out-Null
+            $spans.Add((New-PhpObject @{ Start = $spanStart; End = $block.End })) | Out-Null
         }
     }
     $tagRx = '(?is)<Location(Match)?\b[^>]*>.*?</Location(Match)?>'
     foreach ($match in [regex]::Matches($Text, $tagRx)) {
         $inner = $match.Value -replace '(?is)^<Location(Match)?\b[^>]*>', '' -replace '(?is)</Location(Match)?>$', ''
         if (Test-PhpDenyAction -Body $inner) {
-            $spans.Add([pscustomobject]@{ Start = $match.Index; End = ($match.Index + $match.Length - 1) }) | Out-Null
+            $spans.Add((New-PhpObject @{ Start = $match.Index; End = ($match.Index + $match.Length - 1) })) | Out-Null
         }
     }
     if ($spans.Count -eq 0) { return $Text }
@@ -252,9 +261,9 @@ function Add-PhpFollowFile {
     if (-not $Visited) { $Visited = @{} }
     $targets = @()
     if ($Path.Contains('*') -or $Path.Contains('?')) {
-        $targets = @(Get-ChildItem -Path $Path -File -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
-    } elseif (Test-Path -LiteralPath $Path) {
-        $targets = @((Resolve-Path -LiteralPath $Path).Path)
+        $targets = @(Get-ChildItem -Path $Path -ErrorAction SilentlyContinue | Where-Object { $_ -and -not $_.PSIsContainer } | ForEach-Object { $_.FullName })
+    } elseif ([IO.File]::Exists($Path)) {
+        $targets = @([IO.Path]::GetFullPath($Path))
     }
     foreach ($full in $targets) {
         if (-not $full) { continue }
@@ -416,20 +425,39 @@ function Add-PhpIisRedirection {
 function Open-PhpRegistryKey {
     param(
         [Microsoft.Win32.RegistryHive]$Hive,
-        [Microsoft.Win32.RegistryView]$View,
+        [string]$View,
         [string]$SubKey
     )
-    $base = $null
-    try {
-        $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($Hive, $View)
-        if (-not $base) { return $null }
-        return $base.OpenSubKey($SubKey)
-    } catch {
-        Write-Debug $_.Exception.Message
-        return $null
-    } finally {
-        if ($base) { $base.Close() }
+    if (-not $SubKey) { return $null }
+    $viewType = 'Microsoft.Win32.RegistryView' -as [type]
+    if ($viewType) {
+        $base = $null
+        try {
+            $viewEnum = [Enum]::Parse($viewType, $View)
+            $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($Hive, $viewEnum)
+            if (-not $base) { return $null }
+            return $base.OpenSubKey($SubKey)
+        } catch {
+            Write-Debug $_.Exception.Message
+            return $null
+        } finally {
+            if ($base) { $base.Close() }
+        }
     }
+    $root = $null
+    if ($Hive -eq [Microsoft.Win32.RegistryHive]::LocalMachine) { $root = [Microsoft.Win32.Registry]::LocalMachine }
+    elseif ($Hive -eq [Microsoft.Win32.RegistryHive]::Users) { $root = [Microsoft.Win32.Registry]::Users }
+    if (-not $root) { return $null }
+    $effective = $SubKey
+    $os64 = ($env:PROCESSOR_ARCHITECTURE -match '^(AMD64|ARM64)$' -or [string]$env:PROCESSOR_ARCHITEW6432)
+    if ($View -eq 'Registry32' -and $os64) {
+        if ($effective -match '(?i)^SOFTWARE\\') {
+            $effective = 'SOFTWARE\Wow6432Node\' + $effective.Substring(9)
+        } elseif ($effective -match '(?i)\\SOFTWARE\\') {
+            $effective = [regex]::Replace($effective, '(?i)\\SOFTWARE\\', '\SOFTWARE\Wow6432Node\', 1)
+        }
+    }
+    try { return $root.OpenSubKey($effective) } catch { Write-Debug $_.Exception.Message; return $null }
 }
 
 function Add-PhpUninstallKey {
@@ -527,10 +555,10 @@ function Add-PhpEnvironmentKey {
 function Get-PhpServiceParameters {
     param([string]$ServiceName)
     $sub = 'SYSTEM\CurrentControlSet\Services\' + $ServiceName + '\Parameters'
-    $key = Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View ([Microsoft.Win32.RegistryView]::Registry64) -SubKey $sub
+    $key = Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View 'Registry64' -SubKey $sub
     if (-not $key) { return $null }
     try {
-        return [pscustomobject]@{
+        return New-PhpObject @{
             Application   = [string]$key.GetValue('Application')
             AppParameters = [string]$key.GetValue('AppParameters')
         }
@@ -548,7 +576,7 @@ function Get-PhpWinSwCommand {
     $executable = [string]$xml.service.executable
     $arguments = [string]$xml.service.arguments
     if (-not $executable) { return $null }
-    return [pscustomobject]@{ Exe = $executable; Arguments = $arguments }
+    return New-PhpObject @{ Exe = $executable; Arguments = $arguments }
 }
 
 function Add-PhpWrappedService {
@@ -572,7 +600,7 @@ function Add-PhpWrappedService {
 
 function Add-PhpUserProfiles {
     $profiles = New-Object System.Collections.Generic.List[string]
-    $list = Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View ([Microsoft.Win32.RegistryView]::Registry64) -SubKey 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
+    $list = Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View 'Registry64' -SubKey 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
     if ($list) {
         try {
             foreach ($sid in @($list.GetSubKeyNames())) {
@@ -592,8 +620,8 @@ function Add-PhpUserProfiles {
         }
     }
     $users = Join-Path $env:SystemDrive 'Users'
-    if (Test-Path -LiteralPath $users) {
-        Get-ChildItem -LiteralPath $users -Directory -ErrorAction SilentlyContinue | ForEach-Object { [void]$profiles.Add($_.FullName) }
+    foreach ($dir in @(Get-PhpDirectory -Root $users)) {
+        if ($dir) { [void]$profiles.Add($dir) }
     }
     $seen = @{}
     foreach ($profilePath in $profiles) {
@@ -607,25 +635,167 @@ function Add-PhpUserProfiles {
         $herdExe = Join-Path $herd 'php.exe'
         if (Test-Path -LiteralPath $herdExe) { Add-PhpBin $herdExe }
         $winget = Join-Path $profilePath 'AppData\Local\Microsoft\WinGet\Packages'
-        if (Test-Path -LiteralPath $winget) {
-            Get-ChildItem -LiteralPath $winget -Directory -Filter 'PHP.PHP*' -ErrorAction SilentlyContinue | ForEach-Object {
-                Add-PhpExeUnder -Root $_.FullName
-            }
+        foreach ($dir in @(Get-PhpDirectory -Root $winget -Filter 'PHP.PHP*')) {
+            if ($dir) { Add-PhpExeUnder -Root $dir }
         }
         $express = Join-Path $profilePath 'Documents\IISExpress\config\applicationHost.config'
         Add-PhpIisFile -Path $express
     }
 }
 
+function Get-PhpDirectory {
+    param(
+        [string]$Root,
+        [string]$Filter
+    )
+    if (-not $Root -or -not [IO.Directory]::Exists($Root)) { return }
+    $info = $null
+    try { $info = New-Object IO.DirectoryInfo $Root } catch { Write-Debug $_.Exception.Message; return }
+    try {
+        if ($Filter) { $dirs = @($info.GetDirectories($Filter)) }
+        else { $dirs = @($info.GetDirectories()) }
+    } catch {
+        Write-Debug $_.Exception.Message
+        return
+    }
+    foreach ($dir in $dirs) {
+        if (-not $dir) { continue }
+        if (($dir.Attributes -band [IO.FileAttributes]::Hidden) -ne 0) { continue }
+        $dir.FullName
+    }
+}
+
+function Get-PhpFilesUnder {
+    param(
+        [string]$Root,
+        [string]$Filter,
+        [int]$MaxDepth
+    )
+    if (-not $Root -or -not [IO.Directory]::Exists($Root)) { return }
+    $pending = New-Object System.Collections.Generic.Queue[string]
+    $pending.Enqueue(('0|' + $Root))
+    $seen = @{}
+    while ($pending.Count -gt 0) {
+        $raw = [string]$pending.Dequeue()
+        $split = $raw.IndexOf('|')
+        if ($split -lt 1) { continue }
+        $depth = [int]$raw.Substring(0, $split)
+        $dir = $raw.Substring($split + 1)
+        $key = $dir.TrimEnd('\').ToLowerInvariant()
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        $info = $null
+        try { $info = New-Object IO.DirectoryInfo $dir } catch { Write-Debug $_.Exception.Message; continue }
+        try {
+            foreach ($file in @($info.GetFiles($Filter))) {
+                if (-not $file) { continue }
+                if (($file.Attributes -band [IO.FileAttributes]::Hidden) -ne 0) { continue }
+                $file.FullName
+            }
+        } catch { Write-Debug $_.Exception.Message }
+        if ($depth -ge $MaxDepth) { continue }
+        try {
+            foreach ($child in @($info.GetDirectories())) {
+                if (-not $child) { continue }
+                if (($child.Attributes -band [IO.FileAttributes]::Hidden) -ne 0) { continue }
+                $pending.Enqueue((([string]($depth + 1)) + '|' + $child.FullName))
+            }
+        } catch { Write-Debug $_.Exception.Message }
+    }
+}
+
 function Add-PhpExeUnder {
     param([string]$Root)
-    if (-not $Root -or -not (Test-Path -LiteralPath $Root)) { return }
-    Get-ChildItem -LiteralPath $Root -Filter php.exe -Recurse -Depth 4 -File -ErrorAction SilentlyContinue |
-        ForEach-Object { Add-PhpBin $_.FullName }
+    foreach ($exe in @(Get-PhpFilesUnder -Root $Root -Filter 'php.exe' -MaxDepth 4)) {
+        if ($exe) { Add-PhpBin $exe }
+    }
+}
+
+function Get-PhpCim {
+    param(
+        [string]$Class,
+        [string]$Filter
+    )
+    try {
+        if (Get-Command Get-CimInstance -ErrorAction SilentlyContinue) {
+            if ($Filter) { return @(Get-CimInstance -ClassName $Class -Filter $Filter -ErrorAction SilentlyContinue) }
+            return @(Get-CimInstance -ClassName $Class -ErrorAction SilentlyContinue)
+        }
+        if ($Filter) { return @(Get-WmiObject -Class $Class -Filter $Filter -ErrorAction SilentlyContinue) }
+        return @(Get-WmiObject -Class $Class -ErrorAction SilentlyContinue)
+    } catch {
+        Write-Debug $_.Exception.Message
+        return @()
+    }
+}
+
+function Add-PhpTaskCommand {
+    param(
+        [string]$TaskName,
+        [string]$Execute,
+        [string]$Arguments
+    )
+    $blob = ((@($Execute, $Arguments) | Where-Object { $_ }) -join ' ')
+    $referenced = $blob -match $script:PhpRef
+    if (-not $referenced -and $blob -match '(?i)(?:"([^"]+\.(?:bat|cmd|ps1))"|([A-Za-z]:\\[^"\s]+\.(?:bat|cmd|ps1)))') {
+        $scriptFile = $Matches[1]
+        if (-not $scriptFile) { $scriptFile = $Matches[2] }
+        if ($scriptFile -and (Test-Path -LiteralPath $scriptFile)) {
+            try {
+                $fileText = [IO.File]::ReadAllText($scriptFile)
+                if ($fileText.Length -le 512000 -and $fileText -match $script:PhpRef) { $referenced = $true }
+            } catch {
+                Write-Debug $_.Exception.Message
+            }
+        }
+    }
+    if (-not $referenced) { return }
+    Add-PhpUse ("Scheduled task {0} starts PHP" -f $TaskName)
+    if ($blob -match '(?i)([A-Za-z]:\\[^"\s]*php(?:-cgi|-win)?\.exe)') { Add-PhpBin $Matches[1] }
+}
+
+function Add-PhpScheduledTasks {
+    if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
+        Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object {
+            $taskName = $_.TaskName
+            foreach ($action in @($_.Actions)) {
+                if (-not $action) { continue }
+                Add-PhpTaskCommand -TaskName $taskName -Execute $action.Execute -Arguments $action.Arguments
+            }
+        }
+        return
+    }
+    $svc = New-Object -ComObject 'Schedule.Service'
+    $svc.Connect()
+    $folders = New-Object System.Collections.Generic.Queue[string]
+    $folders.Enqueue('\')
+    while ($folders.Count -gt 0) {
+        $folderPath = [string]$folders.Dequeue()
+        $folder = $null
+        try { $folder = $svc.GetFolder($folderPath) } catch { Write-Debug $_.Exception.Message; continue }
+        try {
+            foreach ($sub in $folder.GetFolders(0)) {
+                if ($sub -and $sub.Path) { $folders.Enqueue([string]$sub.Path) }
+            }
+        } catch { Write-Debug $_.Exception.Message }
+        try {
+            foreach ($task in $folder.GetTasks(0)) {
+                if (-not $task) { continue }
+                $taskName = [string]$task.Name
+                foreach ($action in $task.Definition.Actions) {
+                    $execute = ''
+                    $arguments = ''
+                    try { $execute = [string]$action.Path } catch { $execute = '' }
+                    try { $arguments = [string]$action.Arguments } catch { $arguments = '' }
+                    Add-PhpTaskCommand -TaskName $taskName -Execute $execute -Arguments $arguments
+                }
+            }
+        } catch { Write-Debug $_.Exception.Message }
+    }
 }
 
 # --- main ---
-Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+Get-PhpCim -Class 'Win32_Process' |
     Where-Object { $_.Name -match '^(php|php-cgi|php-win|httpd|nginx|caddy)\.exe$' } |
     ForEach-Object {
         if ($_.Name -match '^(php|php-cgi|php-win)\.exe$') {
@@ -656,7 +826,7 @@ foreach ($proc in @(Get-Process -ErrorAction SilentlyContinue)) {
     }
 }
 
-Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | ForEach-Object {
+Get-PhpCim -Class 'Win32_Service' | ForEach-Object {
     $serviceName = [string]$_.Name
     $state = [string]$_.State
     $pathName = [string]$_.PathName
@@ -693,31 +863,7 @@ Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | ForEach-Object {
 }
 
 try {
-    if (Get-Command Get-ScheduledTask -ErrorAction SilentlyContinue) {
-        Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object {
-            $taskName = $_.TaskName
-            foreach ($action in @($_.Actions)) {
-                if (-not $action) { continue }
-                $blob = ((@($action.Execute, $action.Arguments) | Where-Object { $_ }) -join ' ')
-                $referenced = $blob -match $script:PhpRef
-                if (-not $referenced -and $blob -match '(?i)(?:"([^"]+\.(?:bat|cmd|ps1))"|([A-Za-z]:\\[^"\s]+\.(?:bat|cmd|ps1)))') {
-                    $scriptFile = $Matches[1]
-                    if (-not $scriptFile) { $scriptFile = $Matches[2] }
-                    if ($scriptFile -and (Test-Path -LiteralPath $scriptFile)) {
-                        try {
-                            $fileText = [IO.File]::ReadAllText($scriptFile)
-                            if ($fileText.Length -le 512000 -and $fileText -match $script:PhpRef) { $referenced = $true }
-                        } catch {
-                            Write-Debug $_.Exception.Message
-                        }
-                    }
-                }
-                if (-not $referenced) { continue }
-                Add-PhpUse ("Scheduled task {0} starts PHP" -f $taskName)
-                if ($blob -match '(?i)([A-Za-z]:\\[^"\s]*php(?:-cgi|-win)?\.exe)') { Add-PhpBin $Matches[1] }
-            }
-        }
-    }
+    Add-PhpScheduledTasks
 } catch {
     Write-Debug $_.Exception.Message
 }
@@ -727,12 +873,11 @@ Add-PhpIisFile -Path $appHost
 Add-PhpIisRedirection -Path (Get-PhpSystemPath -Relative 'inetsrv\config\redirection.config')
 
 $inetpub = Join-Path $env:SystemDrive 'inetpub'
-if (Test-Path -LiteralPath $inetpub) {
-    Get-ChildItem -LiteralPath $inetpub -Filter web.config -Recurse -Depth 5 -File -ErrorAction SilentlyContinue |
-        ForEach-Object { Add-PhpConfigFile -Path $_.FullName -Label 'IIS site' -Kind 'iis' }
+foreach ($file in @(Get-PhpFilesUnder -Root $inetpub -Filter 'web.config' -MaxDepth 5)) {
+    if ($file) { Add-PhpConfigFile -Path $file -Label 'IIS site' -Kind 'iis' }
 }
 
-$drives = @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue | ForEach-Object { $_.DeviceID })
+$drives = @(Get-PhpCim -Class 'Win32_LogicalDisk' -Filter 'DriveType=3' | ForEach-Object { $_.DeviceID })
 if (-not $drives) { $drives = @($env:SystemDrive) }
 $programRoots = @(
     (Join-Path $env:ProgramFiles 'PHP'),
@@ -759,10 +904,8 @@ foreach ($drive in $drives) {
         Add-PhpExeUnder -Root (Join-Path $driveRoot $rel)
     }
     $bitnami = Join-Path $driveRoot 'Bitnami'
-    if (Test-Path -LiteralPath $bitnami) {
-        Get-ChildItem -LiteralPath $bitnami -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-            Add-PhpExeUnder -Root (Join-Path $_.FullName 'php')
-        }
+    foreach ($dir in @(Get-PhpDirectory -Root $bitnami)) {
+        if ($dir) { Add-PhpExeUnder -Root (Join-Path $dir 'php') }
     }
     foreach ($pair in @(
             @{ Path = "$drive\xampp\apache\conf\httpd.conf"; Label = 'Apache'; Style = 'apache' },
@@ -779,8 +922,8 @@ foreach ($drive in $drives) {
         $label = 'Apache'
         $style = 'apache'
         if ($root -match 'nginx') { $label = 'nginx'; $style = 'nginx' }
-        Get-ChildItem -LiteralPath $root -Filter *.conf -Recurse -Depth 4 -File -ErrorAction SilentlyContinue | ForEach-Object {
-            Add-PhpFollowFile -Path $_.FullName -Label $label -Kind 'web' -Style $style -Visited @{}
+        foreach ($file in @(Get-PhpFilesUnder -Root $root -Filter '*.conf' -MaxDepth 4)) {
+            if ($file) { Add-PhpFollowFile -Path $file -Label $label -Kind 'web' -Style $style -Visited @{} }
         }
     }
 }
@@ -789,33 +932,43 @@ foreach ($root in $programRoots) { Add-PhpExeUnder -Root $root }
 Add-PhpUserProfiles
 
 Get-Command php.exe, php-cgi.exe -ErrorAction SilentlyContinue | ForEach-Object {
-    if ($_.Source) { Add-PhpBin $_.Source }
+    $commandPath = $_.Path
+    if (-not $commandPath) { $commandPath = $_.Definition }
+    if ($commandPath) { Add-PhpBin $commandPath }
 }
 
 foreach ($viewName in @('Registry64', 'Registry32')) {
-    $view = [Microsoft.Win32.RegistryView]::$viewName
-    Add-PhpUninstallKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View $view -SubKey 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')
-    Add-PhpComposerKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View $view -SubKey 'SOFTWARE\ComposerSetup')
+    Add-PhpUninstallKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View $viewName -SubKey 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall')
+    Add-PhpComposerKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View $viewName -SubKey 'SOFTWARE\ComposerSetup')
 }
-Add-PhpEnvironmentKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View ([Microsoft.Win32.RegistryView]::Registry64) -SubKey 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment') -Scope 'machine'
+Add-PhpEnvironmentKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::LocalMachine) -View 'Registry64' -SubKey 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment') -Scope 'machine'
 
-$usersHive = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::Users, [Microsoft.Win32.RegistryView]::Registry64)
 $sidNames = @()
-if ($usersHive) {
-    try { $sidNames = @($usersHive.GetSubKeyNames()) } catch { Write-Debug $_.Exception.Message }
-    finally { $usersHive.Close() }
+$viewType = 'Microsoft.Win32.RegistryView' -as [type]
+if ($viewType) {
+    $usersHive = $null
+    try {
+        $viewEnum = [Enum]::Parse($viewType, 'Registry64')
+        $usersHive = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::Users, $viewEnum)
+        if ($usersHive) { $sidNames = @($usersHive.GetSubKeyNames()) }
+    } catch {
+        Write-Debug $_.Exception.Message
+    } finally {
+        if ($usersHive) { $usersHive.Close() }
+    }
+} else {
+    try { $sidNames = @([Microsoft.Win32.Registry]::Users.GetSubKeyNames()) } catch { Write-Debug $_.Exception.Message }
 }
 foreach ($sid in $sidNames) {
     if ($sid -notmatch '^S-1-5-21-' -or $sid -match '_Classes$') { continue }
     foreach ($viewName in @('Registry64', 'Registry32')) {
-        $view = [Microsoft.Win32.RegistryView]::$viewName
         $uninstall = $sid + '\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
-        Add-PhpUninstallKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::Users) -View $view -SubKey $uninstall)
+        Add-PhpUninstallKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::Users) -View $viewName -SubKey $uninstall)
         $composer = $sid + '\SOFTWARE\ComposerSetup'
-        Add-PhpComposerKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::Users) -View $view -SubKey $composer)
+        Add-PhpComposerKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::Users) -View $viewName -SubKey $composer)
     }
     $envKey = $sid + '\Environment'
-    Add-PhpEnvironmentKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::Users) -View ([Microsoft.Win32.RegistryView]::Registry64) -SubKey $envKey) -Scope $sid
+    Add-PhpEnvironmentKey -Key (Open-PhpRegistryKey -Hive ([Microsoft.Win32.RegistryHive]::Users) -View 'Registry64' -SubKey $envKey) -Scope $sid
 }
 
 $inUse = ($script:Running.Count -gt 0) -or ($script:Use.Count -gt 0)
