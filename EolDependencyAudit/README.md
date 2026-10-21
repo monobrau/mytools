@@ -62,7 +62,7 @@ The launcher scan copies Measure. Apply copies Watch. Force adds `-Force`.
 
 ## GPO
 
-Run elevated as a Domain Admin on a DC or RSAT box. The script copies `Invoke-EolDependencyAudit.ps1` to `\\<domain>\NETLOGON\EolDependencyAudit\` and creates an Immediate Task that runs as SYSTEM at the next Group Policy refresh. Pass the same `-Action`, `-Dependency`, and `-MaxDailyLogMB` the endpoint script uses.
+Run `Install-EolDependencyAuditGpo.ps1` elevated on the domain controller. The launcher entry **EOL dependency audit GPO** downloads that installer. The installer then downloads `Invoke-EolDependencyAudit.ps1` from GitHub (unless that file is already beside it), copies it to `\\<domain>\NETLOGON\EolDependencyAudit\`, and creates an Immediate Task that runs as SYSTEM at the next Group Policy refresh. Pass the same `-Action`, `-Dependency`, and `-MaxDailyLogMB` the endpoint script uses. A local copy is used when you run the installer from a checkout of this repo.
 
 Watch and Enable also write the Advanced Audit Policy "Audit File System / Success" into that GPO. Measure does not. Disable removes the sentinel rules and does not turn File System auditing off, because other files may use it.
 

@@ -4,8 +4,10 @@
     Stage the EOL dependency script on NETLOGON and run it from a GPO.
 
 .DESCRIPTION
-    Run elevated as a Domain Admin on a DC or RSAT box. The Immediate Task
-    runs the same Invoke-EolDependencyAudit.ps1 switches this script receives.
+    Run elevated as a Domain Admin on a domain controller. This script
+    downloads Invoke-EolDependencyAudit.ps1 from GitHub when it is not
+    already beside this file, stages that script on NETLOGON, and creates
+    the GPO. The Immediate Task runs the same switches this script receives.
     Watch and Enable also set Audit File System success in the GPO. Measure
     does not. A repeating sample is refused; run -SampleMinutes on one PC.
 
@@ -44,7 +46,8 @@ param(
     [switch]$SkipLink,
     [string]$GpoName,
     [string]$ScriptPath,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Exit
 )
 
 Set-StrictMode -Off
@@ -190,10 +193,24 @@ foreach ($item in $Dependency) {
 if ($MaxDailyLogMB -lt 1) { throw '-MaxDailyLogMB must be at least 1.' }
 if ($SinceHours -lt 1) { throw '-SinceHours must be at least 1.' }
 
-if (-not $ScriptPath) { $ScriptPath = Join-Path $PSScriptRoot 'Invoke-EolDependencyAudit.ps1' }
-if (-not (Test-Path -LiteralPath $ScriptPath)) { throw "Endpoint script not found: $ScriptPath" }
-$catalogSource = Join-Path (Split-Path -Parent $ScriptPath) 'dependencies.csv'
-$hasCatalog = Test-Path -LiteralPath $catalogSource
+$downloadUrl = 'https://api.github.com/repos/monobrau/mytools/contents/EolDependencyAudit/Invoke-EolDependencyAudit.ps1?ref=main'
+$usingLocalScript = $false
+if ($ScriptPath -and (Test-Path -LiteralPath $ScriptPath)) {
+    $usingLocalScript = $true
+}
+elseif ($PSScriptRoot) {
+    $beside = Join-Path $PSScriptRoot 'Invoke-EolDependencyAudit.ps1'
+    if (Test-Path -LiteralPath $beside) {
+        $ScriptPath = $beside
+        $usingLocalScript = $true
+    }
+}
+$catalogSource = $null
+$hasCatalog = $false
+if ($usingLocalScript) {
+    $catalogSource = Join-Path (Split-Path -Parent $ScriptPath) 'dependencies.csv'
+    $hasCatalog = Test-Path -LiteralPath $catalogSource
+}
 
 foreach ($mod in @('ActiveDirectory', 'GroupPolicy')) {
     if (-not (Get-Module -ListAvailable -Name $mod)) {
@@ -229,6 +246,8 @@ Write-Step "  Action: $Action"
 Write-Step "  Cap:    $MaxDailyLogMB MB/day of current 4663 traffic"
 if ($names.Count -eq 0) { Write-Step '  Families: built-in EOL set' }
 else { Write-Step "  Families: $($names -join ', ')" }
+if ($usingLocalScript) { Write-Step "  Payload: $ScriptPath" }
+else { Write-Step "  Payload: download $downloadUrl" }
 Write-Step "  Script: $stagedScript"
 if ($armAudit) { Write-Step '  Audit policy: File System success in this GPO' }
 else { Write-Step '  Audit policy: not changed by this action' }
@@ -245,12 +264,27 @@ echo %DATE% %TIME% exit %ERRORLEVEL%>>"%ProgramData%\EolDependencyAudit\gpo-task
 
 if ($DryRun) {
     Write-Step ''
-    Write-Step '[DRY RUN] Would stage the script and create the Immediate Task:'
+    Write-Step '[DRY RUN] Would download the audit script if it is not already local, then create the Immediate Task:'
     Write-Step "          powershell.exe $psArgs"
+    if ($Exit) { exit 0 }
     return
 }
 
 Write-Step '[1/3] Staging script'
+if (-not $usingLocalScript) {
+    Write-Step '       Downloading the audit script'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $wc = New-Object Net.WebClient
+    $wc.Headers.Add('User-Agent', 'EolDependencyAudit-gpo/1.0.0')
+    $wc.Headers.Add('Accept', 'application/vnd.github.raw')
+    $payload = $wc.DownloadString($downloadUrl)
+    if ($payload.Length -lt 500 -or $payload -notmatch 'EOL dependency use') {
+        throw 'The audit script download did not look like Invoke-EolDependencyAudit.ps1.'
+    }
+    $ScriptPath = Join-Path $env:TEMP 'Invoke-EolDependencyAudit.ps1'
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($ScriptPath, $payload, $utf8)
+}
 New-Item -ItemType Directory -Path $packageUnc -Force | Out-Null
 Copy-Item -LiteralPath $ScriptPath -Destination $stagedScript -Force
 if ($hasCatalog) { Copy-Item -LiteralPath $catalogSource -Destination $stagedCatalog -Force }
@@ -293,3 +327,4 @@ Write-Step "     Script: $stagedScript"
 Write-Step '     Runs as SYSTEM at the next Group Policy refresh.'
 Write-Step '     Log: C:\ProgramData\EolDependencyAudit\gpo-task.log'
 Write-Step '     Hits: C:\ProgramData\EolDependencyAudit\usage.csv'
+if ($Exit) { exit 0 }

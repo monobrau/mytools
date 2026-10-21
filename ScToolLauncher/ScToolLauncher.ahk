@@ -34,7 +34,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
-;        PowerIdle FastStartup EolAudit
+;        PowerIdle FastStartup EolAudit EolAuditGpo
 ;        BackstageOnly AutoReboot AllowServer Help
 HelpIntroText := Format("
 (
@@ -200,6 +200,22 @@ Mozilla Firefox
         "TimeoutUpdate", 600000,
         "Flags", "EolAudit Force NoExit",
         "Note", "Scan does not change auditing. Apply turns on File System success auditing and an execute audit on each sentinel DLL, then records which process loaded it. Event text is not saved. Apply stops if 4663 traffic is already over 64 MB/day unless Force is checked. Add a dependency by extending the catalog. Private DLL copies outside the catalog paths are not seen."
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "EOL dependency audit GPO",
+        "Summary", "On a domain controller: downloads the audit script, stages it on NETLOGON, and creates the GPO. The task audits sentinel DLLs and keeps process hit counts.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EolDependencyAudit",
+        "Fetch", "Contents",
+        "Path", "EolDependencyAudit",
+        "Script", "Install-EolDependencyAuditGpo.ps1",
+        "UaPrefix", "EolDependencyAuditGpo-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 600000,
+        "Flags", "EolAuditGpo AlwaysNote",
+        "Note", "Run elevated on the domain controller. Scan is a dry run. Apply downloads the audit script from GitHub, stages it on NETLOGON, and creates the GPO. Blank domain uses this DC. Put an OU DN in to pilot. Link at the domain root includes servers. The task stops if 4663 traffic is already over 64 MB/day.",
+        "ClipboardNote", "NOTE: Run elevated on the domain controller. Apply downloads the audit script and creates the GPO. Pilot an OU before linking at the domain root. Servers are included. Event text is not saved."
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
@@ -1637,6 +1653,7 @@ RefreshOptionEnable(*) {
     showAutomate := ToolHasFlag(t, "AutomateGpo")
     showScGpo := ToolHasFlag(t, "ScreenConnectGpo")
     showWebrootGpo := ToolHasFlag(t, "WebrootUninstallGpo")
+    showEolGpo := ToolHasFlag(t, "EolAuditGpo")
     scanOnly := ToolHasFlag(t, "ScanOnly")
 
     if (showHuntress) {
@@ -1743,12 +1760,16 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["AutomateClientName"], showAutomate || showScGpo)
     SetCtrlShown(gCtrls["LblAutomateLocation"], showAutomate)
     SetCtrlShown(gCtrls["AutomateLocationName"], showAutomate)
-    showGpoDomain := showAutomate || showScGpo || showWebrootGpo
+    showGpoDomain := showAutomate || showScGpo || showWebrootGpo || showEolGpo
     SetCtrlShown(gCtrls["LblAutomateDomain"], showGpoDomain)
     SetCtrlShown(gCtrls["AutomateDomain"], showGpoDomain)
     SetCtrlShown(gCtrls["LblAutomateOu"], showGpoDomain)
     SetCtrlShown(gCtrls["AutomateTargetOu"], showGpoDomain)
     showGpoLink := showGpoDomain && !gCtrls["ModeScan"].Value
+    if (showEolGpo)
+        gCtrls["AutomateLinkToDomain"].Text := "Link at the domain root (includes servers)"
+    else
+        gCtrls["AutomateLinkToDomain"].Text := "Link at domain root + workstation WMI filter"
     SetCtrlShown(gCtrls["AutomateLinkToDomain"], showGpoLink)
     SetCtrlShown(gCtrls["LblWebrootKeyCode"], showWebrootGpo)
     SetCtrlShown(gCtrls["WebrootKeyCode"], showWebrootGpo)
@@ -1819,6 +1840,9 @@ RefreshOptionEnable(*) {
     } else if ToolHasFlag(t, "EolAudit") {
         gCtrls["ModeScan"].Text := "Measure log space (no audit changes)"
         gCtrls["ModeUpdate"].Text := "Audit sentinel DLLs"
+    } else if ToolHasFlag(t, "EolAuditGpo") {
+        gCtrls["ModeScan"].Text := "Dry-run (no download, no GPO)"
+        gCtrls["ModeUpdate"].Text := "Download script and create GPO"
     } else if scanOnly && (ToolGet(t, "Fetch", "") = "Inline") {
         gCtrls["ModeScan"].Text := "Check pending reboot"
     } else if scanOnly {
@@ -2016,6 +2040,19 @@ BuildSwitches(tool, isScan, isCommands) {
             sw.Push("-Action Measure")
         else
             sw.Push("-Action Watch")
+    }
+    if ToolHasFlag(tool, "EolAuditGpo") {
+        sw.Push("-Action Watch")
+        domain := Trim(gCtrls["AutomateDomain"].Value)
+        targetOu := Trim(gCtrls["AutomateTargetOu"].Value)
+        if (domain != "")
+            sw.Push("-Domain '" StrReplace(domain, "'", "''") "'")
+        if isScan
+            sw.Push("-DryRun")
+        else if (targetOu != "")
+            sw.Push("-TargetOU '" StrReplace(targetOu, "'", "''") "'")
+        else if CtrlActive(gCtrls["AutomateLinkToDomain"]) && gCtrls["AutomateLinkToDomain"].Value
+            sw.Push("-LinkToDomain")
     }
 
     if ToolHasFlag(tool, "Remediate") && !isScan
@@ -2628,6 +2665,16 @@ DescribeSelection(tool, isScan) {
             mode := "Create GPO (domain link)"
         else
             mode := "Create GPO (unlinked)"
+    }
+    if ToolHasFlag(tool, "EolAuditGpo") {
+        if isScan
+            mode := "Dry-run GPO"
+        else if (Trim(gCtrls["AutomateTargetOu"].Value) != "")
+            mode := "Download + GPO to OU"
+        else if CtrlActive(gCtrls["AutomateLinkToDomain"]) && gCtrls["AutomateLinkToDomain"].Value
+            mode := "Download + GPO (domain link)"
+        else
+            mode := "Download + create GPO (unlinked)"
     }
     parts := [tool["Name"], mode]
     if CtrlActive(gCtrls["Force"]) && gCtrls["Force"].Value
