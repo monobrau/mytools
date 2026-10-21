@@ -826,6 +826,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ; --- Untested (move here until validated) ---
     Map(
         "Category", "Untested",
+        "Name", "PHP use",
+        "Summary", "Read-only. Reports whether this PC is running PHP or is set up to run it (IIS, Apache, nginx, a service, or a scheduled task), and whether php.exe is installed.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PhpUse",
+        "Fetch", "Contents",
+        "Path", "PhpUse",
+        "Script", "Get-PhpUse.ps1",
+        "UaPrefix", "PhpUse-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 300000,
+        "Flags", "ScanOnly NoExit AlwaysNote",
+        "Note", "Read-only. USING PHP means a process, IIS, Apache, nginx, a service, or a scheduled task is set up to run it. INSTALLED means the program was found. A copy in an unusual folder with nothing pointing at it is not listed.",
+        "ClipboardNote", "NOTE: Read-only. USING PHP means it is running or set up to run. INSTALLED means the program files were found. The Note line says what was not searched."
+    ),
+    Map(
+        "Category", "Untested",
         "Name", "Outlook disable local cache",
         "Summary", "Force classic Outlook online-only for every profile on a shared lab PC, including the Default profile. Clean up also deletes .ost and .nst files. PST archives stay.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/OutlookDisableCache",
@@ -1935,6 +1951,9 @@ RefreshOptionEnable(*) {
     }
     if InStr(ToolGet(t, "Path", ""), "PowerShellV2Disable") {
         gCtrls["ModeUpdate"].Text := "Disable PowerShell 2.0"
+    }
+    if InStr(ToolGet(t, "Path", ""), "PhpUse") {
+        gCtrls["ModeScan"].Text := "Check whether this PC uses PHP"
     }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
