@@ -322,9 +322,9 @@ foreach ($row in $images) {
     if (-not $ifeo) { break }
     $sub = $ifeo.OpenSubKey($row.Image)
     if (-not $sub) { continue }
-    $marker = $sub.GetValue($script:Marker)
+    $stamp = $sub.GetValue($script:Marker)
     $sub.Close()
-    if ([string]$marker -eq '1') { $armed++ }
+    if ([string]$stamp -eq '1') { $armed++ }
 }
 if ($ifeo) { $ifeo.Close() }
 Write-Line "Already blocked by this script: $armed"
@@ -352,9 +352,9 @@ if ($Disable) {
     foreach ($nameKey in @($ifeoW.GetSubKeyNames())) {
         if ($onlyThese -and -not $onlyThese.ContainsKey($nameKey.ToLowerInvariant())) { continue }
         $sub = $ifeoW.OpenSubKey($nameKey)
-        $marker = $null
-        if ($sub) { $marker = $sub.GetValue($script:Marker); $sub.Close() }
-        if ([string]$marker -eq '1') {
+        $stamp = $null
+        if ($sub) { $stamp = $sub.GetValue($script:Marker); $sub.Close() }
+        if ([string]$stamp -eq '1') {
             $ifeoW.DeleteSubKeyTree($nameKey)
             $removed++
         }
@@ -362,9 +362,9 @@ if ($Disable) {
     $left = 0
     foreach ($nameKey in @($ifeoW.GetSubKeyNames())) {
         $sub = $ifeoW.OpenSubKey($nameKey)
-        $marker = $null
-        if ($sub) { $marker = $sub.GetValue($script:Marker); $sub.Close() }
-        if ([string]$marker -eq '1') { $left++ }
+        $stamp = $null
+        if ($sub) { $stamp = $sub.GetValue($script:Marker); $sub.Close() }
+        if ([string]$stamp -eq '1') { $left++ }
     }
     $ifeoW.Close()
     if ($left -eq 0) {
@@ -388,10 +388,10 @@ $skipped = 0
 foreach ($row in $images) {
     $existing = $ifeoW.OpenSubKey($row.Image)
     if ($existing) {
-        $marker = [string]$existing.GetValue($script:Marker)
+        $stamp = [string]$existing.GetValue($script:Marker)
         $debugger = [string]$existing.GetValue('Debugger')
         $existing.Close()
-        if ($debugger -and $marker -ne '1') {
+        if ($debugger -and $stamp -ne '1') {
             Write-Line "Skip $($row.Image): another debugger is already set."
             $skipped++
             continue
