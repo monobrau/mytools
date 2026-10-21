@@ -827,17 +827,17 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     Map(
         "Category", "Untested",
         "Name", "PHP use",
-        "Summary", "Read-only. Reports whether this PC is running PHP or is set up to run it (IIS, Apache, nginx, a service, or a scheduled task), and whether php.exe is installed.",
+        "Summary", "Read-only, for workstations and Windows Server. Reports whether PHP is running or set up to run (IIS, Apache, nginx, a service, or a scheduled task), and whether php.exe is installed. Servers are not skipped.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PhpUse",
         "Fetch", "Contents",
         "Path", "PhpUse",
         "Script", "Get-PhpUse.ps1",
         "UaPrefix", "PhpUse-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.0.1",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 300000,
         "Flags", "ScanOnly NoExit AlwaysNote",
-        "Note", "Read-only. USING PHP means a process, IIS, Apache, nginx, a service, or a scheduled task is set up to run it. INSTALLED means the program was found. A copy in an unusual folder with nothing pointing at it is not listed.",
+        "Note", "Read-only on workstations and Windows Server. Servers are not skipped. USING PHP means a process, IIS, Apache, nginx, a service, or a scheduled task is set up to run it. INSTALLED means the program was found. IIS site folders outside inetpub are included. A copy in an unusual folder with nothing pointing at it is not listed.",
         "ClipboardNote", "NOTE: Read-only. USING PHP means it is running or set up to run. INSTALLED means the program files were found. The Note line says what was not searched."
     ),
     Map(
@@ -1953,7 +1953,7 @@ RefreshOptionEnable(*) {
         gCtrls["ModeUpdate"].Text := "Disable PowerShell 2.0"
     }
     if InStr(ToolGet(t, "Path", ""), "PhpUse") {
-        gCtrls["ModeScan"].Text := "Check whether this PC uses PHP"
+        gCtrls["ModeScan"].Text := "Check whether this host uses PHP"
     }
     if ToolHasFlag(t, "Delete") && InStr(ToolGet(t, "Path", ""), "Inky") {
         gCtrls["ModeScan"].Text := "List matching rules"
