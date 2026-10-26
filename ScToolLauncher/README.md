@@ -24,6 +24,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | Tool | Source |
 | --- | --- |
 | Vulnerable software updater (catalog) | mytools |
+| Vulnerable Python cleanup | mytools `PythonCleanup` — uninstalls end-of-life CPython and builds older than the current security release. A newer copy does not keep the old one. Does not install a replacement |
 | Microsoft 365 Apps (Click-to-Run) | mytools |
 | .NET runtime / SDK patches | mytools |
 | Visual C++ 2005-2013 redistributables | mytools `VisualCppUpdate` — last security build per installed year |

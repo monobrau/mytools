@@ -26,6 +26,7 @@ Public collection of work tools and scripts.
 | [WinVerifyTrustPadding](WinVerifyTrustPadding/) | Enable the CVE-2013-3900 Authenticode padding check (`EnableCertPaddingCheck`) in both registry views |
 | [RmmAgentDeploy](RmmAgentDeploy/) | Coverage CSV of Automate/Huntress on recent AD computers, then a non-GPO push to hosts that are missing one |
 | [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep, plus a block that stops those installer names and shows a warning. Dry-run by default; `-Remove` deletes remnants |
+| [PythonCleanup](PythonCleanup/) | Uninstall vulnerable CPython (end of life, or older than the current security release). A newer install on the same PC does not keep the old one |
 | [ScreenConnectGpoDeploy](ScreenConnectGpoDeploy/) | Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task GPO |
 | [ScreenConnectRogueHunt](ScreenConnectRogueHunt/) | Read-only hunt that prints each distinct ScreenConnect instance ID once and flags IDs that are not on the allow list |
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |

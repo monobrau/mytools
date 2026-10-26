@@ -146,6 +146,21 @@ Mozilla Firefox
     ),
     Map(
         "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Name", "Vulnerable Python cleanup",
+        "Summary", "Removes CPython installs that are end of life or older than the current security release. A newer copy on the same PC does not keep the old one.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PythonCleanup",
+        "Fetch", "Contents",
+        "Path", "PythonCleanup",
+        "Script", "Uninstall-VulnerablePython.ps1",
+        "UaPrefix", "PythonCleanup-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 1800000,
+        "Flags", "CheckOnly Remediate NoExit",
+        "Note", "Scan lists Python 3.12 / 3.13 builds below the current release, and 3.10 and older. Apply uninstalls those. It does not install a replacement. The Python Launcher, Anaconda, and copies inside other apps stay. No reboot. Reload launcher after pull."
+    ),
+    Map(
+        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
         "Name", "Microsoft 365 Apps (Click-to-Run)",
         "Summary", "Silent M365 Apps Click-to-Run check/update. Does not close Office unless you opt in.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/M365AppsUpdate",
@@ -1933,6 +1948,10 @@ RefreshOptionEnable(*) {
             gCtrls["ModeUpdate"].Text := "Install (no reboot unless option)"
         }
     }
+    if InStr(ToolGet(t, "Path", ""), "PythonCleanup") {
+        gCtrls["ModeScan"].Text := "List vulnerable Python"
+        gCtrls["ModeUpdate"].Text := "Remove vulnerable Python"
+    }
     if InStr(ToolGet(t, "Path", ""), "HpImageAssistant") {
         gCtrls["ModeScan"].Text := "List unattended SoftPaqs"
         gCtrls["ModeUpdate"].Text := "Install unattended SoftPaqs"
@@ -2652,6 +2671,12 @@ DescribeSelection(tool, isScan) {
             else
                 mode := "Install"
         }
+    }
+    if InStr(ToolGet(tool, "Path", ""), "PythonCleanup") {
+        if isScan
+            mode := "List vulnerable Python"
+        else
+            mode := "Remove vulnerable Python"
     }
     if InStr(ToolGet(tool, "Path", ""), "HpImageAssistant") {
         if isScan
