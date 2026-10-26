@@ -55,7 +55,9 @@ $script:Floors = @{
 
 function Write-Line {
     param([string]$Message)
-    Write-Output $Message
+    # Host, not Write-Output. Callers capture uninstall exit codes, and
+    # Write-Output would turn those codes into a string plus a number.
+    Write-Host $Message
 }
 
 function Test-IsAdmin {
