@@ -61,7 +61,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.2.1'
+$ScriptVersion = '1.2.2'
 # winget moved this package from HPInc.HPSupportAssistant to HP.SupportAssistant.
 $WingetPackageIds = @('HP.SupportAssistant', 'HPInc.HPSupportAssistant')
 $WingetManifestApis = @(
@@ -78,8 +78,8 @@ $Win11PatchedSoftPaq = [pscustomobject]@{
 # Do NOT match "HP Support Solutions Framework" - that is a companion with a different version scheme (12.x vs HPSA 9.x).
 $HpsaDisplayNamePattern = '^HP Support Assistant(\s|$)'
 $FrameworkDisplayNamePattern = '^HP Support Solutions Framework(\s|$)'
-# Minimum build that covers recent HP bulletins (CVE-2025-10578 requires < 9.47.41.0 fixed).
-$PatchedMinimumVersion = [version]'9.47.41.0'
+# Builds below 9.55.10.0 are vulnerable (HPSBGN04141). The 2025 floor was 9.47.41.0.
+$PatchedMinimumVersion = [version]'9.55.10.0'
 
 # Kept for SoftPaqUrl / legacy override paths only. Windows 10 default action is uninstall, not these SoftPaqs.
 $Win10SoftPaqCandidates = @(
@@ -496,7 +496,7 @@ function Test-HpsaVersionVulnerable {
     if ($Installed.Version -lt $PatchedMinimumVersion) {
         return [pscustomobject]@{
             IsVulnerable = $true
-            Reason       = ("{0} < patched minimum {1} (CVE-2025-10578 / CVE-2025-43019 / CVE-2025-43026 family)" -f `
+            Reason       = ("{0} < patched minimum {1} (HPSBGN04141)" -f `
                     $Installed.Version, $PatchedMinimumVersion)
         }
     }

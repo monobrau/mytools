@@ -115,7 +115,7 @@ WinSCP
 VLC
 Edge WebView2 Runtime
 PowerShell 7
-FileZilla
+FileZilla (report only; no winget package)
 KeePass
 KeePassXC
 SumatraPDF
@@ -127,7 +127,7 @@ Windows Terminal
 AWS CLI
 Sysinternals Suite
 UltraVNC
-Python 3.13 (stays on 3.13; does not jump to 3.14)
+Python 3.11, 3.12, 3.13, and 3.14 (each stays on its own minor)
 ---
 Opt-in only, when Include browsers is checked:
 Google Chrome
@@ -139,7 +139,7 @@ Mozilla Firefox
         "Path", "VulnSoftwareUpdate",
         "Script", "Update-VulnSoftware.ps1",
         "UaPrefix", "VulnSoftwareUpdate-bootstrap",
-        "UaVer", "1.4.8",
+        "UaVer", "1.4.9",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers Product NoExit"
@@ -241,7 +241,7 @@ Mozilla Firefox
         "Path", "HpSupportAssistantUpdate",
         "Script", "Update-HpSupportAssistant.ps1",
         "UaPrefix", "HpSupportAssistantUpdate-bootstrap",
-        "UaVer", "1.2.1",
+        "UaVer", "1.2.2",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 600000,
         "Flags", "CheckOnly Uninstall Force NoExit"

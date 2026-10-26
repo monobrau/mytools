@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.8'
+$ScriptVersion = '1.4.9'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -249,8 +249,9 @@ function Get-VulnCatalog {
             Notes = 'Does not replace Windows PowerShell 5.1'
         }
         [pscustomobject]@{
-            Id = 'FileZilla'; Name = 'FileZilla'; Method = 'Winget'; WingetId = 'FileZilla.FileZilla'
+            Id = 'FileZilla'; Name = 'FileZilla'; Method = 'Manual'
             Match = @('^FileZilla')
+            Notes = 'No winget package. FileZilla does not allow winget to redistribute the installer.'
         }
         # Phase 2 — safe mid-volume (password managers / PDF / admin CLIs)
         [pscustomobject]@{
@@ -301,9 +302,24 @@ function Get-VulnCatalog {
             Notes = 'In-place winget upgrade. Does not change the VNC password.'
         }
         [pscustomobject]@{
+            Id = 'Python311'; Name = 'Python 3.11'; Method = 'Winget'; WingetId = 'Python.Python.3.11'
+            Match = @('Python 3\.11(\.| |$)')
+            Notes = 'Stays on 3.11. Winget latest Windows build checked 2026-10-26: 3.11.9. Later 3.11 releases are source-only.'
+        }
+        [pscustomobject]@{
+            Id = 'Python312'; Name = 'Python 3.12'; Method = 'Winget'; WingetId = 'Python.Python.3.12'
+            Match = @('Python 3\.12(\.| |$)')
+            Notes = 'Stays on 3.12. Winget latest Windows build checked 2026-10-26: 3.12.10. Does not jump to 3.13.'
+        }
+        [pscustomobject]@{
             Id = 'Python313'; Name = 'Python 3.13'; Method = 'Winget'; WingetId = 'Python.Python.3.13'
-            Match = @('Python 3\.13')
-            Notes = 'Stays on 3.13. Does not install 3.14 or remove older majors.'
+            Match = @('Python 3\.13(\.| |$)')
+            Notes = 'Stays on 3.13. Winget latest Windows build checked 2026-10-26: 3.13.15. Does not jump to 3.14.'
+        }
+        [pscustomobject]@{
+            Id = 'Python314'; Name = 'Python 3.14'; Method = 'Winget'; WingetId = 'Python.Python.3.14'
+            Match = @('Python 3\.14(\.| |$)')
+            Notes = 'Stays on 3.14. Winget latest Windows build checked 2026-10-26: 3.14.7. Does not install 3.15.'
         }
         # Browsers — opt-in only (-IncludeBrowsers or explicit -Product); may close sessions
         [pscustomobject]@{
@@ -582,8 +598,12 @@ function Get-UninstallAppEntries {
 function ConvertTo-SevenZipVersion {
     param([string]$DisplayVersion, [string]$DisplayName)
     foreach ($text in @($DisplayVersion, $DisplayName)) {
-        if ($text -match '(\d+\.\d+(?:\.\d+){0,2})') {
-            try { return [version]$Matches[1] } catch { }
+        if ($text -match '(\d+)\.(\d+)(?:\.(\d+))?(?:\.(\d+))?') {
+            $build = 0
+            $rev = 0
+            if ($Matches[3]) { $build = [int]$Matches[3] }
+            if ($Matches[4]) { $rev = [int]$Matches[4] }
+            try { return [version]::new([int]$Matches[1], [int]$Matches[2], $build, $rev) } catch { }
         }
     }
     return $null

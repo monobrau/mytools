@@ -32,7 +32,7 @@ Built for endpoints that may **not** have RMM patch management or Intune — Scr
 | VLC | `VLC` | winget `VideoLAN.VLC` |
 | Edge WebView2 Runtime | `WebView2` | winget `Microsoft.EdgeWebView2Runtime` |
 | PowerShell 7 | `PowerShell7` | winget `Microsoft.PowerShell` |
-| FileZilla | `FileZilla` | winget `FileZilla.FileZilla` |
+| FileZilla | `FileZilla` | Report only. Winget cannot redistribute FileZilla |
 | KeePass | `KeePass` | winget `DominikReichl.KeePass` |
 | KeePassXC | `KeePassXC` | winget `KeePassXCTeam.KeePassXC` |
 | SumatraPDF | `SumatraPDF` | winget `SumatraPDF.SumatraPDF` |
@@ -44,7 +44,10 @@ Built for endpoints that may **not** have RMM patch management or Intune — Scr
 | AWS CLI | `AwsCli` | winget `Amazon.AWSCLI` |
 | Sysinternals Suite | `SysinternalsSuite` | winget `Microsoft.Sysinternals.Suite` |
 | UltraVNC | `UltraVNC` | winget `uvncbvba.UltraVNC` |
-| Python 3.13 | `Python313` | winget `Python.Python.3.13` (does not jump to 3.14) |
+| Python 3.11 | `Python311` | winget `Python.Python.3.11` (stays on 3.11; Windows build 3.11.9) |
+| Python 3.12 | `Python312` | winget `Python.Python.3.12` (stays on 3.12; Windows build 3.12.10) |
+| Python 3.13 | `Python313` | winget `Python.Python.3.13` (stays on 3.13; Windows build 3.13.15) |
+| Python 3.14 | `Python314` | winget `Python.Python.3.14` (stays on 3.14; Windows build 3.14.7) |
 | Google Chrome | `Chrome` | **Opt-in** — `-IncludeBrowsers` or `-Product Chrome` (may close sessions) |
 | Microsoft Edge | `Edge` | **Opt-in** — `-IncludeBrowsers` or `-Product Edge` (may close sessions) |
 | Mozilla Firefox | `Firefox` | **Opt-in** — `-IncludeBrowsers` or `-Product Firefox` (may close sessions) |
@@ -76,7 +79,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.8'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.9'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes
