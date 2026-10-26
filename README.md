@@ -28,7 +28,7 @@ Public collection of work tools and scripts.
 | [PupRemnantCleanup](PupRemnantCleanup/) | Definition-driven PUP leftover sweep, plus a block that stops those installer names and shows a warning. Dry-run by default; `-Remove` deletes remnants |
 | [PythonCleanup](PythonCleanup/) | Uninstall vulnerable CPython (end of life, or older than the current security release). A newer install on the same PC does not keep the old one |
 | [ScreenConnectGpoDeploy](ScreenConnectGpoDeploy/) | Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task GPO |
-| [ScreenConnectRogueHunt](ScreenConnectRogueHunt/) | Read-only hunt that prints each distinct ScreenConnect instance ID once and flags IDs that are not on the allow list |
+| [ScreenConnectRogueHunt](ScreenConnectRogueHunt/) | Hunt that prints each distinct ScreenConnect instance ID once. Scan by default. `-Remediate` deletes installs that are not on the allow list |
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet/VC++ 2005-2013 delegates + winget; ScreenConnect `#!ps`) |

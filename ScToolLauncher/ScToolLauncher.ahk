@@ -344,16 +344,31 @@ Mozilla Firefox
     Map(
         "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
         "Name", "Rogue instance IDs",
-        "Summary", "Read-only. Prints each distinct ScreenConnect instance ID once and flags IDs that are not on the allow list.",
+        "Summary", "Read-only. Prints each distinct ScreenConnect instance ID once. Live IDs that are not on the allow list are ROGUE. Event-only IDs are History.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectRogueHunt",
         "Fetch", "Contents",
         "Path", "ScreenConnectRogueHunt",
         "Script", "Find-RogueScreenConnect.ps1",
         "UaPrefix", "ScreenConnectRogueHunt-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.1.0",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 300000,
         "Flags", "ScanOnly NoExit"
+    ),
+    Map(
+        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
+        "Name", "Remove rogue ScreenConnect",
+        "Summary", "Stops, uninstalls, and deletes ScreenConnect clients whose instance ID is not on the allow list. Allow-listed IDs stay. Event history and hits with no instance ID are left.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectRogueHunt",
+        "Fetch", "Contents",
+        "Path", "ScreenConnectRogueHunt",
+        "Script", "Find-RogueScreenConnect.ps1",
+        "UaPrefix", "ScreenConnectRogueHunt-bootstrap",
+        "UaVer", "1.1.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 900000,
+        "Flags", "CheckOnly Remediate NoExit",
+        "Note", "Does not remove the allow-listed instance IDs. Run it from the allow-listed session. A session connected through a rogue client drops while a scheduled task finishes the removal. Review hits with no instance ID are not deleted."
     ),
     Map(
         "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
@@ -1952,6 +1967,10 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "List vulnerable Python"
         gCtrls["ModeUpdate"].Text := "Remove vulnerable Python"
     }
+    if InStr(ToolGet(t, "Path", ""), "ScreenConnectRogueHunt") && ToolHasFlag(t, "Remediate") {
+        gCtrls["ModeScan"].Text := "List rogue IDs"
+        gCtrls["ModeUpdate"].Text := "Remove rogue installs"
+    }
     if InStr(ToolGet(t, "Path", ""), "HpImageAssistant") {
         gCtrls["ModeScan"].Text := "List unattended SoftPaqs"
         gCtrls["ModeUpdate"].Text := "Install unattended SoftPaqs"
@@ -2677,6 +2696,12 @@ DescribeSelection(tool, isScan) {
             mode := "List vulnerable Python"
         else
             mode := "Remove vulnerable Python"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "ScreenConnectRogueHunt") && ToolHasFlag(tool, "Remediate") {
+        if isScan
+            mode := "List rogue IDs"
+        else
+            mode := "Remove rogue installs"
     }
     if InStr(ToolGet(tool, "Path", ""), "HpImageAssistant") {
         if isScan

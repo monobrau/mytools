@@ -42,7 +42,8 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 
 | Tool | Repo |
 | --- | --- |
-| Rogue instance IDs | mytools `ScreenConnectRogueHunt` — one line per distinct instance ID; ROGUE if it is not on the allow list |
+| Rogue instance IDs | mytools `ScreenConnectRogueHunt` — one line per distinct instance ID; ROGUE if a live install is not on the allow list. Event-only IDs are History |
+| Remove rogue ScreenConnect | mytools `ScreenConnectRogueHunt` — uninstall and delete installs that are not on the allow list. Allow-listed IDs stay |
 | GPO / MSI finder | [screenconnect-gpo-msi-finder](https://github.com/monobrau/screenconnect-gpo-msi-finder) |
 | Temp file cleanup | [screenconnect-temp-cleanup](https://github.com/monobrau/screenconnect-temp-cleanup) **v1.7.1** — CVE-2026-84869 advisory is report-only; in-use/installed clients are never deleted |
 
