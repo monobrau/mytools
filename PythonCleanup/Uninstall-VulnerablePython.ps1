@@ -189,6 +189,7 @@ function Add-ArpFromKey {
                             QuietUninstallString = [string]$sub.GetValue('QuietUninstallString')
                             ProductCode          = $product
                             Bundle               = (Test-PythonBundleName $display)
+                            KeyPath              = ($BaseKey.Name + '\' + $rel + '\' + $name)
                         })
                 }
                 finally { $sub.Dispose() }
@@ -447,6 +448,41 @@ function Test-UninstallOk {
     return $Code -in 0, 3010, 1641, 1605
 }
 
+function Remove-OrphanArpKey {
+    param($Entry)
+    $full = [string]$Entry.KeyPath
+    $hive = $null
+    $sub = $null
+    if ($full -match '^HKEY_LOCAL_MACHINE\\(.+)$') {
+        $hive = [Microsoft.Win32.RegistryHive]::LocalMachine
+        $sub = $Matches[1]
+    }
+    elseif ($full -match '^HKEY_CURRENT_USER\\(.+)$') {
+        $hive = [Microsoft.Win32.RegistryHive]::CurrentUser
+        $sub = $Matches[1]
+    }
+    elseif ($full -match '^HKEY_USERS\\(.+)$') {
+        $hive = [Microsoft.Win32.RegistryHive]::Users
+        $sub = $Matches[1]
+    }
+    if (-not $hive -or -not $sub) {
+        Write-Line ("Could not remove stale ARP key for {0}." -f $Entry.DisplayName)
+        return $false
+    }
+    $base = $null
+    try {
+        $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($hive, [Microsoft.Win32.RegistryView]::Registry64)
+        $base.DeleteSubKeyTree($sub)
+        Write-Line ("Removed stale ARP key: {0}" -f $Entry.DisplayName)
+        return $true
+    }
+    catch {
+        Write-Line ("Could not remove stale ARP key for {0}: {1}" -f $Entry.DisplayName, $_.Exception.Message)
+        return $false
+    }
+    finally { if ($base) { $base.Dispose() } }
+}
+
 function Get-GroupKey {
     param($Entry)
     $ver = if ($Entry.Version) { [string]$Entry.Version } else { 'unknown' }
@@ -567,7 +603,11 @@ function Remove-Target {
         if ($bundleOk -and -not $entry.Bundle) { continue }
         $code = Invoke-QuietUninstall -Entry $entry
         Write-Line ("Uninstall exit {0}: {1}" -f $code, $entry.DisplayName)
-        if (Test-UninstallOk $code) {
+        if ($code -eq 1605) {
+            Write-Line ("Windows Installer has no product for {0}. The uninstall entry is stale." -f $entry.DisplayName)
+            if (-not (Remove-OrphanArpKey $entry)) { $anyFail = $true }
+        }
+        elseif (Test-UninstallOk $code) {
             if ($entry.Bundle) { $bundleOk = $true }
         }
         else { $anyFail = $true }
