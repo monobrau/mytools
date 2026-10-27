@@ -31,6 +31,7 @@ Public collection of work tools and scripts.
 | [ScreenConnectRogueHunt](ScreenConnectRogueHunt/) | Hunt that prints each distinct ScreenConnect instance ID once. Scan by default. `-Remediate` deletes installs that are not on the allow list |
 | [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
+| [UnquotedServicePath](UnquotedServicePath/) | Read-only unquoted service path check. Prints an elevated `sc.exe` quote command when a user can write a split folder. Leaves Defender and Sense alone |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet/VC++ 2005-2013 delegates + winget; ScreenConnect `#!ps`) |
 | [WebrootUninstallGpo](WebrootUninstallGpo/) | Immediate Task uninstall + leftover sweep; `Get-WebrootFleetStatus.ps1` checks AD PCs via C$ |
 | [EolDependencyAudit](EolDependencyAudit/) | See which processes load EOL runtimes. Script or GPO. Measures Security-log growth; stores hit counts, not event text |

@@ -936,6 +936,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     Map(
         "Category", "Untested",
+        "Name", "Unquoted service paths",
+        "Summary", "Read-only. Lists service binaries with a space and no quotes. Windows Defender and Sense are left alone. A user-writable split folder includes the sc.exe command that quotes the path.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/UnquotedServicePath",
+        "Fetch", "Contents",
+        "Path", "UnquotedServicePath",
+        "Script", "Get-UnquotedServicePath.ps1",
+        "UaPrefix", "UnquotedServicePath-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 180000,
+        "Flags", "ScanOnly NoExit AlwaysNote",
+        "Note", "Read-only. Does not change services. Action needed means Users, Everyone, or Authenticated Users can write a folder in the unquoted path. The Next line is the elevated quote command. Do not quote Defender or Sense.",
+        "ClipboardNote", "NOTE: Read-only unquoted service path check. Action needed includes the sc.exe quote command. Review it before running. Do not quote Windows Defender or Sense."
+    ),
+    Map(
+        "Category", "Untested",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
