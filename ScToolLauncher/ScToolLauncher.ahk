@@ -856,6 +856,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ; --- Untested (move here until validated) ---
     Map(
         "Category", "Untested",
+        "Name", "Pale Moon Portable",
+        "Summary", "Download the official Pale Moon portable build onto this PC, add a desktop shortcut, and launch it. Backstage PowerShell only.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PaleMoonPortable",
+        "Fetch", "Contents",
+        "Path", "PaleMoonPortable",
+        "Script", "Install-PaleMoonPortable.ps1",
+        "UaPrefix", "PaleMoonPortable-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 600000,
+        "TimeoutUpdate", 600000,
+        "Flags", "RunOnly AlwaysNote BackstageOnly NoExit",
+        "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Checks the SHA256 published on palemoon.org, unpacks under %LOCALAPPDATA%\PaleMoonPortable, and writes Pale Moon Portable.lnk on the desktop. A later run updates the build and keeps the User folder.",
+        "ClipboardNote", "NOTE: This PC only. Official Pale Moon portable, hash-checked. Desktop shortcut Pale Moon Portable.lnk. Profile stays in %LOCALAPPDATA%\PaleMoonPortable."
+    ),
+    Map(
+        "Category", "Untested",
         "Name", "PHP use",
         "Summary", "Read-only, for workstations and Windows Server. Reports whether PHP is running or set up to run (IIS, Apache, nginx, a service, or a scheduled task), and whether php.exe is installed. Servers are not skipped.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PhpUse",
