@@ -29,6 +29,10 @@ Exit codes: `0` absent, removed, or reinstalled, `1` present (scan), `2` leftove
 
 ## ScreenConnect
 
+The script is meant to be run from a ScreenConnect session. It does not stop,
+delete, or tree-kill that service. If the vendor uninstaller or the agent MSI
+stops it, the script starts it again before exiting.
+
 See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Prefer elevated
 PowerShell. Or use ScToolLauncher (**Agents** → Automate). Scan first.
 Reload the launcher after updating `ScToolLauncher.ahk`.

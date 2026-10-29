@@ -79,6 +79,85 @@ function Test-UnderAgentRoot {
     return ($clean -match '(?i)\\LTSvc(\\|"|$)')
 }
 
+function Test-ScreenConnectText {
+    param([string]$Text)
+    if (-not $Text) { return $false }
+    return [bool]($Text -match '(?i)ScreenConnect|ConnectWiseControl|ConnectWise Control')
+}
+
+# This script is meant to be run from a ScreenConnect session. Never stop or
+# delete that service, and never taskkill an ancestor of this process (that is
+# the session host).
+function Get-SessionProcessIds {
+    if ($script:SessionProcessIds) { return @($script:SessionProcessIds) }
+    $ids = New-Object System.Collections.Generic.List[int]
+    $walk = [int]$PID
+    $guard = 0
+    while ($walk -gt 0 -and $guard -lt 40) {
+        if (-not $ids.Contains($walk)) { $ids.Add($walk) }
+        $proc = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $walk) -ErrorAction SilentlyContinue
+        if (-not $proc) { break }
+        $parent = [int]$proc.ParentProcessId
+        if ($parent -le 0 -or $parent -eq $walk) { break }
+        $walk = $parent
+        $guard++
+    }
+    $script:SessionProcessIds = @($ids)
+    return @($script:SessionProcessIds)
+}
+
+function Test-ScreenConnectService {
+    param($Service)
+    if (-not $Service) { return $false }
+    $name = [string]$Service.Name
+    $display = [string]$Service.DisplayName
+    $path = [string]$Service.PathName
+    if (-not $path -and $name) {
+        $escaped = $name -replace "'", "''"
+        $cim = Get-CimInstance Win32_Service -Filter ("Name='" + $escaped + "'") -ErrorAction SilentlyContinue
+        if ($cim) {
+            $display = [string]$cim.DisplayName
+            $path = [string]$cim.PathName
+        }
+    }
+    return (Test-ScreenConnectText $name) -or (Test-ScreenConnectText $display) -or (Test-ScreenConnectText $path)
+}
+
+function Save-ScreenConnectState {
+    $script:ScreenConnectKeep = @()
+    foreach ($svc in @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue)) {
+        if (-not (Test-ScreenConnectService $svc)) { continue }
+        $script:ScreenConnectKeep += [pscustomobject]@{
+            Name       = [string]$svc.Name
+            WasRunning = ($svc.State -eq 'Running')
+        }
+        Write-Output ("Keep ScreenConnect service " + $svc.Name + " " + $svc.State)
+    }
+    if (@($script:ScreenConnectKeep).Count -eq 0) {
+        Write-Output 'No ScreenConnect service found to protect.'
+    }
+}
+
+function Restore-ScreenConnectServices {
+    foreach ($row in @($script:ScreenConnectKeep)) {
+        if (-not $row -or -not $row.Name) { continue }
+        $svc = Get-Service -Name $row.Name -ErrorAction SilentlyContinue
+        if (-not $svc) {
+            Write-Output ("WARNING: ScreenConnect service is gone: " + $row.Name)
+            continue
+        }
+        if ($row.WasRunning -and $svc.Status -ne 'Running') {
+            Write-Output ("Restart ScreenConnect service " + $svc.Name)
+            & "$env:SystemRoot\System32\sc.exe" start $svc.Name 2>&1 | ForEach-Object { Write-Output ("  " + $_) }
+            Start-Sleep -Seconds 2
+            $svc = Get-Service -Name $row.Name -ErrorAction SilentlyContinue
+        }
+        if ($svc) {
+            Write-Output ("ScreenConnect service " + $row.Name + " " + [string]$svc.Status)
+        }
+    }
+}
+
 function Get-LabTechProps {
     $hits = @()
     foreach ($path in @(
@@ -147,7 +226,7 @@ function Get-AgentServices {
     }
     $extra = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object {
         $_.Name -notin $script:AgentServiceNames -and
-        $_.Name -notmatch '(?i)ScreenConnect|ConnectWise' -and
+        -not (Test-ScreenConnectService $_) -and
         (Test-UnderAgentRoot ([string]$_.PathName))
     })
     foreach ($svc in $extra) {
@@ -159,10 +238,14 @@ function Get-AgentServices {
 
 function Get-AgentProcesses {
     $names = $script:AgentImageNames
+    $session = @(Get-SessionProcessIds)
     @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
         $n = [string]$_.Name
-        if ($n -match '(?i)ScreenConnect') { return $false }
-        ($names -contains $n.ToLower()) -or (Test-UnderAgentRoot ([string]$_.ExecutablePath))
+        $exe = [string]$_.ExecutablePath
+        if (Test-ScreenConnectText $n) { return $false }
+        if (Test-ScreenConnectText $exe) { return $false }
+        if ($session -contains [int]$_.ProcessId) { return $false }
+        ($names -contains $n.ToLower()) -or (Test-UnderAgentRoot $exe)
     })
 }
 
@@ -227,13 +310,18 @@ function Stop-AgentHolders {
     foreach ($name in $script:AgentServiceNames) {
         $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
         if (-not $svc) { continue }
+        if (Test-ScreenConnectService $svc) {
+            Write-Output ("Skip stop of ScreenConnect service " + $name)
+            continue
+        }
         Write-Output ("Stop-Service " + $name + " " + [string]$svc.Status)
         & "$env:SystemRoot\System32\sc.exe" stop $name 2>&1 | ForEach-Object { Write-Output ("  " + $_) }
     }
     Start-Sleep -Seconds 3
     foreach ($proc in @(Get-AgentProcesses)) {
+        # No /T. A tree kill can take down the ScreenConnect session that started this script.
         Write-Output ("taskkill PID " + [string]$proc.ProcessId + " " + $proc.Name)
-        & "$env:SystemRoot\System32\taskkill.exe" /F /T /PID $proc.ProcessId 2>$null | Out-Null
+        & "$env:SystemRoot\System32\taskkill.exe" /F /PID $proc.ProcessId 2>$null | Out-Null
     }
     $dll = Join-Path (Get-AgentBase) 'wodVPN.dll'
     if (Test-Path -LiteralPath $dll) {
@@ -246,6 +334,11 @@ function Invoke-AgentMsiUninstall {
     param($Entry)
     $name = [string]$Entry.DisplayName
     $guid = [string]$Entry.PSChildName
+    $blob = $name + ' ' + ([string]$Entry.UninstallString) + ' ' + ([string]$Entry.InstallLocation)
+    if (Test-ScreenConnectText $blob) {
+        Write-Output ("Skip ScreenConnect uninstall entry: " + $name)
+        return
+    }
     if ($guid -notmatch '^\{[0-9A-Fa-f-]{36}\}$') {
         Write-Output ("No MSI product code: " + $name)
         return
@@ -639,25 +732,40 @@ if ($probe) { Write-Output 'Probe override forced.' }
 $server = $primaryServer
 if (-not $server -and $info) { $server = $info.Server }
 
+Save-ScreenConnectState
 Stop-AgentHolders
+Restore-ScreenConnectServices
 foreach ($entry in @(Get-AgentArp)) { Invoke-AgentMsiUninstall -Entry $entry }
+Restore-ScreenConnectServices
 
 $uninstaller = Get-AgentUninstaller -Server $server
 if ($uninstaller) {
     Invoke-AgentUninstaller -ExePath $uninstaller
+    Restore-ScreenConnectServices
 } else {
     Write-Output 'Vendor uninstaller was not downloaded. Continuing with local service, file, and registry cleanup.'
 }
 
 Stop-AgentHolders
+Restore-ScreenConnectServices
 
 foreach ($svc in @(Get-AgentServices)) {
+    if (Test-ScreenConnectService $svc) {
+        Write-Output ("Skip sc delete of ScreenConnect service " + $svc.Name)
+        continue
+    }
     Write-Output ("sc.exe delete " + $svc.Name)
     & "$env:SystemRoot\System32\sc.exe" delete $svc.Name 2>&1 | ForEach-Object { Write-Output ("  " + $_) }
 }
+Restore-ScreenConnectServices
 
 foreach ($task in @(Get-AgentTasks)) {
-    Write-Output ("Unregister-ScheduledTask " + $task.TaskPath + $task.TaskName)
+    $taskLabel = [string]$task.TaskPath + [string]$task.TaskName
+    if (Test-ScreenConnectText $taskLabel) {
+        Write-Output ("Skip ScreenConnect scheduled task " + $taskLabel)
+        continue
+    }
+    Write-Output ("Unregister-ScheduledTask " + $taskLabel)
     Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false -ErrorAction SilentlyContinue
 }
 
@@ -708,7 +816,9 @@ if ($servicesLeft.Count -gt 0 -or $folderLeft) {
 
 if ($Reinstall) {
 Write-Output '=== Installing Automate agent from this PC ==='
+if (-not $script:ScreenConnectKeep) { Save-ScreenConnectState }
 $installCode = Install-SavedAgentMsi -Msi $installMsi -Server $primaryServer -LocationId $locationId
+Restore-ScreenConnectServices
 if ($installCode -eq 3010) {
     Write-Output 'msiexec 3010 = success, reboot required.'
 }
