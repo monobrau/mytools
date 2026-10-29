@@ -110,7 +110,8 @@ Park tools here until they have been validated on a host. Add `"Category", "Unte
 
 | Tool | Source |
 | --- | --- |
-| Pale Moon Portable | mytools `PaleMoonPortable` — Backstage PowerShell on this PC only. No Commands snippet. Official portable build, SHA256 from the Pale Moon download page, desktop shortcut |
+| Pale Moon Portable | mytools `PaleMoonPortable` — Backstage PowerShell on this PC only. No Commands snippet. Official portable build, SHA256 from the Pale Moon download page, files in `C:\ProgramData\PaleMoonPortable` |
+| Run Pale Moon Portable | mytools `PaleMoonPortable` — launches that same folder. Does not download |
 | PHP use | mytools `PhpUse` — read-only on workstations and Windows Server. Servers are not skipped. Download is pinned to commit `1c67472` and checked with SHA256 |
 | Deploy ScreenConnect client via GPO | mytools `ScreenConnectGpoDeploy` — stage the instance MSI on NETLOGON; Immediate Task installs when the client service is missing |
 | Automate GPO deploy | mytools `AutomateGpoDeploy` — bake the location MSI and create the install GPO |

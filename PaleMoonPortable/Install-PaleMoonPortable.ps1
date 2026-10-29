@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Download Pale Moon Portable, keep a desktop shortcut, and launch it.
+    Download Pale Moon Portable into C:\ProgramData\PaleMoonPortable and launch it.
 
 .DESCRIPTION
     For an admin PC. Paste the one-liner into ScreenConnect Backstage or a
@@ -9,20 +9,17 @@
 
     The package is the official 64-bit portable self-extractor. The script
     reads the SHA256 from the Pale Moon download page and checks the file
-    before unpacking. Files go under %LOCALAPPDATA%\PaleMoonPortable.
-    A later run with a newer published build replaces the program files and
-    copies the existing User folder onto the new copy.
-
-    The shortcut is Pale Moon Portable.lnk on the current user's desktop.
-    Launch uses Palemoon-Portable.exe so the profile stays inside that folder.
+    before unpacking. The folder is always C:\ProgramData\PaleMoonPortable
+    so Start-PaleMoonPortable.ps1 can launch the same copy. A later run with
+    a newer published build replaces the program files and copies the existing
+    User folder onto the new copy.
 #>
 [CmdletBinding()]
 param(
     [switch]$NoExit,
     [switch]$Exit,
     [switch]$NoLaunch,
-    [string]$Destination,
-    [string]$ShortcutFolder
+    [string]$Destination
 )
 
 Set-StrictMode -Version 2.0
@@ -151,32 +148,10 @@ function Copy-PaleMoonUserFolder {
     Copy-Item -Path (Join-Path $source '*') -Destination $dest -Recurse -Force
 }
 
-function Set-PaleMoonShortcut {
-    param(
-        [Parameter(Mandatory = $true)][string]$Launcher,
-        [Parameter(Mandatory = $true)][string]$WorkingDirectory,
-        [Parameter(Mandatory = $true)][string]$Folder
-    )
-    if (-not (Test-Path -LiteralPath $Folder)) {
-        New-Item -ItemType Directory -Path $Folder -Force | Out-Null
-    }
-    $path = Join-Path $Folder 'Pale Moon Portable.lnk'
-    $shell = New-Object -ComObject WScript.Shell
-    $link = $shell.CreateShortcut($path)
-    $link.TargetPath = $Launcher
-    $link.WorkingDirectory = $WorkingDirectory
-    $link.Description = 'Pale Moon Portable'
-    $link.Save()
-    Write-Output ("Shortcut: {0}" -f $path)
-}
-
 try {
     Enable-PaleMoonTls
     if (-not $Destination) {
-        $Destination = Join-Path $env:LOCALAPPDATA 'PaleMoonPortable'
-    }
-    if (-not $ShortcutFolder) {
-        $ShortcutFolder = [Environment]::GetFolderPath('Desktop')
+        $Destination = Join-Path $env:ProgramData 'PaleMoonPortable'
     }
     $published = Get-PaleMoonPublished
     $installed = Get-PaleMoonInstalledVersion -Root $Destination
@@ -237,7 +212,6 @@ try {
     if (-not (Test-Path -LiteralPath $launcher)) {
         throw "Palemoon-Portable.exe was not found in $Destination"
     }
-    Set-PaleMoonShortcut -Launcher $launcher -WorkingDirectory $Destination -Folder $ShortcutFolder
 
     if ($NoLaunch) {
         Write-Output 'Launch skipped.'

@@ -857,18 +857,34 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     Map(
         "Category", "Untested",
         "Name", "Pale Moon Portable",
-        "Summary", "Download the official Pale Moon portable build onto this PC, add a desktop shortcut, and launch it. Backstage PowerShell only.",
+        "Summary", "Download the official Pale Moon portable build into C:\ProgramData\PaleMoonPortable and launch it. Backstage PowerShell only.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PaleMoonPortable",
         "Fetch", "Contents",
         "Path", "PaleMoonPortable",
         "Script", "Install-PaleMoonPortable.ps1",
         "UaPrefix", "PaleMoonPortable-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.1.0",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 600000,
         "Flags", "RunOnly AlwaysNote BackstageOnly NoExit",
-        "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Checks the SHA256 published on palemoon.org, unpacks under %LOCALAPPDATA%\PaleMoonPortable, and writes Pale Moon Portable.lnk on the desktop. A later run updates the build and keeps the User folder.",
-        "ClipboardNote", "NOTE: This PC only. Official Pale Moon portable, hash-checked. Desktop shortcut Pale Moon Portable.lnk. Profile stays in %LOCALAPPDATA%\PaleMoonPortable."
+        "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Checks the SHA256 published on palemoon.org and unpacks to C:\ProgramData\PaleMoonPortable. A later run updates the build and keeps the User folder. Use Run Pale Moon Portable to open an existing copy.",
+        "ClipboardNote", "NOTE: This PC only. Official Pale Moon portable, hash-checked. Files stay in C:\ProgramData\PaleMoonPortable."
+    ),
+    Map(
+        "Category", "Untested",
+        "Name", "Run Pale Moon Portable",
+        "Summary", "Launch the Pale Moon portable copy already in C:\ProgramData\PaleMoonPortable. Does not download. Backstage PowerShell only.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PaleMoonPortable",
+        "Fetch", "Contents",
+        "Path", "PaleMoonPortable",
+        "Script", "Start-PaleMoonPortable.ps1",
+        "UaPrefix", "PaleMoonPortableRun-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 120000,
+        "TimeoutUpdate", 120000,
+        "Flags", "RunOnly AlwaysNote BackstageOnly NoExit",
+        "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Starts C:\ProgramData\PaleMoonPortable\Palemoon-Portable.exe. Run the install tool first.",
+        "ClipboardNote", "NOTE: This PC only. Launches C:\ProgramData\PaleMoonPortable. Does not download. Install first."
     ),
     Map(
         "Category", "Untested",
@@ -1927,6 +1943,8 @@ RefreshOptionEnable(*) {
             gCtrls["ModeUpdate"].Text := "Silent install (-c/-e/-j)"
     } else if runOnly && InStr(ToolGet(t, "TempName", ""), "HPbloatware") {
         gCtrls["ModeUpdate"].Text := "Remove HP bloat / Wolf"
+    } else if runOnly && (ToolGet(t, "Script", "") = "Start-PaleMoonPortable.ps1") {
+        gCtrls["ModeUpdate"].Text := "Launch Pale Moon"
     } else if runOnly {
         gCtrls["ModeUpdate"].Text := "Download and run"
     } else if ToolHasFlag(t, "PowerIdle") {
@@ -2682,6 +2700,8 @@ DescribeSelection(tool, isScan) {
             mode := "Run command"
         else if InStr(ToolGet(tool, "TempName", ""), "HPbloatware")
             mode := "Remove HP bloat"
+        else if (ToolGet(tool, "Script", "") = "Start-PaleMoonPortable.ps1")
+            mode := "Launch Pale Moon"
         else if InStr(ToolGet(tool, "Path", ""), "EntraIntuneEvidence")
             mode := "Export evidence"
         else if ToolHasFlag(tool, "AdReview")
