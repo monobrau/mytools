@@ -223,7 +223,11 @@ function Get-PupCatalog {
             DisplayName = 'Wave Browser (Wavesor)'
             Notes       = 'Chromium PUP often bundled with MediaArena/AppSuite-style converters. Task WaveBrowser-StartAtLogin; vendor Wavesor Software.'
             FolderNameMatch = '(?i)^Wavesor Software$|^WaveBrowser$'
-            LooseFileMatch  = '(?i)^(WaveBrowser|Wave Browser)(\s*\(\d+\))?(\.exe|\.msi|\.lnk)$'
+            UserFolders = @(
+                'Wavesor Software'
+                'AppData\Local\Temp\Wave'
+            )
+            LooseFileMatch  = '(?i)^(WaveBrowser|Wave Browser)(\s*\(\d+\)|\s+-.*)?(\.exe|\.msi|\.lnk)$'
             RegistryKeys = @(
                 'HKLM:\SOFTWARE\Wavesor'
                 'HKLM:\SOFTWARE\WOW6432Node\Wavesor'
@@ -917,11 +921,43 @@ function Remove-PupFinding {
 
     switch ($type) {
         'Process' {
-            $id = $Finding.Meta.Id
-            if ($id) { Stop-Process -Id $id -Force -ErrorAction Stop }
-            else { Stop-Process -Name $item -Force -ErrorAction Stop }
+            # Findings are deduped by process name. taskkill /T ends the Chromium tree.
+            $exe = if ($item -match '\.exe$') { $item } else { "$item.exe" }
+            & taskkill.exe /F /T /IM $exe 2>$null | Out-Null
+            Stop-Process -Name $item -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+            $left = @(Get-Process -Name $item -ErrorAction SilentlyContinue)
+            if ($left.Count -gt 0) {
+                & taskkill.exe /F /T /IM $exe 2>$null | Out-Null
+                Start-Sleep -Seconds 2
+                $left = @(Get-Process -Name $item -ErrorAction SilentlyContinue)
+            }
+            if ($left.Count -gt 0) { throw ("{0} process(es) still running" -f $left.Count) }
         }
-        'Folder' { Remove-Item -LiteralPath $item -Recurse -Force -ErrorAction Stop }
+        'Folder' {
+            $prefix = $item.TrimEnd('\')
+            $last = $null
+            for ($try = 1; $try -le 3; $try++) {
+                Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+                    $exe = [string]$_.ExecutablePath
+                    $cmd = [string]$_.CommandLine
+                    $fromFolder = ($exe -and $exe.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) -or
+                        ($cmd -and $cmd.IndexOf($prefix, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+                    if (-not $fromFolder) { return }
+                    Write-PupLog ("Stopping pid {0} from {1}" -f $_.ProcessId, $exe)
+                    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+                }
+                Start-Sleep -Seconds 2
+                try {
+                    Remove-Item -LiteralPath $item -Recurse -Force -ErrorAction Stop
+                    $last = $null
+                    break
+                } catch {
+                    $last = $_
+                }
+            }
+            if ($last) { throw $last }
+        }
         'LooseFile' { Remove-Item -LiteralPath $item -Force -ErrorAction Stop }
         'ScheduledTask' {
             $taskName = $Finding.Meta.TaskName
