@@ -118,6 +118,7 @@ Park tools here until they have been validated on a host. Add `"Category", "Unte
 | Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT Immediate Task plus leftover sweep |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration |
 | Outlook disable local cache | mytools `OutlookDisableCache` — scan every profile, or force classic Outlook online-only and delete `.ost` / `.nst` |
+| Stale user profiles | mytools `StaleUserProfile` — scan Windows profiles unused for 90 days, then remove only that list. Accounts stay |
 | WinVerifyTrust padding check | mytools `WinVerifyTrustPadding` — CVE-2013-3900 registry check. Apply writes both views. Does not reboot |
 | Speculative Store Bypass | mytools `SpeculativeStoreBypass` — CVE-2018-3639 SSBD registry bits. Does not install Windows updates, firmware, or reboot |
 | Disable PowerShell 2.0 | mytools `PowerShellV2Disable` — DISM disable of V2 + V2Root. Apply only. Does not reboot |

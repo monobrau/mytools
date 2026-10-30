@@ -920,6 +920,23 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     Map(
         "Category", "Untested",
+        "Name", "Stale user profiles",
+        "Summary", "On a shared lab PC, list Windows user profiles unused for 90 days, then remove only that list. Accounts stay.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/StaleUserProfile",
+        "Fetch", "Contents",
+        "Path", "StaleUserProfile",
+        "Script", "Remove-StaleUserProfile.ps1",
+        "UaPrefix", "StaleUserProfile-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 300000,
+        "TimeoutUpdate", 600000,
+        "DefaultArgs", "-Days 90",
+        "Flags", "CheckOnly Remediate NoExit AlwaysNote",
+        "Note", "Prefer elevated PowerShell on the lab PC. Scan lists profiles whose last sign-in is older than 90 days. Clean up removes those profile folders only. The signed-in user, loaded profiles, Windows service profiles, the built-in Administrator, and direct members of local Administrators stay. The user account is not deleted. Change -Days 90 in the pasted command to use another cutoff.",
+        "ClipboardNote", "NOTE: Scan lists what would be removed. Clean up removes those profiles only. Accounts stay. Loaded profiles, Windows service profiles, and local administrators stay. Run elevated. Cutoff is -Days 90."
+    ),
+    Map(
+        "Category", "Untested",
         "Name", "WinVerifyTrust padding check",
         "Summary", "Enable the CVE-2013-3900 Authenticode padding check. Writes EnableCertPaddingCheck=1 in the 64-bit and 32-bit registry views. Does not restart the PC.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WinVerifyTrustPadding",
@@ -2029,6 +2046,10 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "Scan profiles and cache size"
         gCtrls["ModeUpdate"].Text := "Force online mode and delete cache"
     }
+    if InStr(ToolGet(t, "Path", ""), "StaleUserProfile") {
+        gCtrls["ModeScan"].Text := "List profiles that would be removed"
+        gCtrls["ModeUpdate"].Text := "Remove those profiles"
+    }
     if InStr(ToolGet(t, "Path", ""), "WinVerifyTrustPadding") {
         gCtrls["ModeScan"].Text := "Check padding registry"
         gCtrls["ModeUpdate"].Text := "Enable strict signature check"
@@ -2766,6 +2787,12 @@ DescribeSelection(tool, isScan) {
             mode := "Scan profiles and cache"
         else
             mode := "Force online mode and delete cache"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "StaleUserProfile") {
+        if isScan
+            mode := "List profiles that would be removed"
+        else
+            mode := "Remove those profiles"
     }
     if InStr(ToolGet(tool, "Path", ""), "WinVerifyTrustPadding") {
         if isScan
