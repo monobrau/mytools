@@ -22,7 +22,15 @@
     A profile with no logoff time and no NTUSER.DAT is listed and kept.
 
 .PARAMETER Days
-    Last logoff or NTUSER.DAT must be older than this many days. Default is 90.
+    Last logoff or NTUSER.DAT must be older than this many days. 1 to 3650.
+
+.PARAMETER Weeks
+    Last logoff or NTUSER.DAT must be older than this many weeks. 1 to 520.
+    A week is 7 days back from now.
+
+.PARAMETER Months
+    Last logoff or NTUSER.DAT must be older than this many calendar months.
+    Default is 2. 1 to 120. Pass only one of -Days, -Weeks, or -Months.
 
 .PARAMETER CheckOnly
     Dry run. The launcher sends this for Scan.
@@ -36,9 +44,17 @@
 .PARAMETER Exit
     Always call exit with the result code (Commands / automation).
 #>
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Months')]
 param(
-    [int]$Days = 90,
+    [Parameter(ParameterSetName = 'Days')]
+    [int]$Days,
+
+    [Parameter(ParameterSetName = 'Weeks')]
+    [int]$Weeks,
+
+    [Parameter(ParameterSetName = 'Months')]
+    [int]$Months = 2,
+
     [switch]$CheckOnly,
     [switch]$Remediate,
     [switch]$NoExit,
@@ -222,13 +238,33 @@ function Get-StaleRows {
 }
 
 try {
-    if ($Days -lt 1) {
-        Write-Output 'Days must be at least 1. Nothing was deleted.'
+    $count = 0
+    $unit = 'month'
+    $cutoff = $null
+    switch ($PSCmdlet.ParameterSetName) {
+        'Days' {
+            $count = $Days
+            $unit = 'day'
+            if ($count -ge 1 -and $count -le 3650) { $cutoff = (Get-Date).AddDays(-1 * $count) }
+        }
+        'Weeks' {
+            $count = $Weeks
+            $unit = 'week'
+            if ($count -ge 1 -and $count -le 520) { $cutoff = (Get-Date).AddDays(-7 * $count) }
+        }
+        default {
+            $count = $Months
+            $unit = 'month'
+            if ($count -ge 1 -and $count -le 120) { $cutoff = (Get-Date).AddMonths(-1 * $count) }
+        }
+    }
+    if (-not $cutoff) {
+        Write-Output 'Age must be 1 to 3650 days, 1 to 520 weeks, or 1 to 120 months. Nothing was deleted.'
         Complete-StaleRun -Code 2
         return
     }
+    $ageLabel = if ($count -eq 1) { "1 $unit" } else { "$count ${unit}s" }
     $remove = [bool]$Remediate -and -not $CheckOnly
-    $cutoff = (Get-Date).AddDays(-1 * $Days)
     $elevated = Test-StaleAdmin
     $adminSids = @()
     $adminKnown = $true
@@ -239,7 +275,7 @@ try {
         Write-Output ("Could not read the local Administrators group: {0}" -f $_.Exception.Message)
     }
 
-    Write-Output ("Stale user profiles. Last logoff or NTUSER.DAT before {0:yyyy-MM-dd} ({1} days)." -f $cutoff, $Days)
+    Write-Output ("Stale user profiles. Last logoff or NTUSER.DAT before {0:yyyy-MM-dd} ({1})." -f $cutoff, $ageLabel)
     if (-not $elevated) {
         Write-Output 'This window is not elevated. The list can be incomplete, and nothing will be deleted.'
     }

@@ -35,7 +35,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
 ;        PowerIdle FastStartup EolAudit EolAuditGpo PupBlock
-;        BackstageOnly AutoReboot AllowServer Help
+;        BackstageOnly AutoReboot AllowServer Help StaleAge
 HelpIntroText := Format("
 (
 SC Tool Launcher copies a ScreenConnect-ready snippet to the clipboard.
@@ -52,6 +52,7 @@ How to use
 
 Tips
 - Untested means the tool has not been validated yet.
+- On startup, if GitHub main is newer, you can pull it and restart. Tray: Update launcher.
 - After you edit this script, use Reload. {1} does not reload the catalog.
 - Tokens and keys are only in the snippet you copy — they are not saved here.
 )", HotkeyLabel)
@@ -64,6 +65,7 @@ CategoryOrder := [
     "Power — plugged-in sleep, hibernate, Fast Startup",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — admin PC (Inky rules, vendor apps)",
+    "Lab PC — Outlook cache, stale profiles",
     "Untested",
     "Client-specific"
 ]
@@ -903,7 +905,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Read-only. USING PHP means it is running or set up to run. INSTALLED means the program files were found. The Note line says what was not searched."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "Lab PC — Outlook cache, stale profiles",
         "Name", "Outlook disable local cache",
         "Summary", "Force classic Outlook online-only for every profile on a shared lab PC, including the Default profile. Clean up also deletes .ost and .nst files. PST archives stay.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/OutlookDisableCache",
@@ -919,21 +921,20 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Scan is dry-run. Clean up forces online mode and deletes .ost/.nst. PST archives are kept. Run elevated."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "Lab PC — Outlook cache, stale profiles",
         "Name", "Stale user profiles",
-        "Summary", "On a shared lab PC, list Windows user profiles unused for 90 days, then remove only that list. Accounts stay.",
+        "Summary", "On a shared lab PC, list Windows user profiles older than the age you pick (default 2 months), then remove only that list. Accounts stay.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/StaleUserProfile",
         "Fetch", "Contents",
         "Path", "StaleUserProfile",
         "Script", "Remove-StaleUserProfile.ps1",
         "UaPrefix", "StaleUserProfile-bootstrap",
-        "UaVer", "1.1.0",
+        "UaVer", "1.2.0",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 600000,
-        "DefaultArgs", "-Days 90",
-        "Flags", "CheckOnly Remediate NoExit AlwaysNote",
-        "Note", "Prefer elevated PowerShell on the lab PC. Scan lists profiles whose last logoff or NTUSER.DAT is older than 90 days. The Windows last-use time is ignored. Clean up removes those profile folders only. The signed-in user, loaded profiles, Windows service profiles, the built-in Administrator, and direct members of local Administrators stay. The user account is not deleted. Change -Days 90 in the pasted command to use another cutoff.",
-        "ClipboardNote", "NOTE: Scan lists what would be removed. Age is last logoff or NTUSER.DAT, not the Windows last-use time. Clean up removes those profiles only. Accounts stay. Run elevated. Cutoff is -Days 90."
+        "Flags", "CheckOnly Remediate NoExit AlwaysNote StaleAge",
+        "Note", "Prefer elevated PowerShell on the lab PC. Older than sets the cutoff. The default is 2 calendar months. Months count back on the calendar. Weeks are 7 days. Scan lists profiles whose last logoff or NTUSER.DAT is older than that. The Windows last-use time is ignored. Clean up removes those profile folders only. The signed-in user, loaded profiles, Windows service profiles, the built-in Administrator, and direct members of local Administrators stay. The user account is not deleted.",
+        "ClipboardNote", "NOTE: Scan lists what would be removed. Age is last logoff or NTUSER.DAT. The cutoff is the age selected in the launcher. Default is 2 months. Clean up removes those profiles only. Accounts stay. Run elevated."
     ),
     Map(
         "Category", "Untested",
@@ -1112,10 +1113,12 @@ DetectHiddenWindows(true)
 try WinSetTitle(TrayLabel, "ahk_class AutoHotkey ahk_pid " ProcessExist())
 A_IconTip := TrayLabel
 A_TrayMenu.Insert("1&", "Open " AppName, (*) => ShowGui())
+A_TrayMenu.Insert("2&", "Update launcher", (*) => CheckLauncherUpdate(true))
 A_TrayMenu.Default := "Open " AppName
 A_TrayMenu.ClickCount := 1
 
 Hotkey(HotkeySpec, (*) => ToggleGui())
+SetTimer(() => CheckLauncherUpdate(false), -2000)
 
 gGui := 0
 gCtrls := Map()
@@ -1129,8 +1132,126 @@ for arg in A_Args {
 ; Restart this script in-place (avoids a second tray icon from a naive Reload + leftover instance).
 ; /show reopens the window; a cold start stays in the tray.
 ReloadScToolLauncher(*) {
-    Run(Format('"{1}" /restart "{2}" /show', A_AhkPath, A_ScriptFullPath))
+    show := ""
+    if (gGui && WinExist("ahk_id " gGui.Hwnd))
+        show := " /show"
+    Run(Format('"{1}" /restart "{2}"{3}', A_AhkPath, A_ScriptFullPath, show))
     ExitApp
+}
+
+gLauncherUpdateBusy := false
+
+LauncherRepoRoot() {
+    dir := A_ScriptDir
+    loop 6 {
+        if DirExist(dir "\.git") || FileExist(dir "\.git")
+            return dir
+        parent := RegExReplace(RTrim(dir, "\"), "\\[^\\]+$", "")
+        if (parent = "" || parent = dir)
+            return ""
+        dir := parent
+    }
+    return ""
+}
+
+GitRun(repo, gitArgs, timeoutSec := 25) {
+    stamp := A_TickCount
+    bat := A_Temp "\sctool-launcher-git-" stamp ".cmd"
+    outFile := A_Temp "\sctool-launcher-git-" stamp ".txt"
+    codeFile := A_Temp "\sctool-launcher-git-" stamp ".code"
+    text := "@echo off`r`nset GIT_TERMINAL_PROMPT=0`r`nset GCM_INTERACTIVE=Never`r`ngit " gitArgs " > `"" outFile "`" 2>&1`r`n> `"" codeFile "`" echo %ERRORLEVEL%`r`n"
+    try FileAppend(text, bat, "UTF-8-RAW")
+    catch as e {
+        return Map("code", 1, "out", e.Message)
+    }
+    pid := 0
+    try Run(Format('"{1}"', bat), repo, "Hide", &pid)
+    catch as e {
+        try FileDelete(bat)
+        return Map("code", 1, "out", e.Message)
+    }
+    if !ProcessWaitClose(pid, timeoutSec) {
+        try ProcessClose(pid)
+        try FileDelete(bat)
+        try FileDelete(outFile)
+        try FileDelete(codeFile)
+        return Map("code", 1, "out", "git timed out")
+    }
+    out := ""
+    code := 1
+    try out := Trim(FileRead(outFile, "UTF-8"), " `t`r`n")
+    try {
+        rawCode := Trim(FileRead(codeFile, "UTF-8"), " `t`r`n")
+        if RegExMatch(rawCode, "^\d+$")
+            code := Integer(rawCode)
+    }
+    try FileDelete(bat)
+    try FileDelete(outFile)
+    try FileDelete(codeFile)
+    return Map("code", code, "out", out)
+}
+
+GitText(repo, gitArgs) {
+    result := GitRun(repo, gitArgs, 15)
+    if (result["code"] != 0 || result["out"] = "")
+        return ""
+    return Trim(StrSplit(result["out"], "`n", "`r")[1])
+}
+
+CheckLauncherUpdate(interactive := false) {
+    global AppName, gLauncherUpdateBusy
+    if gLauncherUpdateBusy
+        return
+    gLauncherUpdateBusy := true
+    try {
+        repo := LauncherRepoRoot()
+        if (repo = "") {
+            if interactive
+                MsgBox("This launcher is not in a git checkout, so it cannot pull updates.", AppName, "Icon!")
+            return
+        }
+        branch := GitText(repo, "rev-parse --abbrev-ref HEAD")
+        if (branch != "main") {
+            if interactive
+                MsgBox("This checkout is on " branch ", not main. Nothing was pulled.", AppName, "Icon!")
+            return
+        }
+        fetched := GitRun(repo, "fetch origin main", 25)
+        if (fetched["code"] != 0) {
+            if interactive
+                MsgBox("Could not reach GitHub.`n`n" fetched["out"], AppName, "Icon!")
+            return
+        }
+        localRev := GitText(repo, "rev-parse HEAD")
+        remoteRev := GitText(repo, "rev-parse origin/main")
+        if (localRev = "" || remoteRev = "") {
+            if interactive
+                MsgBox("Could not read the local or GitHub revision.", AppName, "Icon!")
+            return
+        }
+        if (localRev = remoteRev) {
+            if interactive
+                MsgBox("The launcher is already up to date.", AppName, "Iconi")
+            return
+        }
+        ancestor := GitRun(repo, "merge-base --is-ancestor HEAD origin/main", 15)
+        if (ancestor["code"] != 0) {
+            if interactive
+                MsgBox("Local main does not fast-forward onto GitHub. Nothing was pulled.", AppName, "Icon!")
+            return
+        }
+        answer := MsgBox("A newer launcher is on GitHub.`n`nPull the latest and restart?", AppName, "YesNo Iconi")
+        if (answer != "Yes")
+            return
+        pulled := GitRun(repo, "pull --ff-only origin main", 60)
+        if (pulled["code"] != 0) {
+            MsgBox("Pull failed. The launcher was not restarted.`n`n" pulled["out"], AppName, "Icon!")
+            return
+        }
+        ReloadScToolLauncher()
+    } finally {
+        gLauncherUpdateBusy := false
+    }
 }
 
 ToggleGui(*) {
@@ -1355,6 +1476,11 @@ ShowGui(*) {
     gCtrls["LblAdInactiveDays"] := gGui.Add("Text", , "Stale after this many days without a logon")
     gCtrls["AdInactiveDays"] := gGui.Add("Edit", "w" UiContentW " Number vAdInactiveDays", "90")
 
+    gCtrls["LblStaleAge"] := gGui.Add("Text", "Section", "Older than")
+    gCtrls["StaleAgeAmount"] := gGui.Add("Edit", "w80 Number Limit4 vStaleAgeAmount", "2")
+    gCtrls["StaleAgeUnit"] := gGui.Add("DropDownList", "w140 vStaleAgeUnit", ["Months", "Weeks", "Days"])
+    gCtrls["StaleAgeUnit"].Choose(1)
+
     gCtrls["LblPaste"] := gGui.Add("Text", "Section", "Paste format")
     gCtrls["FmtCommands"] := gGui.Add("Radio", "Group Checked vFmtCommands", "ScreenConnect Commands (recommended)")
     gCtrls["FmtBackstage"] := gGui.Add("Radio", "vFmtBackstage", "PowerShell (one line)")
@@ -1393,6 +1519,7 @@ ShowGui(*) {
         "LblWebrootKeyCode", "WebrootKeyCode",
         "LblRoPortal", "RoPortal", "LblRoToken", "RoToken",
         "LblAdTarget", "AdTarget", "LblAdInactiveDays", "AdInactiveDays",
+        "LblStaleAge", "StaleAgeAmount", "StaleAgeUnit",
         "LblPaste", "FmtCommands", "FmtBackstage",
         "Note", "Status"
     ]
@@ -1464,7 +1591,8 @@ ReflowGui() {
             || key = "AutomateServer" || key = "AutomateLocationId" || key = "AutomateToken"
             || key = "AutomateClientName" || key = "AutomateLocationName" || key = "AutomateDomain"
             || key = "AutomateTargetOu" || key = "WebrootKeyCode"
-            || key = "RoPortal" || key = "RoToken" || key = "AdTarget" || key = "AdInactiveDays")
+            || key = "RoPortal" || key = "RoToken" || key = "AdTarget" || key = "AdInactiveDays"
+            || key = "StaleAgeAmount" || key = "StaleAgeUnit")
             ch := 22
         else if (InStr(key, "Lbl") = 1)
             ch := 16
@@ -1645,6 +1773,25 @@ ToolHasFlag(tool, flag) {
     return InStr(" " tool["Flags"] " ", " " flag " ")
 }
 
+StaleAgeChoice() {
+    global gCtrls
+    raw := Trim(gCtrls["StaleAgeAmount"].Value)
+    unit := gCtrls["StaleAgeUnit"].Text
+    if !RegExMatch(raw, "^\d+$")
+        return Map("arg", "", "label", "")
+    n := Integer(raw)
+    word := ""
+    if (unit = "Days" && n >= 1 && n <= 3650)
+        word := (n = 1) ? "day" : "days"
+    else if (unit = "Weeks" && n >= 1 && n <= 520)
+        word := (n = 1) ? "week" : "weeks"
+    else if (unit = "Months" && n >= 1 && n <= 120)
+        word := (n = 1) ? "month" : "months"
+    else
+        return Map("arg", "", "label", "")
+    return Map("arg", "-" unit " " n, "label", n " " word)
+}
+
 ToolGet(tool, key, default := "") {
     if tool.Has(key)
         return tool[key]
@@ -1730,6 +1877,7 @@ RefreshOptionEnable(*) {
             "LblAutomateOu", "AutomateTargetOu", "AutomateLinkToDomain", "LblWebrootKeyCode", "WebrootKeyCode",
             "LblRoPortal", "RoPortal", "LblRoToken", "RoToken",
             "LblAdTarget", "AdTarget", "LblAdInactiveDays", "AdInactiveDays",
+            "LblStaleAge", "StaleAgeAmount", "StaleAgeUnit",
             "LblPaste", "FmtCommands", "FmtBackstage", "Note", "BtnAffects"
         ]
         for key in hideKeys
@@ -1915,6 +2063,10 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["AdTarget"], showAdReview)
     SetCtrlShown(gCtrls["LblAdInactiveDays"], showAdReview)
     SetCtrlShown(gCtrls["AdInactiveDays"], showAdReview)
+    showStaleAge := ToolHasFlag(t, "StaleAge")
+    SetCtrlShown(gCtrls["LblStaleAge"], showStaleAge)
+    SetCtrlShown(gCtrls["StaleAgeAmount"], showStaleAge)
+    SetCtrlShown(gCtrls["StaleAgeUnit"], showStaleAge)
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning || showResetPlatform
@@ -2408,6 +2560,12 @@ BuildSwitches(tool, isScan, isCommands) {
             sw.Push("-ComputerName '" StrReplace(target, "'", "''") "'")
         if (days != "")
             sw.Push("-InactiveDays " days)
+    }
+
+    if ToolHasFlag(tool, "StaleAge") {
+        choice := StaleAgeChoice()
+        if (choice["arg"] != "")
+            sw.Push(choice["arg"])
     }
 
     fetch := ToolGet(tool, "Fetch", "Contents")
@@ -2913,6 +3071,11 @@ DescribeSelection(tool, isScan) {
     }
     if CtrlActive(gCtrls["CsOs"])
         parts.Push(gCtrls["CsOs"].Text)
+    if ToolHasFlag(tool, "StaleAge") {
+        choice := StaleAgeChoice()
+        if (choice["label"] != "")
+            parts.Push(choice["label"])
+    }
     if ToolHasFlag(tool, "SentinelOneInstall") && CtrlActive(gCtrls["S1InstallerUrl"]) {
         if (Trim(gCtrls["S1InstallerUrl"].Value) != "")
             parts.Push("Download+install")
@@ -3027,6 +3190,10 @@ DoCopy(*) {
             MsgBox("Inactive days must be a number from 1 to 3650.", AppName, "Icon!")
             return
         }
+    }
+    if ToolHasFlag(tool, "StaleAge") && (StaleAgeChoice()["arg"] = "") {
+        MsgBox("Older than must be 1 to 120 months, 1 to 520 weeks, or 1 to 3650 days.", AppName, "Icon!")
+        return
     }
 
     try {

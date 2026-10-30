@@ -7,6 +7,7 @@ Copies a ready-to-paste Commands `#!ps` (or PowerShell one-liner) bootstrap onto
 - Hotkey: **Ctrl+Shift+Alt+S** (edit `HotkeySpec` / `HotkeyLabel` at the top of the script; Win+Alt combos are often reserved by Windows/OEM)
 - Tray: default AutoHotkey v2 icon and menu (includes **Reload Script**); plus **Open SC Tool Launcher**
 - After editing `ScToolLauncher.ahk`, use GUI **Reload**, tray **Reload Script**, or exit and re-run. The hotkey alone does **not** reload the catalog from disk.
+- On startup, if this checkout is on `main` and GitHub is ahead, a prompt offers `git pull --ff-only` and a restart. Tray **Update launcher** runs the same check. Offline, a missing git repo, or local commits that are not on GitHub are left alone.
 - Starts in the tray (window stays hidden until **Open** or the hotkey)
 - First open selects **Help** (root item) with intro / how-to on the right; categories stay collapsed
 - Layout: **two columns** — tool tree on the left, mode/options/actions on the right (fits shorter screens)
@@ -104,6 +105,13 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | INKY / usecure / Skout enterprise apps | mytools `EntraVendorAppRemoval` — PowerShell one-liner only, pasted into Backstage on an admin PC. Scan lists matches. Apply opens the picker. App ids differ per tenant |
 | Entra users, service accounts, BitLocker | mytools `EntraIntuneEvidence` — PowerShell one-liner only, pasted into Backstage on an admin PC. One run writes the authorized-user list, likely service accounts, and BitLocker per workstation to OneDrive |
 
+### Lab PC — Outlook cache, stale profiles
+
+| Tool | Source |
+| --- | --- |
+| Outlook disable local cache | mytools `OutlookDisableCache` — scan every profile, or force classic Outlook online-only and delete `.ost` / `.nst` |
+| Stale user profiles | mytools `StaleUserProfile` — scan Windows profiles older than the age picked in the launcher (default 2 months), then remove only that list. Accounts stay |
+
 ### Untested
 
 Park tools here until they have been validated on a host. Add `"Category", "Untested"` on the tool Map.
@@ -117,8 +125,6 @@ Park tools here until they have been validated on a host. Add `"Category", "Unte
 | Automate GPO deploy | mytools `AutomateGpoDeploy` — bake the location MSI and create the install GPO |
 | Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT Immediate Task plus leftover sweep |
 | Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration |
-| Outlook disable local cache | mytools `OutlookDisableCache` — scan every profile, or force classic Outlook online-only and delete `.ost` / `.nst` |
-| Stale user profiles | mytools `StaleUserProfile` — scan Windows profiles unused for 90 days, then remove only that list. Accounts stay |
 | WinVerifyTrust padding check | mytools `WinVerifyTrustPadding` — CVE-2013-3900 registry check. Apply writes both views. Does not reboot |
 | Speculative Store Bypass | mytools `SpeculativeStoreBypass` — CVE-2018-3639 SSBD registry bits. Does not install Windows updates, firmware, or reboot |
 | Disable PowerShell 2.0 | mytools `PowerShellV2Disable` — DISM disable of V2 + V2Root. Apply only. Does not reboot |
