@@ -65,7 +65,6 @@ CategoryOrder := [
     "Power — plugged-in sleep, hibernate, Fast Startup",
     "IR / forensics — event logs, Sysinternals, ADWCleaner",
     "M365 / Exchange — admin PC (Inky rules, vendor apps)",
-    "Lab PC — Outlook cache, stale profiles",
     "Untested",
     "Client-specific"
 ]
@@ -905,7 +904,8 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Read-only. USING PHP means it is running or set up to run. INSTALLED means the program files were found. The Note line says what was not searched."
     ),
     Map(
-        "Category", "Lab PC — Outlook cache, stale profiles",
+        "Category", "Client-specific",
+        "Client", "St. Francis Seminary",
         "Name", "Outlook disable local cache",
         "Summary", "Force classic Outlook online-only for every profile on a shared lab PC, including the Default profile. Clean up also deletes .ost and .nst files. PST archives stay.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/OutlookDisableCache",
@@ -921,7 +921,8 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Scan is dry-run. Clean up forces online mode and deletes .ost/.nst. PST archives are kept. Run elevated."
     ),
     Map(
-        "Category", "Lab PC — Outlook cache, stale profiles",
+        "Category", "Client-specific",
+        "Client", "St. Francis Seminary",
         "Name", "Stale user profiles",
         "Summary", "On a shared lab PC, list Windows user profiles older than the age you pick (default 2 months), then remove only that list. Accounts stay.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/StaleUserProfile",

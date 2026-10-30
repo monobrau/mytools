@@ -30,4 +30,4 @@ Exit `0` means nothing to remove, or every targeted profile was removed. Exit `1
 
 ## ScreenConnect
 
-See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). ScToolLauncher: **Lab PC → Stale user profiles**. Scan lists. Clean up removes. The age box defaults to 2 months. Reload the launcher after updating `ScToolLauncher.ahk`.
+See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). ScToolLauncher: **Client-specific → St. Francis Seminary → Stale user profiles**. Scan lists. Clean up removes. The age box defaults to 2 months. Reload the launcher after updating `ScToolLauncher.ahk`.

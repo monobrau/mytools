@@ -105,13 +105,6 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | INKY / usecure / Skout enterprise apps | mytools `EntraVendorAppRemoval` — PowerShell one-liner only, pasted into Backstage on an admin PC. Scan lists matches. Apply opens the picker. App ids differ per tenant |
 | Entra users, service accounts, BitLocker | mytools `EntraIntuneEvidence` — PowerShell one-liner only, pasted into Backstage on an admin PC. One run writes the authorized-user list, likely service accounts, and BitLocker per workstation to OneDrive |
 
-### Lab PC — Outlook cache, stale profiles
-
-| Tool | Source |
-| --- | --- |
-| Outlook disable local cache | mytools `OutlookDisableCache` — scan every profile, or force classic Outlook online-only and delete `.ost` / `.nst` |
-| Stale user profiles | mytools `StaleUserProfile` — scan Windows profiles older than the age picked in the launcher (default 2 months), then remove only that list. Accounts stay |
-
 ### Untested
 
 Park tools here until they have been validated on a host. Add `"Category", "Untested"` on the tool Map.
@@ -140,6 +133,8 @@ Grouped by client name. Campaign tools that are not meant for general use.
 | Client | Tool | Source |
 | --- | --- | --- |
 | Naviant | Acrobat XI removal (EOL) | mytools `ClientSpecific/Naviant/AcrobatXiRemoval` — scan XI + Foxit; uninstall XI (skip if no Foxit unless Force); 20 min timeout; MSI mutex wait / 1618 retry |
+| St. Francis Seminary | Outlook disable local cache | mytools `OutlookDisableCache` — scan every profile, or force classic Outlook online-only and delete `.ost` / `.nst` |
+| St. Francis Seminary | Stale user profiles | mytools `StaleUserProfile` — scan Windows profiles older than the age picked in the launcher (default 2 months), then remove only that list. Accounts stay |
 
 ### Dell SARemediation Backup cleanup
 
