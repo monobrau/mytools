@@ -11,14 +11,18 @@
     Default is a dry run. -Remediate removes only the profiles the dry run
     would list. -CheckOnly forces a dry run even when -Remediate is also passed.
 
+    Age is the older of the profile's last logoff time and NTUSER.DAT.
+    Win32_UserProfile.LastUseTime is not used. On a lab image that value is
+    often today for every profile.
+
     A profile is kept when it is loaded, special, under the Windows directory,
     belongs to the signed-in user, is a direct member of the local
     Administrators group, or is the built-in Administrator (RID 500).
     Nested domain groups are not expanded.
-    A profile with no last-use time is listed and kept.
+    A profile with no logoff time and no NTUSER.DAT is listed and kept.
 
 .PARAMETER Days
-    Last use must be older than this many days. Default is 90.
+    Last logoff or NTUSER.DAT must be older than this many days. Default is 90.
 
 .PARAMETER CheckOnly
     Dry run. The launcher sends this for Scan.
@@ -65,18 +69,60 @@ function Test-StaleAdmin {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-function Convert-StaleTime {
-    param($Value)
-    if ($null -eq $Value) { return $null }
-    if ($Value -is [datetime]) {
-        if ($Value.Year -lt 1980) { return $null }
-        return $Value
+function Get-StaleLogoffTime {
+    param([string]$Sid)
+    if (-not $Sid) { return $null }
+    $base = $null
+    $key = $null
+    try {
+        $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+            [Microsoft.Win32.RegistryHive]::LocalMachine,
+            [Microsoft.Win32.RegistryView]::Registry64)
+        $key = $base.OpenSubKey("SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$Sid")
+        if (-not $key) { return $null }
+        $highObj = $key.GetValue('LocalProfileUnloadTimeHigh')
+        $lowObj = $key.GetValue('LocalProfileUnloadTimeLow')
+        if ($null -eq $highObj -or $null -eq $lowObj) { return $null }
+        $fileTime = ([int64]([uint32]$highObj) -shl 32) -bor [int64]([uint32]$lowObj)
+        if ($fileTime -le 0) { return $null }
+        $when = [datetime]::FromFileTime($fileTime)
+        if ($when.Year -lt 1980) { return $null }
+        return $when
+    } catch {
+        return $null
+    } finally {
+        if ($key) { $key.Close() }
+        if ($base) { $base.Close() }
     }
-    $text = [string]$Value
-    if ($text -match '^\d{14}') {
-        return [Management.ManagementDateTimeConverter]::ToDateTime($text)
+}
+
+function Get-StaleNtUserTime {
+    param([string]$Path)
+    if (-not $Path) { return $null }
+    try {
+        $ntuser = Join-Path $Path 'NTUSER.DAT'
+        if (-not (Test-Path -LiteralPath $ntuser -ErrorAction Stop)) { return $null }
+        $when = (Get-Item -LiteralPath $ntuser -Force -ErrorAction Stop).LastWriteTime
+        if ($when.Year -lt 1980) { return $null }
+        return $when
+    } catch {
+        return $null
     }
-    return $null
+}
+
+function Get-StaleAge {
+    param([string]$Sid, [string]$Path)
+    $logoff = Get-StaleLogoffTime $Sid
+    $ntuser = Get-StaleNtUserTime $Path
+    if ($logoff -and $ntuser) {
+        if ($ntuser -lt $logoff) {
+            return [pscustomobject]@{ When = $ntuser; Source = 'ntuser.dat' }
+        }
+        return [pscustomobject]@{ When = $logoff; Source = 'last logoff' }
+    }
+    if ($logoff) { return [pscustomobject]@{ When = $logoff; Source = 'last logoff' } }
+    if ($ntuser) { return [pscustomobject]@{ When = $ntuser; Source = 'ntuser.dat' } }
+    return [pscustomobject]@{ When = $null; Source = 'none' }
 }
 
 function Get-StaleAccount {
@@ -130,7 +176,9 @@ function Get-StaleRows {
     foreach ($profile in @(Get-CimInstance -ClassName Win32_UserProfile -ErrorAction Stop)) {
         $sid = [string]$profile.SID
         $path = [string]$profile.LocalPath
-        $last = Convert-StaleTime $profile.LastUseTime
+        $age = Get-StaleAge -Sid $sid -Path $path
+        $last = $age.When
+        $source = [string]$age.Source
         $name = Get-StaleAccount $sid
         $reason = $null
         $underWindows = $false
@@ -153,7 +201,7 @@ function Get-StaleRows {
         } elseif ($AdminSids -contains $sid) {
             $reason = 'local administrator'
         } elseif (-not $last) {
-            $reason = 'no last-use time'
+            $reason = 'no logoff time'
         } elseif ($last -gt $Cutoff) {
             $reason = 'used since the cutoff'
         }
@@ -165,6 +213,7 @@ function Get-StaleRows {
             Name    = $name
             Path    = $path
             LastUse = $last
+            Source  = $source
             Sid     = $sid
             Profile = $profile
         })
@@ -190,7 +239,7 @@ try {
         Write-Output ("Could not read the local Administrators group: {0}" -f $_.Exception.Message)
     }
 
-    Write-Output ("Stale user profiles. Last use before {0:yyyy-MM-dd} ({1} days)." -f $cutoff, $Days)
+    Write-Output ("Stale user profiles. Last logoff or NTUSER.DAT before {0:yyyy-MM-dd} ({1} days)." -f $cutoff, $Days)
     if (-not $elevated) {
         Write-Output 'This window is not elevated. The list can be incomplete, and nothing will be deleted.'
     }
@@ -208,7 +257,7 @@ try {
             $when = 'unknown'
             if ($row.LastUse) { $when = '{0:yyyy-MM-dd}' -f $row.LastUse }
             $size = Format-StaleSize (Get-StaleFolderBytes $row.Path)
-            Write-Output ("  {0}  {1}  last used {2}  {3}" -f $row.Name, $row.Path, $when, $size)
+            Write-Output ("  {0}  {1}  {2} {3}  {4}" -f $row.Name, $row.Path, $row.Source, $when, $size)
         }
     }
     Write-Output ("Keep: {0}" -f $keepRows.Count)
@@ -216,7 +265,7 @@ try {
         if ($row.Action -ne 'Keep') { continue }
         $when = 'unknown'
         if ($row.LastUse) { $when = '{0:yyyy-MM-dd}' -f $row.LastUse }
-        Write-Output ("  {0}  {1}  {2}  last used {3}" -f $row.Name, $row.Path, $row.Reason, $when)
+        Write-Output ("  {0}  {1}  {2}  {3} {4}" -f $row.Name, $row.Path, $row.Reason, $row.Source, $when)
     }
     Write-Output 'User accounts are not deleted. A removed profile is created again at the next sign-in.'
 

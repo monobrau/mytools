@@ -927,13 +927,13 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Path", "StaleUserProfile",
         "Script", "Remove-StaleUserProfile.ps1",
         "UaPrefix", "StaleUserProfile-bootstrap",
-        "UaVer", "1.0.0",
+        "UaVer", "1.1.0",
         "TimeoutScan", 300000,
         "TimeoutUpdate", 600000,
         "DefaultArgs", "-Days 90",
         "Flags", "CheckOnly Remediate NoExit AlwaysNote",
-        "Note", "Prefer elevated PowerShell on the lab PC. Scan lists profiles whose last sign-in is older than 90 days. Clean up removes those profile folders only. The signed-in user, loaded profiles, Windows service profiles, the built-in Administrator, and direct members of local Administrators stay. The user account is not deleted. Change -Days 90 in the pasted command to use another cutoff.",
-        "ClipboardNote", "NOTE: Scan lists what would be removed. Clean up removes those profiles only. Accounts stay. Loaded profiles, Windows service profiles, and local administrators stay. Run elevated. Cutoff is -Days 90."
+        "Note", "Prefer elevated PowerShell on the lab PC. Scan lists profiles whose last logoff or NTUSER.DAT is older than 90 days. The Windows last-use time is ignored. Clean up removes those profile folders only. The signed-in user, loaded profiles, Windows service profiles, the built-in Administrator, and direct members of local Administrators stay. The user account is not deleted. Change -Days 90 in the pasted command to use another cutoff.",
+        "ClipboardNote", "NOTE: Scan lists what would be removed. Age is last logoff or NTUSER.DAT, not the Windows last-use time. Clean up removes those profiles only. Accounts stay. Run elevated. Cutoff is -Days 90."
     ),
     Map(
         "Category", "Untested",

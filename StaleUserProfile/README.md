@@ -11,7 +11,7 @@ These are kept:
 - The built-in Administrator account (RID 500)
 - Direct members of the local Administrators group
 
-Nested domain groups are not expanded. A profile with no last-use time is listed and kept.
+Age is the older of the last logoff time and `NTUSER.DAT`. The Windows profile last-use time is not used; on a lab image it is often today for every profile. Nested domain groups are not expanded. A profile with neither timestamp is listed and kept.
 
 ## Usage
 
