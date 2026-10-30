@@ -36,7 +36,7 @@ Run elevated. Default is a dry run.
 
 `-CheckOnly` is the same dry run. `-Remediate` is the same as `-Apply -RemoveCache`. The launcher sends those two.
 
-ScToolLauncher: **Client-specific → St. Francis Seminary → Outlook disable local cache**. Scan copies a dry run. Clean up copies the policy write and cache delete. Both paste a `#!ps` or PowerShell one-liner that downloads this script from GitHub and runs it. Reload the launcher after pulling.
+ScToolLauncher: **Clients → St. Francis Seminary → Outlook disable local cache**. Scan copies a dry run. Clean up copies the policy write and cache delete. Both paste a `#!ps` or PowerShell one-liner that downloads this script from GitHub and runs it. Reload the launcher after pulling.
 
 Exit `0` means the PC is already compliant, or `-Apply` finished. Exit `2` means a scan found policy gaps or cache files. Exit `1` means a hive could not be loaded or a cache file stayed locked.
 

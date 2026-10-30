@@ -29,7 +29,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        DownloadExe (IWR vendor EXE + Start-Process -Wait)
 ;        Url (optional) overrides the constructed GitHub raw URL — use for gists
 ; Category: groups tools in the TreeView (order = CategoryOrder below)
-; Folder: optional subfolder under Category (same as Client= for Client-specific)
+; Folder: optional subfolder under Category (same as Client= for Clients)
 ;        CheckOnly Force ForceAppShutdown IncludeBrowsers Uninstall Detailed Remediate Reinstall Product ProductList
 ;        NoExit Delete BlockReinstall RemoveSupportAssistant Vendor
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
@@ -51,22 +51,25 @@ How to use
 5. Paste into ScreenConnect Commands (recommended) or PowerShell.
 
 Tips
+- The Find box filters by name, client, folder, or category. Ctrl+F jumps there. Escape clears it.
 - Untested means the tool has not been validated yet.
 - On startup, if GitHub main is newer, you can pull it and restart. Tray: Update launcher.
 - After you edit this script, use Reload. {1} does not reload the catalog.
 - Tokens and keys are only in the snippet you copy — they are not saved here.
 )", HotkeyLabel)
 CategoryOrder := [
-    "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
-    "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
-    "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
-    "AV — Defender repair, Cylance/Webroot, McAfee remnants",
-    "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
-    "Power — plugged-in sleep, hibernate, Fast Startup",
-    "IR / forensics — event logs, Sysinternals, ADWCleaner",
-    "M365 / Exchange — admin PC (Inky rules, vendor apps)",
+    "Updates",
+    "ScreenConnect",
+    "OEM",
+    "Antivirus",
+    "Hardening",
+    "Agents",
+    "Power",
+    "Forensics",
+    "Microsoft 365",
+    "This PC",
     "Untested",
-    "Client-specific"
+    "Clients"
 ]
 
 ; TreeView (left) / options column (right) — side-by-side so short screens fit
@@ -87,7 +90,7 @@ Tools := [
     ),
     ; --- Software updates ---
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "Vulnerable software updater (catalog)",
         "Summary", "Checks/updates common third-party apps (winget + M365/HPSA/.NET/VC++ 2005-2013 delegates). Browsers are opt-in.",
         "Affects", "
@@ -146,7 +149,7 @@ Mozilla Firefox
         "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers Product NoExit"
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "Vulnerable Python cleanup",
         "Summary", "Removes CPython installs that are end of life or older than the current security release. A newer copy on the same PC does not keep the old one.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PythonCleanup",
@@ -161,7 +164,7 @@ Mozilla Firefox
         "Note", "Scan lists Python 3.12 / 3.13 builds below the current release, and 3.10 and older. Apply uninstalls those. It does not install a replacement. The Python Launcher, Anaconda, and copies inside other apps stay. No reboot. Reload launcher after pull."
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "Microsoft 365 Apps (Click-to-Run)",
         "Summary", "Silent M365 Apps Click-to-Run check/update. Does not close Office unless you opt in.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/M365AppsUpdate",
@@ -175,7 +178,7 @@ Mozilla Firefox
         "Flags", "CheckOnly Force ForceAppShutdown NoExit"
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", ".NET runtime / SDK patches",
         "Summary", "Patches installed .NET 6+ Runtime/Desktop/ASP.NET/SDK to the latest same-major security release only.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DotNetUpdate",
@@ -189,7 +192,7 @@ Mozilla Firefox
         "Flags", "CheckOnly Force NoExit"
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "Visual C++ 2005-2013 redistributables",
         "Summary", "Patches installed VC++ 2005/2008/2010/2012/2013 to the last security build. Does not add missing years. 2015+ stays on the vuln catalog winget IDs.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/VisualCppUpdate",
@@ -203,7 +206,7 @@ Mozilla Firefox
         "Flags", "CheckOnly Force NoExit"
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "EOL dependency use",
         "Summary", "Reports whether out-of-support runtimes are loaded (VC++ 2005-2013, .NET 3.1/5/6/7, Silverlight, old SQL client). Scan only measures the Security log. Apply audits sentinel DLLs and keeps process hit counts.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EolDependencyAudit",
@@ -218,7 +221,7 @@ Mozilla Firefox
         "Note", "Scan does not change auditing. Apply turns on File System success auditing and an execute audit on each sentinel DLL, then records which process loaded it. Event text is not saved. Apply stops if 4663 traffic is already over 64 MB/day unless Force is checked. Add a dependency by extending the catalog. Private DLL copies outside the catalog paths are not seen."
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "EOL dependency audit GPO",
         "Summary", "On a domain controller: downloads the audit script, stages it on NETLOGON, and creates the GPO. The task audits sentinel DLLs and keeps process hit counts.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EolDependencyAudit",
@@ -234,7 +237,7 @@ Mozilla Firefox
         "ClipboardNote", "NOTE: Run elevated on the domain controller. Apply downloads the audit script and creates the GPO. Pilot an OU before linking at the domain root. Servers are included. Event text is not saved."
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "HP Support Assistant",
         "Summary", "Win10: uninstall HPSA by default (vuln SoftPaqs). Win11: update. Scan-only available.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/HpSupportAssistantUpdate",
@@ -248,7 +251,7 @@ Mozilla Firefox
         "Flags", "CheckOnly Uninstall Force NoExit"
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "HP Image Assistant",
         "Summary", "HP PCs only. Downloads HPIA, then installs SoftPaqs that can install unattended. Skips updates that need a person. Default does not reboot.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/HpImageAssistant",
@@ -263,7 +266,7 @@ Mozilla Firefox
         "Note", "Non-HP PCs exit without changes. Apply uses /InstallType:AutoInstallable (SSM only). A silent BIOS package can still restart on its own. Leave Auto reboot off to stop on exit 3010. 2-hour timeout. Reload launcher after pull."
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "Dell SupportAssist",
         "Summary", "Updates Dell SupportAssist when it is already installed. Does not install it, and does not touch OS Recovery, Remediation, or TechHub.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DellSupportAssistUpdate",
@@ -277,7 +280,7 @@ Mozilla Firefox
         "Flags", "CheckOnly Force NoExit"
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "Classic Teams remnants",
         "Summary", "Finds leftover Classic / per-user Teams after cleanup; can remediate remnants.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/TeamsClassicRemnantCheck",
@@ -291,7 +294,7 @@ Mozilla Firefox
         "Flags", "Detailed Remediate NoExit"
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Name", "Windows Update (quality)",
         "Summary", "Pre-check then scan/install quality updates (CU, security, SSU). Default does not reboot.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsUpdate",
@@ -308,7 +311,7 @@ Mozilla Firefox
         "Note", "Pre-check: disk, WinRE/recovery size, WU services/policy, pending reboot. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Reload launcher after pull."
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Folder", "Windows Update",
         "Name", "Windows Update (feature)",
         "Summary", "Pre-check then scan/install feature updates / enablement packages. Hours. Default does not reboot.",
@@ -325,7 +328,7 @@ Mozilla Firefox
         "Note", "Backstage is fine. No desktop login. Driver updates install first. Auto reboot restarts only when Windows Update requires it; leave it off to stop instead. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Do not start a second run while one is in progress. 4-hour timeout."
     ),
     Map(
-        "Category", "Software updates — vuln catalog, M365, .NET, HPSA, Teams",
+        "Category", "Updates",
         "Folder", "Windows Update",
         "Name", "Windows Update (BIOS / firmware)",
         "Summary", "Pre-check then scan/install BIOS, UEFI, and system-firmware drivers only. Other drivers stay. Default does not reboot.",
@@ -343,7 +346,7 @@ Mozilla Firefox
     ),
     ; --- ScreenConnect ---
     Map(
-        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
+        "Category", "ScreenConnect",
         "Name", "Rogue instance IDs",
         "Summary", "Read-only. Prints each distinct ScreenConnect instance ID once. Live IDs that are not on the allow list are ROGUE. Event-only IDs are History.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectRogueHunt",
@@ -357,7 +360,7 @@ Mozilla Firefox
         "Flags", "ScanOnly NoExit"
     ),
     Map(
-        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
+        "Category", "ScreenConnect",
         "Name", "Remove rogue ScreenConnect",
         "Summary", "Stops, uninstalls, and deletes ScreenConnect clients whose instance ID is not on the allow list. Allow-listed IDs stay. Event history and hits with no instance ID are left.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ScreenConnectRogueHunt",
@@ -372,7 +375,7 @@ Mozilla Firefox
         "Note", "Does not remove the allow-listed instance IDs. Run it from the allow-listed session. A session connected through a rogue client drops while a scheduled task finishes the removal. Review hits with no instance ID are not deleted."
     ),
     Map(
-        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
+        "Category", "ScreenConnect",
         "Name", "GPO / MSI finder",
         "Summary", "Finds GPOs that deploy ScreenConnect/Control and related MSI share paths (domain join helpful).",
         "DocsUrl", "https://github.com/monobrau/screenconnect-gpo-msi-finder",
@@ -402,7 +405,7 @@ Mozilla Firefox
         "ClipboardNote", "NOTE: Run on a DC/RSAT box as Domain Admin. Dry-run first. The MSI path is on that machine. Workstations install at the next gpupdate when the client service is missing."
     ),
     Map(
-        "Category", "ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup",
+        "Category", "ScreenConnect",
         "Name", "Temp file cleanup",
         "Summary", "Removes stale ScreenConnect temp leftovers; reports CVE-2026-84869 client version; cleans Huntress staging IOCs. Dry-run first.",
         "DocsUrl", "https://github.com/monobrau/screenconnect-temp-cleanup",
@@ -417,7 +420,7 @@ Mozilla Firefox
     ),
     ; --- OEM cleanup ---
     Map(
-        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Category", "OEM",
         "Folder", "HP",
         "Name", "HP Touchpoint Analytics",
         "Summary", "Detects/removes HP Touchpoint (Insights) Analytics service, tasks, and driver package. Dry-run first.",
@@ -432,7 +435,7 @@ Mozilla Firefox
         "Flags", "Delete BlockReinstall RemoveSupportAssistant CacheBust"
     ),
     Map(
-        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Category", "OEM",
         "Folder", "HP",
         "Name", "HP bloat / Wolf (mark05e gist)",
         "Summary", "Downloads mark05e's Remove-HPbloatware.ps1 from GitHub gist and runs it. Removes HP AppX + Wolf / Sure Click / Sure Run / HPSA AppX. No dry-run.",
@@ -458,7 +461,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: mark05e HP bloat gist. No dry-run. Prefer elevated PowerShell. Reboot after. Then Defender repair if Wolf leftovers remain."
     ),
     Map(
-        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Category", "OEM",
         "Folder", "Dell",
         "Name", "Dell SARemediation Backup (CW/SC)",
         "Summary", "Scan/remove ScreenConnect/ConnectWise-like files from Dell Snapshots\\Backup (S1 revoked-cert hygiene). Pair with SC temp cleanup. Does not uninstall Dell software.",
@@ -475,7 +478,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Backup cleanup only. Must show v1.4.4. 60 min timeout. PENDING_REBOOT = reboot to finish. Then SC temp cleanup."
     ),
     Map(
-        "Category", "OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation",
+        "Category", "OEM",
         "Folder", "Dell",
         "Name", "Dell TechHub",
         "Summary", "Scan or remove Dell TechHub, DTP, and SupportAssist. Common SentinelOne false positive on techhub.dll. Dell Update stays.",
@@ -492,7 +495,7 @@ HP Support Assistant AppX
     ),
     ; --- AV ---
     Map(
-        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Category", "Antivirus",
         "Name", "Windows Defender repair",
         "Summary", "Check or repair Defender RTP. Scan reports services, real-time protection, and tamper protection. Apply re-enables RTP and starts WinDefend / WdNisSvc.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsDefenderRepair",
@@ -508,7 +511,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Elevated PowerShell / SYSTEM only. Scan does not change anything. Apply is a full RTP repair (services + policy + preferences)."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "Antivirus",
         "Folder", "Webroot",
         "Name", "Webroot uninstall GPO",
         "Summary", "Create a GPO Immediate Task: optional silent WRSA /autouninstall, then leftover sweep (services, folders, registry, drivers). Run on the client DC or RSAT box.",
@@ -525,7 +528,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Run on a DC/RSAT box as Domain Admin. Dry-run first. Apply updates the existing Uninstall Webroot GPO. On a test PC: gpupdate /force. Reboot if a driver is locked."
     ),
     Map(
-        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Category", "Antivirus",
         "Folder", "Webroot",
         "Name", "Webroot fleet status",
         "Summary", "From a DC/RSAT box: load AD computers (lastLogonTimestamp), query WRSVC via SCM, and check C$ in parallel (20 threads, 400ms ping) for WRSA.exe, WRData, and the GPO log.",
@@ -542,7 +545,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Run on a DC/RSAT box. Writes C:\\Windows\\Temp\\Webroot-Fleet-Status.csv. Admin share access required."
     ),
     Map(
-        "Category", "AV — Defender repair, Cylance/Webroot, McAfee remnants",
+        "Category", "Antivirus",
         "Name", "McAfee remnant cleanup",
         "Summary", "Detects leftover McAfee AppX + Program Files\McAfee; Remediate kills processes and removes remnants.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/McAfeeRemnantCleanup",
@@ -558,7 +561,7 @@ HP Support Assistant AppX
     ),
     ; --- Agents ---
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Name", "SentinelOne silent install",
         "Summary", "Paste site/group token → silent install for SC Commands or PowerShell. Optional download URL; else installer must already be on disk.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/SentinelOneInstall",
@@ -574,7 +577,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Site token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell. v1.0.1 auto-detects MSI downloads."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Name", "SentinelOne unload (passphrase)",
         "Summary", "Find SentinelCtl.exe and run unload -slam with the uninstall passphrase. The passphrase is not saved.",
         "Fetch", "Inline",
@@ -585,7 +588,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Uninstall passphrase is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Folder", "ConnectSecure",
         "Name", "ConnectSecure silent install",
         "Summary", "Silent install with -c/-e/-j/-i. Paste the portal install script; company, environment, and token are read from it and are not saved. Windows is the default. Mac, Linux, ARM, and ARM-32 copy the portal shell command.",
@@ -602,7 +605,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Folder", "ConnectSecure",
         "Name", "ConnectSecure agent repair + reinstall",
         "Summary", "Wipe leftover agent (uninstall.bat + service registry), then reinstall. Paste the same official install script; company, environment, and token are read from it and are not saved.",
@@ -619,7 +622,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Install token is embedded in this clipboard snippet only. Do not paste into tickets/git. Prefer elevated PowerShell."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Folder", "Huntress",
         "Name", "Huntress silent install",
         "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Account key is built in. Org key is per-client. Force = rip and replace. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
@@ -636,7 +639,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Account/org keys are embedded in this clipboard snippet. Do not paste into tickets/git. Prefer elevated PowerShell. Uses /ACCT_KEY=. PS2-safe inline download."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Folder", "Huntress",
         "Name", "Verify scheduled reboot",
         "Summary", "Read-only: host time, recent User32 1074 shutdown initiations, and HuntressSC task status.",
@@ -648,7 +651,7 @@ HP Support Assistant AppX
         "Note", "Read-only. Prefer elevated PowerShell."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Folder", "Huntress",
         "Name", "Cancel scheduled reboot",
         "Summary", "Aborts a pending shutdown.exe reboot countdown on the endpoint.",
@@ -660,7 +663,7 @@ HP Support Assistant AppX
         "Note", "Prefer elevated PowerShell if the reboot was armed as SYSTEM."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Folder", "Automate",
         "Name", "Automate agent uninstall",
         "Summary", "Scan or remove the ConnectWise Automate (LabTech) remote agent. ScreenConnect and the Automate Control Center stay. Probe agents need Force.",
@@ -677,7 +680,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Removes the Automate/LabTech agent only. ScreenConnect stays. Probe agents need Force. Reboot and run again if leftovers remain."
     ),
     Map(
-        "Category", "Agents — SentinelOne, ConnectSecure, Huntress, Automate",
+        "Category", "Agents",
         "Folder", "Automate",
         "Name", "Automate agent reinstall",
         "Summary", "Reinstall the Automate agent from the server, location, and cached MSI already on this PC. No installer token. ScreenConnect stays. The new check-in gets a new agent ID in the same location.",
@@ -711,7 +714,7 @@ HP Support Assistant AppX
     ),
     ; --- IR / forensics ---
     Map(
-        "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
+        "Category", "Forensics",
         "Name", "HarkinsCollector (event logs)",
         "Summary", "IR event-log + artifact collector (ExceedingLife). Writes zip under C:\ForensicLogs. Needs elevation; Process Bypass for the downloaded script.",
         "DocsUrl", "https://github.com/ExceedingLife/HarkinsCollector",
@@ -728,7 +731,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: Output zip under C:\ForensicLogs\. Prefer elevated session. Collection can take several minutes."
     ),
     Map(
-        "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
+        "Category", "Forensics",
         "Name", "Forensic Investigator (Sysinternals)",
         "Summary", "Sysinternals + Harkins EVTX + all-user Downloads (Zone.ID) + PS history, hives, browser History, admins/RMM, Defender. C:\\SecurityReports.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/ForensicInvestigator",
@@ -746,7 +749,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: One zip plus .sha256 under C:\SecurityReports. Loose CSVs and EventLogs/Artifacts folders are deleted after the zip is written. Prefer elevated. No VirusTotal."
     ),
     Map(
-        "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
+        "Category", "Forensics",
         "Name", "Malwarebytes ADWCleaner",
         "Summary", "Downloads ADWCleaner and runs a silent clean (/eula /clean /noreboot). Prefer elevated PowerShell.",
         "DocsUrl", "https://www.malwarebytes.com/adwcleaner",
@@ -761,7 +764,7 @@ HP Support Assistant AppX
         "ClipboardNote", "NOTE: ADWCleaner /eula /clean /noreboot. Does not reboot. Prefer elevated session. Check EDR alerts if the download is blocked."
     ),
     Map(
-        "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
+        "Category", "Forensics",
         "Name", "PUP remnant cleanup",
         "Summary", "Dry-run the catalog (Ask Toolbar, MediaArena, AppSuite PDF, Wave, OneLaunch, fake PDF installers, Browser Assistant) and report what is on the host. Clean up deletes all matched remnants. Chromium/Firefox prefs are reported only. Family dropdown limits to one catalog id.",
         "Affects", "
@@ -789,7 +792,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Family dropdown — All on host scans the whole catalog. Pick one id to limit. Scan is dry-run. Remove deletes folders/tasks/registry; browser prefs stay report-only."
     ),
     Map(
-        "Category", "IR / forensics — event logs, Sysinternals, ADWCleaner",
+        "Category", "Forensics",
         "Name", "PUP install block",
         "Summary", "Stops the catalog installers from running and shows the person a warning. Uses the same families as PUP remnant cleanup. Re-apply after a family is added.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PupRemnantCleanup",
@@ -807,7 +810,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     ; --- M365 / Exchange ---
     Map(
-        "Category", "M365 / Exchange — admin PC (Inky rules, vendor apps)",
+        "Category", "Microsoft 365",
         "Name", "Inky / IPW transport rules",
         "Summary", "List or remove EXO transport rules matching IPW|Inky|IOC Strip. Requires Connect-ExchangeOnline first (admin PC, not endpoint SC).",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/InkyTransportRuleCleanup",
@@ -823,7 +826,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Requires Connect-ExchangeOnline in this session. Delete has no interactive confirm — Scan first."
     ),
     Map(
-        "Category", "M365 / Exchange — admin PC (Inky rules, vendor apps)",
+        "Category", "Microsoft 365",
         "Name", "INKY / usecure / Skout enterprise apps",
         "Summary", "Find and delete those vendor enterprise apps in the signed-in Entra tenant. Matched by name, because the app id differs per tenant.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EntraVendorAppRemoval",
@@ -839,7 +842,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Admin PC Backstage PowerShell. Scan lists only. Apply opens the picker. Type DELETE to remove. App ids differ per tenant."
     ),
     Map(
-        "Category", "M365 / Exchange — admin PC (Inky rules, vendor apps)",
+        "Category", "Microsoft 365",
         "Name", "Entra users, service accounts, BitLocker",
         "Summary", "Export the Entra authorized-user list, likely service accounts, and Intune BitLocker status per workstation. Saves under OneDrive.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EntraIntuneEvidence",
@@ -856,7 +859,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     ; --- Untested (move here until validated) ---
     Map(
-        "Category", "Untested",
+        "Category", "This PC",
         "Name", "Pale Moon Portable",
         "Summary", "Download the official Pale Moon portable build into C:\ProgramData\PaleMoonPortable and launch it. Backstage PowerShell only.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PaleMoonPortable",
@@ -872,7 +875,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: This PC only. Official Pale Moon portable, hash-checked. Files stay in C:\ProgramData\PaleMoonPortable."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "This PC",
         "Name", "Run Pale Moon Portable",
         "Summary", "Launch the Pale Moon portable copy already in C:\ProgramData\PaleMoonPortable. Does not download. Backstage PowerShell only.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PaleMoonPortable",
@@ -904,7 +907,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Read-only. USING PHP means it is running or set up to run. INSTALLED means the program files were found. The Note line says what was not searched."
     ),
     Map(
-        "Category", "Client-specific",
+        "Category", "Clients",
         "Client", "St. Francis Seminary",
         "Name", "Outlook disable local cache",
         "Summary", "Force classic Outlook online-only for every profile on a shared lab PC, including the Default profile. Clean up also deletes .ost and .nst files. PST archives stay.",
@@ -921,7 +924,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Scan is dry-run. Clean up forces online mode and deletes .ost/.nst. PST archives are kept. Run elevated."
     ),
     Map(
-        "Category", "Client-specific",
+        "Category", "Clients",
         "Client", "St. Francis Seminary",
         "Name", "Stale user profiles",
         "Summary", "On a shared lab PC, list Windows user profiles older than the age you pick (default 2 months), then remove only that list. Accounts stay.",
@@ -938,7 +941,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Scan lists what would be removed. Age is last logoff or NTUSER.DAT. The cutoff is the age selected in the launcher. Default is 2 months. Clean up removes those profiles only. Accounts stay. Run elevated."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "Hardening",
         "Name", "WinVerifyTrust padding check",
         "Summary", "Enable the CVE-2013-3900 Authenticode padding check. Writes EnableCertPaddingCheck=1 in the 64-bit and 32-bit registry views. Does not restart the PC.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WinVerifyTrustPadding",
@@ -954,7 +957,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Scan is dry-run. Apply sets EnableCertPaddingCheck. Does not reboot. Restart before the stricter check is active."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "Hardening",
         "Name", "Speculative Store Bypass",
         "Summary", "Enable the Windows CVE-2018-3639 SSBD mitigation by OR-ing bit 8 into FeatureSettingsOverride. Other mitigation bits stay. Does not install updates or reboot.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/SpeculativeStoreBypass",
@@ -970,7 +973,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Scan is dry-run. Apply sets the SSBD registry bits only. Does not install updates or reboot."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "Hardening",
         "Name", "Disable PowerShell 2.0",
         "Summary", "Disable the Windows PowerShell 2.0 optional features (MicrosoftWindowsPowerShellV2 and V2Root). Apply only. Does not restart the PC.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PowerShellV2Disable",
@@ -1002,7 +1005,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Read-only unquoted service path check. Action needed includes the sc.exe quote command. Review it before running. Do not quote Windows Defender or Sense."
     ),
     Map(
-        "Category", "Untested",
+        "Category", "Antivirus",
         "Name", "Cylance / Webroot cleanup",
         "Summary", "Offboarding / leftover cleanup after migrating off Cylance or Webroot (OpenText CEP). Uninstall + residual sweep. Dry-run first; elevated delete. Prefer PowerShell/SYSTEM.",
         "DocsUrl", "https://github.com/monobrau/windows-av-cleanup",
@@ -1056,9 +1059,9 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Flags", "RunOnly BackstageOnly AdReview",
         "Note", "Paste into an elevated PowerShell window on this PC, not a client session. Enroll the host in RemoteOps first. Prompts for DOMAIN\user. Writes CSVs and Summary.txt under Documents\ADReview."
     ),
-    ; --- Client-specific campaigns ---
+    ; --- Clients ---
     Map(
-        "Category", "Client-specific",
+        "Category", "Clients",
         "Client", "Naviant",
         "Name", "Acrobat XI removal (EOL)",
         "Summary", "Scan or uninstall Adobe Acrobat XI (11.x). Reports Foxit Reader/Editor. Skips uninstall if Foxit is missing unless Force.",
@@ -1075,7 +1078,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Scan first. Uninstall can take 10+ minutes — do not rerun or Force while it runs. Default skips hosts with no Foxit. Prefer elevated PowerShell. Log: C:\\Windows\\Temp\\AcrobatXi-uninstall.log"
     ),
     Map(
-        "Category", "Power — plugged-in sleep, hibernate, Fast Startup",
+        "Category", "Power",
         "Name", "No sleep or hibernate while plugged in",
         "Summary", "Sets the active power plan so a plugged-in PC does not sleep or hibernate on idle. Battery, display, lid, and power buttons stay as they are.",
         "Fetch", "Inline",
@@ -1088,7 +1091,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "ClipboardNote", "NOTE: Active plan only. Plugged-in sleep and hibernate idle set to Never. Battery, display, lid, and buttons are unchanged. A domain power policy can overwrite this."
     ),
     Map(
-        "Category", "Power — plugged-in sleep, hibernate, Fast Startup",
+        "Category", "Power",
         "Name", "Turn Fast Startup off",
         "Summary", "Sets HiberbootEnabled to 0 so shutdown does a full shutdown. Does not turn hibernate off and does not remove the hibernation file.",
         "Fetch", "Inline",
@@ -1104,6 +1107,7 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
 
 gToolByNode := Map()   ; TreeView item id -> Tools index (1-based)
 gLastToolIndex := 1     ; last real tool selection (survives category collapse)
+gTreeFilling := false   ; ignore tree selection events while the filter rebuilds it
 gFlowKeys := []         ; control stack order for ReflowGui
 gPupFamilySource := ""  ; last ProductList loaded into the PUP family dropdown
 
@@ -1120,6 +1124,10 @@ A_TrayMenu.ClickCount := 1
 
 Hotkey(HotkeySpec, (*) => ToggleGui())
 SetTimer(() => CheckLauncherUpdate(false), -2000)
+
+#HotIf LauncherIsActive()
+^f::FocusToolFilter()
+#HotIf
 
 gGui := 0
 gCtrls := Map()
@@ -1255,6 +1263,42 @@ CheckLauncherUpdate(interactive := false) {
     }
 }
 
+LauncherIsActive() {
+    global gGui
+    try return gGui && WinActive("ahk_id " gGui.Hwnd)
+    return false
+}
+
+FocusToolFilter(*) {
+    global gCtrls
+    if gCtrls.Has("ToolFilter")
+        gCtrls["ToolFilter"].Focus()
+}
+
+OnLauncherEscape(*) {
+    global gGui, gCtrls
+    if gCtrls.Has("ToolFilter") && (Trim(gCtrls["ToolFilter"].Value) != "") {
+        gCtrls["ToolFilter"].Value := ""
+        ApplyToolFilter()
+        return
+    }
+    gGui.Hide()
+}
+
+ApplyToolFilter(*) {
+    global gCtrls
+    edit := gCtrls["ToolFilter"]
+    hadFocus := DllCall("GetFocus", "ptr") = edit.Hwnd
+    sel := Buffer(8, 0)
+    if hadFocus
+        DllCall("SendMessage", "ptr", edit.Hwnd, "uint", 0xB0, "ptr", sel.Ptr, "ptr", sel.Ptr + 4)
+    PopulateToolTree(gCtrls["ToolTree"], Trim(edit.Value))
+    if hadFocus {
+        edit.Focus()
+        DllCall("SendMessage", "ptr", edit.Hwnd, "uint", 0xB1, "ptr", NumGet(sel, 0, "uint"), "ptr", NumGet(sel, 4, "uint"))
+    }
+}
+
 ToggleGui(*) {
     global gGui
     if gGui && WinExist("ahk_id " gGui.Hwnd) {
@@ -1269,62 +1313,136 @@ ToggleGui(*) {
     ShowGui()
 }
 
-PopulateToolTree(tv) {
-    global Tools, CategoryOrder, gToolByNode, gLastToolIndex
-    gToolByNode := Map()
-    catNodes := Map()
-    folderNodes := Map()
-    parentByName := Map()
-    helpLeaf := 0
-    firstCatNode := 0
-    ; Help is a root leaf so first open shows the intro with every category collapsed.
-    for i, t in Tools {
-        if !ToolHasFlag(t, "Help")
+ToolMatchesQuery(tool, query) {
+    if (query = "")
+        return true
+    hay := tool["Name"]
+    for key in ["Summary", "Category", "Folder", "Client", "Path", "Script"]
+        hay .= "`n" ToolGet(tool, key, "")
+    for token in StrSplit(query, " ") {
+        token := Trim(token)
+        if (token = "")
             continue
-        node := tv.Add(t["Name"], 0)
-        gToolByNode[node] := i
-        parentByName[t["Name"]] := node
-        helpLeaf := node
+        if !InStr(hay, token)
+            return false
     }
-    for cat in CategoryOrder
-        catNodes[cat] := tv.Add(cat, 0, "Bold")
+    return true
+}
 
-    for i, t in Tools {
-        if ToolHasFlag(t, "Help")
-            continue
-        cat := ToolGet(t, "Category", "Other")
-        if !catNodes.Has(cat)
-            catNodes[cat] := tv.Add(cat, 0, "Bold")
-        parent := catNodes[cat]
-        folder := ToolGet(t, "Folder", "")
-        if (folder = "")
-            folder := ToolGet(t, "Client", "")
-        if (folder != "") {
-            fk := cat "|" folder
-            if !folderNodes.Has(fk)
-                folderNodes[fk] := tv.Add(folder, parent)
-            parent := folderNodes[fk]
+PopulateToolTree(tv, query := "") {
+    global Tools, CategoryOrder, gToolByNode, gLastToolIndex, gTreeFilling, gCtrls
+    query := Trim(query)
+    filtering := query != ""
+    gTreeFilling := true
+    try {
+        tv.Opt("-Redraw")
+        tv.Delete()
+        gToolByNode := Map()
+        catNodes := Map()
+        folderNodes := Map()
+        parentByName := Map()
+        helpLeaf := 0
+        firstCatNode := 0
+        keepNode := 0
+        firstMatch := 0
+        matchCount := 0
+        ; Help is a root leaf so first open shows the intro with every category collapsed.
+        for i, t in Tools {
+            if !ToolHasFlag(t, "Help")
+                continue
+            if !ToolMatchesQuery(t, query)
+                continue
+            node := tv.Add(t["Name"], 0)
+            gToolByNode[node] := i
+            parentByName[t["Name"]] := node
+            helpLeaf := node
+            matchCount += 1
+            if (i = gLastToolIndex)
+                keepNode := node
+            if !firstMatch
+                firstMatch := node
         }
-        parentName := ToolGet(t, "Parent", "")
-        if (parentName != "" && parentByName.Has(parentName))
-            parent := parentByName[parentName]
-        node := tv.Add(t["Name"], parent)
-        gToolByNode[node] := i
-        parentByName[t["Name"]] := node
-        if !firstCatNode && catNodes.Has(cat)
-            firstCatNode := catNodes[cat]
+        if !filtering {
+            for cat in CategoryOrder
+                catNodes[cat] := tv.Add(cat, 0, "Bold")
+        }
+
+        for i, t in Tools {
+            if ToolHasFlag(t, "Help") || !ToolMatchesQuery(t, query)
+                continue
+            cat := ToolGet(t, "Category", "Other")
+            if !catNodes.Has(cat) {
+                catNodes[cat] := tv.Add(cat, 0, "Bold")
+                if filtering
+                    tv.Modify(catNodes[cat], "Expand")
+            }
+            parent := catNodes[cat]
+            folder := ToolGet(t, "Folder", "")
+            if (folder = "")
+                folder := ToolGet(t, "Client", "")
+            if (folder != "") {
+                fk := cat "|" folder
+                if !folderNodes.Has(fk)
+                    folderNodes[fk] := tv.Add(folder, parent)
+                parent := folderNodes[fk]
+            }
+            parentName := ToolGet(t, "Parent", "")
+            if (parentName != "" && parentByName.Has(parentName))
+                parent := parentByName[parentName]
+            label := t["Name"]
+            if filtering && (folder != "")
+                label := folder " — " label
+            node := tv.Add(label, parent)
+            gToolByNode[node] := i
+            parentByName[t["Name"]] := node
+            matchCount += 1
+            if (i = gLastToolIndex)
+                keepNode := node
+            if !firstMatch
+                firstMatch := node
+            if !firstCatNode && catNodes.Has(cat)
+                firstCatNode := catNodes[cat]
+        }
+        if gCtrls.Has("LblTools") {
+            if !filtering
+                gCtrls["LblTools"].Text := "Tool (expand a category)"
+            else if (matchCount = 0)
+                gCtrls["LblTools"].Text := "No matching tools"
+            else if (matchCount = 1)
+                gCtrls["LblTools"].Text := "1 matching tool"
+            else
+                gCtrls["LblTools"].Text := matchCount " matching tools"
+        }
+        ; Expand after the children exist. Expanding an empty folder does not reveal tools added later.
+        if filtering {
+            for , catNode in catNodes
+                tv.Modify(catNode, "Expand")
+            for , folderNode in folderNodes
+                tv.Modify(folderNode, "Expand")
+        }
+    } finally {
+        gTreeFilling := false
+        try tv.Opt("+Redraw")
     }
-    gLastToolIndex := 1
-    if helpLeaf
-        tv.Modify(helpLeaf, "Select Vis")
-    else if firstCatNode
-        tv.Modify(firstCatNode, "Select")
+    selectNode := keepNode
+    if !selectNode {
+        if filtering
+            selectNode := firstMatch
+        else if helpLeaf
+            selectNode := helpLeaf
+        else
+            selectNode := firstCatNode
+    }
+    if selectNode
+        tv.Modify(selectNode, "Select Vis")
 }
 
 ; Only refresh when a tool leaf is selected. Category collapse moves selection to the
 ; parent header — do not auto-select a child (that re-expands the group).
 OnToolTreeSelect(*) {
-    global gCtrls, gToolByNode, gLastToolIndex
+    global gCtrls, gToolByNode, gLastToolIndex, gTreeFilling
+    if gTreeFilling
+        return
     node := gCtrls["ToolTree"].GetSelection()
     if !(node && gToolByNode.Has(node))
         return
@@ -1348,13 +1466,16 @@ ShowGui(*) {
     ; OwnDialogs keeps the "needs company/token" box in front of this always-on-top window.
     gGui := Gui("+AlwaysOnTop -MinimizeBox +OwnDialogs", TrayLabel)
     gGui.OnEvent("Close", (*) => gGui.Hide())
-    gGui.OnEvent("Escape", (*) => gGui.Hide())
+    gGui.OnEvent("Escape", OnLauncherEscape)
     gGui.SetFont("s9", "Segoe UI")
     gGui.MarginX := 12
     gGui.MarginY := 10
 
     ; Left column: tool tree. Right column: options. Positions set in ReflowGui.
     gCtrls["LblTools"] := gGui.Add("Text", "w" UiTreeW, "Tool (expand a category)")
+    gCtrls["ToolFilter"] := gGui.Add("Edit", "w" UiTreeW " vToolFilter")
+    gCtrls["ToolFilter"].OnEvent("Change", ApplyToolFilter)
+    try DllCall("SendMessage", "ptr", gCtrls["ToolFilter"].Hwnd, "uint", 0x1501, "ptr", 1, "ptr", StrPtr("Find a tool or folder"))
     tv := gGui.Add("TreeView", "w" UiTreeW " r" UiTreeRows " vToolTree")
     tv.OnEvent("ItemSelect", OnToolTreeSelect)
     gCtrls["ToolTree"] := tv
@@ -1617,8 +1738,10 @@ ReflowGui() {
 
     ; --- Left column: label + tree sized to right column ---
     lblH := 16
+    filterH := 22
     gCtrls["LblTools"].Move(leftX, marginY, treeW, lblH)
-    treeTop := marginY + lblH + gap
+    gCtrls["ToolFilter"].Move(leftX, marginY + lblH + gap, treeW, filterH)
+    treeTop := marginY + lblH + gap + filterH + gap
     minTreeH := 280
     treeH := rightBottom - treeTop - marginBottom
     if (treeH < minTreeH)

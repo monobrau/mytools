@@ -27,4 +27,4 @@ Exit `0` means the SSBD bits are set. Exit `2` means a scan still needs the chan
 
 ## ScreenConnect
 
-See [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1). ScToolLauncher: **Untested → Speculative Store Bypass**.
+See [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1). ScToolLauncher: **Hardening → Speculative Store Bypass**.

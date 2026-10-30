@@ -17,4 +17,4 @@ A later install leaves that copy in place when the published version is unchange
 .\Start-PaleMoonPortable.ps1
 ```
 
-ScToolLauncher: **Untested → Pale Moon Portable** and **Untested → Run Pale Moon Portable**. Copy pastes a PowerShell one-liner only.
+ScToolLauncher: **This PC → Pale Moon Portable** and **This PC → Run Pale Moon Portable**. Copy pastes a PowerShell one-liner only.

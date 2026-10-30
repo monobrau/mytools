@@ -23,6 +23,6 @@ log: `%SystemRoot%\Temp\AcrobatXi-uninstall.log`.
 ## ScreenConnect
 
 See [ScreenConnect-Commands.ps1](ScreenConnect-Commands.ps1). Or use ScToolLauncher
-(**Client-specific** → client → Acrobat XI removal). Prefer elevated / Backstage.
+(**Clients** → client → Acrobat XI removal). Prefer elevated / Backstage.
 Commands uninstall timeout is 20 minutes. Reload the launcher after pull so
 snippets pick up `1.0.1`.

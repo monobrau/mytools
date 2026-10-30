@@ -13,14 +13,14 @@ Copies a ready-to-paste Commands `#!ps` (or PowerShell one-liner) bootstrap onto
 - Layout: **two columns** — tool tree on the left, mode/options/actions on the right (fits shorter screens)
 - Formats: Commands tab `#!ps` (default) or PowerShell one-liner
 - Modes/options depend on the tool (Scan, Update/Remediate/Delete, Force, etc.)
-- Tool list is a **TreeView** grouped by category, with subfolders (Webroot, Huntress, Automate, HP, Dell, …)
+- Tool list is a **TreeView** grouped by category, with subfolders (Webroot, Huntress, Automate, HP, Dell, …). The Find box above it matches name, client, folder, and category. Ctrl+F focuses it. Escape clears it.
 - Each selection shows a short **About** blurb and **Open docs in browser** (GitHub README / folder)
 
 ## Catalog (GUI groups)
 
 Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Huntress, ConnectSecure, Automate, HP, Dell, Windows Update). Labels list what is under each group:
 
-### Software updates — vuln catalog, M365, .NET, HPSA, Teams
+### Updates
 
 | Tool | Source |
 | --- | --- |
@@ -39,7 +39,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | Windows Update → feature | mytools `WindowsUpdate` — pre-check + feature/enablement. 4h timeout. Default no reboot. Servers skipped unless confirmed |
 | Windows Update → BIOS / firmware | mytools `WindowsUpdate` — BIOS, UEFI, and system firmware only. Other drivers stay. Default no reboot. Servers skipped unless confirmed |
 
-### ScreenConnect — rogue IDs, GPO/MSI finder, temp cleanup
+### ScreenConnect
 
 | Tool | Repo |
 | --- | --- |
@@ -48,7 +48,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | GPO / MSI finder | [screenconnect-gpo-msi-finder](https://github.com/monobrau/screenconnect-gpo-msi-finder) |
 | Temp file cleanup | [screenconnect-temp-cleanup](https://github.com/monobrau/screenconnect-temp-cleanup) **v1.7.1** — CVE-2026-84869 advisory is report-only; in-use/installed clients are never deleted |
 
-### OEM cleanup — HP Touchpoint, HP bloat, Dell SARemediation
+### OEM
 
 | Tool | Repo |
 | --- | --- |
@@ -57,19 +57,27 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | Dell → SARemediation Backup (CW/SC) | [dell-saremediation-cleanup](https://github.com/monobrau/dell-saremediation-cleanup) **v1.4.4** — EnumerateFiles + skip VersionInfo-identified non-CW PEs; 60 min timeout; reload AHK for `?v=1.4.4` |
 | Dell → TechHub | mytools `DellTechHubCleanup` — scan/remove TechHub, DTP, and SupportAssist (S1 false positive on `techhub.dll`). Dell Update stays |
 
-AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
-
-### AV — Defender repair, Cylance/Webroot, McAfee remnants
+### Antivirus
 
 | Tool | Repo |
 | --- | --- |
 | Windows Defender repair | mytools `WindowsDefenderRepair` — PowerShell only. Scan: services + RTP + tamper. Apply: full RTP repair (services + policy + PassiveMode + preferences). Optional nuclear: `MpCmdRun -ResetPlatform` |
 | Webroot → fleet status | mytools `Get-WebrootFleetStatus.ps1` — DC/RSAT: AD computer list + C$ check for WRSA / WRData / GPO log. CSV in Temp |
 | McAfee remnant cleanup | mytools — AppX + `Program Files\McAfee` leftovers |
+| Webroot → uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT Immediate Task plus leftover sweep |
+| Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration |
 
 AV passwords/keys are only embedded in the clipboard snippet if you type them — nothing is stored in the script.
 
-### Agents — SentinelOne, ConnectSecure, Huntress, Automate
+### Hardening
+
+| Tool | Source |
+| --- | --- |
+| WinVerifyTrust padding check | mytools `WinVerifyTrustPadding` — CVE-2013-3900 registry check. Apply writes both views. Does not reboot |
+| Speculative Store Bypass | mytools `SpeculativeStoreBypass` — CVE-2018-3639 SSBD registry bits. Does not install Windows updates, firmware, or reboot |
+| Disable PowerShell 2.0 | mytools `PowerShellV2Disable` — DISM disable of V2 + V2Root. Apply only. Does not reboot |
+
+### Agents
 
 | Tool | Source |
 | --- | --- |
@@ -85,7 +93,7 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 
 Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, SentinelOne tokens and uninstall passphrases, Automate installer tokens, and the RemoteOps enroll token stay GUI-only. The RemoteOps portal URL is `[RemoteOps] Portal=` in `local-defaults.ini`. Do not paste live tokens into tickets or git.
 
-### IR / forensics — event logs, Sysinternals, ADWCleaner, PUP remnants
+### Forensics
 
 | Tool | Repo |
 | --- | --- |
@@ -97,7 +105,7 @@ Huntress account key is built into the launcher and `HuntressInstall/ScreenConne
 
 Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypass` plus `Invoke-RestMethod -OutFile` then `&` run. ADWCleaner downloads the vendor EXE and runs `Start-Process -Wait`. Prefer elevated PowerShell.
 
-### M365 / Exchange — admin PC (Inky rules, vendor apps)
+### Microsoft 365
 
 | Tool | Source |
 | --- | --- |
@@ -105,28 +113,30 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | INKY / usecure / Skout enterprise apps | mytools `EntraVendorAppRemoval` — PowerShell one-liner only, pasted into Backstage on an admin PC. Scan lists matches. Apply opens the picker. App ids differ per tenant |
 | Entra users, service accounts, BitLocker | mytools `EntraIntuneEvidence` — PowerShell one-liner only, pasted into Backstage on an admin PC. One run writes the authorized-user list, likely service accounts, and BitLocker per workstation to OneDrive |
 
+### This PC
+
+Tools pasted into Backstage or a local window on this computer, not a client session.
+
+| Tool | Source |
+| --- | --- |
+| Pale Moon Portable | mytools `PaleMoonPortable` — Backstage PowerShell on this PC only. No Commands snippet. Official portable build, SHA256 from the Pale Moon download page, files in `C:\ProgramData\PaleMoonPortable` |
+| Run Pale Moon Portable | mytools `PaleMoonPortable` — launches that same folder. Does not download |
+
 ### Untested
 
 Park tools here until they have been validated on a host. Add `"Category", "Untested"` on the tool Map.
 
 | Tool | Source |
 | --- | --- |
-| Pale Moon Portable | mytools `PaleMoonPortable` — Backstage PowerShell on this PC only. No Commands snippet. Official portable build, SHA256 from the Pale Moon download page, files in `C:\ProgramData\PaleMoonPortable` |
-| Run Pale Moon Portable | mytools `PaleMoonPortable` — launches that same folder. Does not download |
 | PHP use | mytools `PhpUse` — read-only on workstations and Windows Server. Servers are not skipped. Download is pinned to commit `1c67472` and checked with SHA256 |
 | Deploy ScreenConnect client via GPO | mytools `ScreenConnectGpoDeploy` — stage the instance MSI on NETLOGON; Immediate Task installs when the client service is missing |
 | Automate GPO deploy | mytools `AutomateGpoDeploy` — bake the location MSI and create the install GPO |
-| Webroot uninstall GPO | mytools `WebrootUninstallGpo` — DC/RSAT Immediate Task plus leftover sweep |
-| Cylance / Webroot cleanup | [windows-av-cleanup](https://github.com/monobrau/windows-av-cleanup) — offboarding / remnant sweep after migration |
-| WinVerifyTrust padding check | mytools `WinVerifyTrustPadding` — CVE-2013-3900 registry check. Apply writes both views. Does not reboot |
-| Speculative Store Bypass | mytools `SpeculativeStoreBypass` — CVE-2018-3639 SSBD registry bits. Does not install Windows updates, firmware, or reboot |
-| Disable PowerShell 2.0 | mytools `PowerShellV2Disable` — DISM disable of V2 + V2Root. Apply only. Does not reboot |
 | Unquoted service paths | mytools `UnquotedServicePath` — read-only. Action needed includes the elevated `sc.exe` command that quotes the binary. Defender and Sense are left alone |
 | RemoteOps enroll (token) | Inline — one-time portal token in the GUI; paste `#!ps` on the client host |
 | RemoteOps remove | Inline — runs `remoteops-remove.ps1` from the portal, or `C:\ProgramData\RemoteOps` if the portal is down |
 | Active Directory review (over tunnel) | mytools `ActiveDirectoryReview` — elevated PowerShell on this PC; Peer IP in the GUI; CSVs and `Summary.txt` under `Documents\ADReview` |
 
-### Client-specific
+### Clients
 
 Grouped by client name. Campaign tools that are not meant for general use.
 

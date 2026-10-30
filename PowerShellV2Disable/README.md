@@ -18,4 +18,4 @@ Exit `0` means the features are disabled or not present. Exit `1` means the scri
 
 ## ScreenConnect
 
-See [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1). ScToolLauncher: **Untested → Disable PowerShell 2.0**.
+See [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1). ScToolLauncher: **Hardening → Disable PowerShell 2.0**.

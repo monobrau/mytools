@@ -28,4 +28,4 @@ Exit `0` means the values are set. Exit `2` means a scan still needs the change.
 
 ## ScreenConnect
 
-See [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1). ScToolLauncher: **Untested → WinVerifyTrust padding check**.
+See [`ScreenConnect-Commands.ps1`](ScreenConnect-Commands.ps1). ScToolLauncher: **Hardening → WinVerifyTrust padding check**.
