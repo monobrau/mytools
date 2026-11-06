@@ -37,7 +37,8 @@ Scan and Apply always run a pre-check:
   the Safe OS phase (`0x80070005`) and roll the upgrade back. Uninstall it
   normally (SentinelOne console, or Programs and Features with the site
   passphrase), reboot, rerun, and reinstall it after the upgrade. `-Force`
-  does not bypass this gate.
+  does not bypass this gate; `-AllowSentinelOne` does, deliberately, and
+  prints a warning that the rollback risk remains.
 
 Apply stops on Fail unless `-Force`. Critical disk (under 5 GB quality / 10 GB
 feature) always stops.

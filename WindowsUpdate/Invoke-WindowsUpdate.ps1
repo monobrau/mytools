@@ -55,6 +55,12 @@
     Run on Windows Server and domain controllers. Without this switch the
     script exits before it changes services or searches for updates.
 
+.PARAMETER AllowSentinelOne
+    Feature only. Continue the ISO upgrade even though SentinelOne is
+    installed. Without this switch a feature upgrade stops when
+    SentinelOne is detected, because its protected files can fail the
+    Safe OS phase (0x80070005) and roll the upgrade back.
+
 .PARAMETER NoExit
     Keep the PowerShell host open (Backstage). Does not call exit.
 
@@ -70,6 +76,7 @@ param(
     [switch]$Reboot,
     [switch]$Force,
     [switch]$AllowServer,
+    [switch]$AllowSentinelOne,
     [switch]$NoExit,
     [switch]$Exit
 )
@@ -423,10 +430,14 @@ function Invoke-FeatureIsoUpgrade {
     # in Safe OS while SentinelOne protects its files.
     $s1 = Get-SentinelOneState
     if ($s1.Installed) {
-        Write-Line ("Result: SentinelOne is installed ({0}). Not starting the upgrade." -f $s1.Detail)
-        Write-Line 'Uninstall it with the normal methods first: SentinelOne console (select the device, Actions, Uninstall), or Programs and Features with the site passphrase when prompted. Reboot, then run -Feature again. Reinstall SentinelOne after the upgrade.'
-        $script:ExitCode = 4
-        return
+        if ($AllowSentinelOne) {
+            Write-Line ("Warning: SentinelOne is installed ({0}). -AllowSentinelOne was set, so the upgrade continues. It can still roll back in the Safe OS phase on a SentinelOne-protected file (0x80070005)." -f $s1.Detail)
+        } else {
+            Write-Line ("Result: SentinelOne is installed ({0}). Not starting the upgrade." -f $s1.Detail)
+            Write-Line 'Uninstall it with the normal methods first: SentinelOne console (select the device, Actions, Uninstall), or Programs and Features with the site passphrase when prompted. Reboot, then run -Feature again. Reinstall SentinelOne after the upgrade. Or rerun with -AllowSentinelOne to force the upgrade anyway.'
+            $script:ExitCode = 4
+            return
+        }
     }
 
     $dir = Join-Path $env:SystemDrive 'Temp\WindowsFeatureISO'
