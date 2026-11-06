@@ -2,6 +2,8 @@
 
 Public collection of work tools and scripts.
 
+Double-click [ScToolLauncher.cmd](ScToolLauncher.cmd) in this folder to open the tool launcher (requires [AutoHotkey v2](https://www.autohotkey.com/)).
+
 ## Tools
 
 | Tool | Description |

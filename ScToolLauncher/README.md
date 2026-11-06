@@ -5,7 +5,7 @@ AutoHotkey v2 hotkey picker for **any** ScreenConnect-ready tool shortcut — re
 Copies a ready-to-paste Commands `#!ps` (or PowerShell one-liner) bootstrap onto the clipboard. The remote host downloads/runs the script from GitHub.
 
 - Hotkey: **Ctrl+Shift+Alt+S** (edit `HotkeySpec` / `HotkeyLabel` at the top of the script; Win+Alt combos are often reserved by Windows/OEM)
-- Tray: default AutoHotkey v2 icon and menu (includes **Reload Script**); plus **Open SC Tool Launcher**
+- Tray: clipboard icon from `ScToolLauncher.ico` (taskbar and window use it too). Menu still includes **Reload Script**, plus **Open SC Tool Launcher**
 - After editing `ScToolLauncher.ahk`, use GUI **Reload**, tray **Reload Script**, or exit and re-run. The hotkey alone does **not** reload the catalog from disk.
 - On startup, if this checkout is on `main` and GitHub is ahead, a prompt offers `git pull --ff-only` and a restart. Tray **Update launcher** runs the same check. Offline, a missing git repo, or local commits that are not on GitHub are left alone.
 - Starts in the tray (window stays hidden until **Open** or the hotkey)
@@ -163,11 +163,13 @@ Upstream script still supports full uninstall switches for rare manual use; they
 
 ## Run
 
+From the repo root, double-click [ScToolLauncher.cmd](../ScToolLauncher.cmd). That starts this script with AutoHotkey v2 and leaves the window in the tray.
+
 ```text
 ScToolLauncher.ahk
 ```
 
-Double-click the script, or create a shortcut / Startup entry.
+Double-click the script itself if you are already in this folder.
 
 ## Usage
 

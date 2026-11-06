@@ -1112,11 +1112,12 @@ gFlowKeys := []         ; control stack order for ReflowGui
 gPupFamilySource := ""  ; last ProductList loaded into the PUP family dropdown
 
 ; --- tray / identity ---
-; Keep the default AHK v2 tray icon + menu (includes Reload Script / Edit / Exit).
-; Only add an Open item; do not Delete() the stock menu or override the icon.
+; Keep the AHK v2 tray menu (includes Reload Script / Edit / Exit).
+; Do not Delete() the stock menu. The icon is ScToolLauncher.ico beside this script.
 DetectHiddenWindows(true)
 try WinSetTitle(TrayLabel, "ahk_class AutoHotkey ahk_pid " ProcessExist())
 A_IconTip := TrayLabel
+ApplyLauncherIcon(WinExist("ahk_class AutoHotkey ahk_pid " ProcessExist()))
 A_TrayMenu.Insert("1&", "Open " AppName, (*) => ShowGui())
 A_TrayMenu.Insert("2&", "Update launcher", (*) => CheckLauncherUpdate(true))
 A_TrayMenu.Default := "Open " AppName
@@ -1136,6 +1137,28 @@ for arg in A_Args {
         ShowGui()
         break
     }
+}
+
+; Tray, taskbar, and window icon. Missing file keeps the AutoHotkey icon.
+ApplyLauncherIcon(hwnd := 0) {
+    static hBig := 0, hSmall := 0, loaded := false
+    iconPath := A_ScriptDir "\ScToolLauncher.ico"
+    if !FileExist(iconPath)
+        return
+    if !loaded {
+        try TraySetIcon(iconPath)
+        ; IMAGE_ICON = 1, LR_LOADFROMFILE = 0x10. Handles live until the process exits.
+        hBig := DllCall("LoadImage", "Ptr", 0, "Str", iconPath, "UInt", 1, "Int", 32, "Int", 32, "UInt", 0x10, "Ptr")
+        hSmall := DllCall("LoadImage", "Ptr", 0, "Str", iconPath, "UInt", 1, "Int", 16, "Int", 16, "UInt", 0x10, "Ptr")
+        loaded := true
+    }
+    if !hwnd
+        return
+    ; WM_SETICON goes to the window itself. AHK SendMessage's 4th arg is a control name.
+    if hBig
+        DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x80, "Ptr", 1, "Ptr", hBig)
+    if hSmall
+        DllCall("SendMessage", "Ptr", hwnd, "UInt", 0x80, "Ptr", 0, "Ptr", hSmall)
 }
 
 ; Restart this script in-place (avoids a second tray icon from a naive Reload + leftover instance).
@@ -1465,6 +1488,7 @@ ShowGui(*) {
 
     ; OwnDialogs keeps the "needs company/token" box in front of this always-on-top window.
     gGui := Gui("+AlwaysOnTop -MinimizeBox +OwnDialogs", TrayLabel)
+    ApplyLauncherIcon(gGui.Hwnd)
     gGui.OnEvent("Close", (*) => gGui.Hide())
     gGui.OnEvent("Escape", OnLauncherEscape)
     gGui.SetFont("s9", "Segoe UI")
