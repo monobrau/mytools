@@ -314,7 +314,7 @@ Mozilla Firefox
         "Category", "Updates",
         "Folder", "Windows Update",
         "Name", "Windows Update (feature)",
-        "Summary", "Pre-check then scan/install feature updates / enablement packages. Hours. Default does not reboot.",
+        "Summary", "Pre-check, then an in-place Windows 11 ISO upgrade. Fido first; fallback ISO if Fido fails. Hours. Default does not reboot.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/WindowsUpdate",
         "Fetch", "Contents",
         "Path", "WindowsUpdate",
@@ -323,9 +323,9 @@ Mozilla Firefox
         "UaVer", "1.1.2",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 14400000,
-        "DefaultArgs", "-Feature",
+        "DefaultArgs", "-Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows.iso'",
         "Flags", "CheckOnly Force AutoReboot AllowServer NoExit",
-        "Note", "Backstage is fine. No desktop login. Driver updates install first. Auto reboot restarts only when Windows Update requires it; leave it off to stop instead. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Do not start a second run while one is in progress. 4-hour timeout."
+        "Note", "Keeps files, apps, and settings. Tries Microsoft through Fido, then the fallback ISO if Fido returns nothing. A complete ISO already in C:\Temp\WindowsFeatureISO is used as-is. Backstage launches setup as a SYSTEM scheduled task. Driver updates install first. Leave Auto reboot off to stage and stop. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Do not start a second run while one is in progress. 4-hour timeout."
     ),
     Map(
         "Category", "Updates",

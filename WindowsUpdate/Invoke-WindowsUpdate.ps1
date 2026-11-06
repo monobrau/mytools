@@ -62,6 +62,12 @@
     C:\Temp\WindowsFeatureISO is still used first. Use this where
     Microsoft's download service refuses the PC's network.
 
+.PARAMETER IsoFallbackUrl
+    Feature only. Try Fido first. If Fido cannot be downloaded or returns
+    no URL, download the ISO from this URL instead. The launcher passes
+    this so a banned Microsoft download still has media. -IsoUrl skips
+    Fido and takes priority over this parameter.
+
 .PARAMETER AllowSentinelOne
     Feature only. Continue the ISO upgrade even though SentinelOne is
     installed. Without this switch a feature upgrade stops when
@@ -84,6 +90,7 @@ param(
     [switch]$Force,
     [switch]$AllowServer,
     [string]$IsoUrl,
+    [string]$IsoFallbackUrl,
     [switch]$AllowSentinelOne,
     [switch]$NoExit,
     [switch]$Exit
@@ -515,11 +522,20 @@ function Invoke-FeatureIsoUpgrade {
     # A truncated ISO still passes a size floor and then fails as
     # "corrupted and unreadable" when its files are copied. When the
     # caller supplied the source URL, only trust the cache if its size
-    # matches what the server says the file is.
-    if ($cachedIso -and -not [string]::IsNullOrWhiteSpace($IsoUrl)) {
+    # matches what the server says the file is. A fallback URL is checked
+    # only when the cached file name is that fallback file, so a complete
+    # ISO from Fido is not thrown out for being a different size.
+    $sizeCheckUrl = $null
+    if (-not [string]::IsNullOrWhiteSpace($IsoUrl)) {
+        $sizeCheckUrl = $IsoUrl.Trim()
+    } elseif ($cachedIso -and -not [string]::IsNullOrWhiteSpace($IsoFallbackUrl)) {
+        $fallbackName = [IO.Path]::GetFileName(($IsoFallbackUrl.Trim() -split '\?')[0])
+        if ($fallbackName -and ($cachedIso.Name -eq $fallbackName)) { $sizeCheckUrl = $IsoFallbackUrl.Trim() }
+    }
+    if ($cachedIso -and $sizeCheckUrl) {
         $remoteSize = $null
         try {
-            $head = @(& curl.exe -sI -L $IsoUrl 2>$null)
+            $head = @(& curl.exe -sI -L $sizeCheckUrl 2>$null)
             $lenLine = $head | Where-Object { $_ -match '^Content-Length:' } | Select-Object -Last 1
             if ($lenLine -match '(\d+)\s*$') { $remoteSize = [int64]$Matches[1] }
         } catch { }
@@ -539,33 +555,41 @@ function Invoke-FeatureIsoUpgrade {
             Write-Line ("ISO source: {0}" -f $url)
         } else {
             $fido = $null
-            try { $fido = Get-LatestFidoScript -Dir $dir } catch {
-                Write-Line ("Result: Could not download Fido: {0}" -f $_.Exception.Message)
-                $script:ExitCode = 2
-                return
-            }
-            # Fido's default language pick can choose English International
-            # on an en-US PC, and setup then blocks the keep-apps upgrade
-            # (0xC1900204). Ask for the language matching this PC's UI culture.
-            $fidoArgs = @('-ExecutionPolicy', 'Bypass', '-File', $fido, '-Win', 'Windows 11', '-Rel', 'Latest', '-Ed', 'Pro', '-Arch', 'x64', '-PlatformArch', 'x64', '-GetUrl')
-            if ($uiCulture -eq 'en-US') {
-                $fidoArgs += @('-Lang', '^English$')
-                Write-Line 'ISO language: English (en-US host).'
-            } elseif ($uiCulture -like 'en-*') {
-                $fidoArgs += @('-Lang', 'International')
-                Write-Line ("ISO language: English International ({0} host)." -f $uiCulture)
-            }
             $fidoOut = @()
-            # Microsoft's download protection ("Sentinel marked this
-            # request as rejected") trips on repeated Fido calls from one
-            # address and takes a while to clear, so retry slowly.
-            for ($attempt = 1; $attempt -le 3 -and -not $url; $attempt++) {
-                $fidoOut = @(& powershell.exe @fidoArgs 2>&1)
-                $url = $fidoOut | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
-                if (-not $url -and $attempt -lt 3) {
-                    Write-Line 'Fido returned no URL. Waiting 60 seconds before trying again.'
-                    Start-Sleep -Seconds 60
+            try { $fido = Get-LatestFidoScript -Dir $dir } catch {
+                Write-Line ("Could not download Fido: {0}" -f $_.Exception.Message)
+            }
+            if ($fido) {
+                # Fido's default language pick can choose English International
+                # on an en-US PC, and setup then blocks the keep-apps upgrade
+                # (0xC1900204). Ask for the language matching this PC's UI culture.
+                $fidoArgs = @('-ExecutionPolicy', 'Bypass', '-File', $fido, '-Win', 'Windows 11', '-Rel', 'Latest', '-Ed', 'Pro', '-Arch', 'x64', '-PlatformArch', 'x64', '-GetUrl')
+                if ($uiCulture -eq 'en-US') {
+                    $fidoArgs += @('-Lang', '^English$')
+                    Write-Line 'ISO language: English (en-US host).'
+                } elseif ($uiCulture -like 'en-*') {
+                    $fidoArgs += @('-Lang', 'International')
+                    Write-Line ("ISO language: English International ({0} host)." -f $uiCulture)
                 }
+                # Microsoft's download protection ("Sentinel marked this
+                # request as rejected") trips on repeated Fido calls from one
+                # address and takes a while to clear, so retry slowly. A
+                # fallback URL means the first miss is enough: do not sit
+                # through the retries before using media that is already known.
+                $maxAttempts = 3
+                if (-not [string]::IsNullOrWhiteSpace($IsoFallbackUrl)) { $maxAttempts = 1 }
+                for ($attempt = 1; $attempt -le $maxAttempts -and -not $url; $attempt++) {
+                    $fidoOut = @(& powershell.exe @fidoArgs 2>&1)
+                    $url = $fidoOut | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
+                    if (-not $url -and $attempt -lt $maxAttempts) {
+                        Write-Line 'Fido returned no URL. Waiting 60 seconds before trying again.'
+                        Start-Sleep -Seconds 60
+                    }
+                }
+            }
+            if (-not $url -and -not [string]::IsNullOrWhiteSpace($IsoFallbackUrl)) {
+                $url = $IsoFallbackUrl.Trim()
+                Write-Line ("Fido did not return an ISO URL. Using fallback: {0}" -f $url)
             }
             if (-not $url) {
                 Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
@@ -574,7 +598,7 @@ function Invoke-FeatureIsoUpgrade {
                     if ($t.Length -gt 200) { $t = $t.Substring(0, 200) }
                     Write-Line ("Fido output: {0}" -f $t)
                 }
-                Write-Line ("Workaround: copy a Windows 11 ISO into {0} and rerun (a cached ISO is used without calling Fido), or pass -IsoUrl." -f $dir)
+                Write-Line ("Workaround: copy a Windows 11 ISO into {0} and rerun (a cached ISO is used without calling Fido), or pass -IsoUrl or -IsoFallbackUrl." -f $dir)
                 $script:ExitCode = 2
                 return
             }

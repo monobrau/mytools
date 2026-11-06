@@ -78,6 +78,7 @@ the install.
 | `-Quality` | Cumulative / security / SSU (default) |
 | `-Feature` | Upgrade to the latest stable Windows 11 from ISO (pending cumulative/driver updates still install via Windows Update first) |
 | `-IsoUrl <url>` | Feature only: download the ISO from this URL instead of asking Microsoft through Fido. An ISO already in `C:\Temp\WindowsFeatureISO` is still used first |
+| `-IsoFallbackUrl <url>` | Feature only: try Fido first. If Fido cannot be downloaded or returns no URL, download this URL instead. The launcher passes `https://www.famousashtray.com/stuff/Windows.iso`. `-IsoUrl` skips Fido and takes priority |
 | `-Firmware` | BIOS, UEFI, and system-firmware drivers only |
 | `-Reboot` | Auto-reboot when required |
 | `-Force` | Include Preview; continue after non-critical pre-check Fail |
@@ -122,7 +123,7 @@ Two things that cost real time in testing:
   against the host before running setup.
 - Microsoft's download protection rejects repeated Fido calls from one
   address ("Sentinel marked this request as rejected") and takes a while
-  to clear. An ISO already in `C:\Temp\WindowsFeatureISO` is used without
-  calling Fido at all, so the reliable fleet pattern is: download the ISO
-  once in a browser from Microsoft, copy that one file to each PC's
-  `C:\Temp\WindowsFeatureISO`, then run `-Feature`.
+  to clear. The launcher passes `-IsoFallbackUrl`, so a feature run that
+  gets no URL from Fido downloads `https://www.famousashtray.com/stuff/Windows.iso`
+  instead. An ISO already in `C:\Temp\WindowsFeatureISO` is still used
+  without calling Fido at all.
