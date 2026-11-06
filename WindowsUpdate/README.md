@@ -114,4 +114,11 @@ Two things that cost real time in testing:
 - The ISO language must match the PC's UI language or setup returns
   `0xC1900204` (migration choice blocked). Fido's default pick can choose
   English International on an en-US PC, so the script requests the host's
-  language explicitly (`^English$` for en-US).
+  language explicitly (`^English$` for en-US) and checks `lang.ini`
+  against the host before running setup.
+- Microsoft's download protection rejects repeated Fido calls from one
+  address ("Sentinel marked this request as rejected") and takes a while
+  to clear. An ISO already in `C:\Temp\WindowsFeatureISO` is used without
+  calling Fido at all, so the reliable fleet pattern is: download the ISO
+  once in a browser from Microsoft, copy that one file to each PC's
+  `C:\Temp\WindowsFeatureISO`, then run `-Feature`.

@@ -7,12 +7,13 @@
     Quality and Firmware use the Windows Update Agent COM API (no
     PSWindowsUpdate module).
     Quality: cumulative / security / SSU / .NET  -  excludes Feature Update titles.
-    Feature: downloads the latest stable Windows 11 ISO from Microsoft
-    (link resolved by the latest Fido release) and runs setup.exe
-    /Auto Upgrade /Quiet /NoReboot. It does not depend on Windows Update
-    offering the version upgrade, and it stages first; -Reboot restarts
-    only after setup has staged. SentinelOne must be uninstalled before
-    a feature upgrade (see the SentinelOne pre-check).
+    Feature: uses the latest stable Windows 11 ISO from Microsoft and
+    runs setup.exe /Auto Upgrade /Quiet /NoReboot. An ISO already in
+    C:\Temp\WindowsFeatureISO is used as-is; otherwise the download link
+    is resolved by the latest Fido release. It does not depend on Windows
+    Update offering the version upgrade, and it stages first; -Reboot
+    restarts only after setup has staged. SentinelOne must be
+    uninstalled before a feature upgrade (see the SentinelOne pre-check).
     Firmware: BIOS, UEFI, and system-firmware drivers only. Other drivers stay.
 
     Always runs a pre-check (disk space, recovery partition, WU services,
@@ -444,59 +445,72 @@ function Invoke-FeatureIsoUpgrade {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
 
-    $fido = $null
-    try { $fido = Get-LatestFidoScript -Dir $dir } catch {
-        Write-Line ("Result: Could not download Fido: {0}" -f $_.Exception.Message)
-        $script:ExitCode = 2
-        return
-    }
-    # Fido's default language pick can choose English International on an
-    # en-US PC, and setup then blocks the keep-apps upgrade (0xC1900204).
-    # Ask for the language that matches this PC's UI culture.
     $uiCulture = ''
     try { $uiCulture = [System.Globalization.CultureInfo]::CurrentUICulture.Name } catch { }
     if (-not $uiCulture) {
         try { $uiCulture = (Get-WinSystemLocale -ErrorAction Stop).Name } catch { }
     }
-    $fidoArgs = @('-ExecutionPolicy', 'Bypass', '-File', $fido, '-Win', 'Windows 11', '-Rel', 'Latest', '-Ed', 'Pro', '-Arch', 'x64', '-PlatformArch', 'x64', '-GetUrl')
-    if ($uiCulture -eq 'en-US') {
-        $fidoArgs += @('-Lang', '^English$')
-        Write-Line 'ISO language: English (en-US host).'
-    } elseif ($uiCulture -like 'en-*') {
-        $fidoArgs += @('-Lang', 'International')
-        Write-Line ("ISO language: English International ({0} host)." -f $uiCulture)
-    }
-    $url = $null
-    $fidoOut = @()
-    # Microsoft's download protection ("Sentinel marked this request as
-    # rejected") trips on repeated Fido calls from one address and takes
-    # a while to clear, so retry slowly instead of hammering it.
-    for ($attempt = 1; $attempt -le 3 -and -not $url; $attempt++) {
-        $fidoOut = @(& powershell.exe @fidoArgs 2>&1)
-        $url = $fidoOut | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
-        if (-not $url -and $attempt -lt 3) {
-            Write-Line 'Fido returned no URL. Waiting 60 seconds before trying again.'
-            Start-Sleep -Seconds 60
-        }
-    }
-    if (-not $url) {
-        Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
-        $fidoOut | Select-Object -Last 5 | ForEach-Object {
-            $t = [string]$_
-            if ($t.Length -gt 200) { $t = $t.Substring(0, 200) }
-            Write-Line ("Fido output: {0}" -f $t)
-        }
-        $script:ExitCode = 2
-        return
-    }
-    $isoName = [IO.Path]::GetFileName(($url -split '\?')[0])
-    if ([string]::IsNullOrWhiteSpace($isoName)) { $isoName = 'Win11_Latest_x64.iso' }
-    $iso = Join-Path $dir $isoName
-    Write-Line ("ISO: {0}" -f $iso)
 
-    if ((Test-Path -LiteralPath $iso) -and (Get-Item -LiteralPath $iso).Length -gt 5GB) {
-        Write-Line 'ISO already downloaded. Reusing it.'
+    # An ISO already in the cache folder wins, and Fido is not called at
+    # all. Microsoft's download protection rejects repeated Fido calls
+    # from one address, so seeding this folder with one browser-downloaded
+    # ISO (copied to each PC) is the reliable way to supply media.
+    $iso = $null
+    $isoName = $null
+    $cachedIso = Get-ChildItem -LiteralPath $dir -Filter '*.iso' -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Length -gt 5GB } |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if ($cachedIso) {
+        $iso = $cachedIso.FullName
+        $isoName = $cachedIso.Name
+        Write-Line ("Using ISO already on this PC: {0}. Not calling Fido." -f $iso)
     } else {
+        $fido = $null
+        try { $fido = Get-LatestFidoScript -Dir $dir } catch {
+            Write-Line ("Result: Could not download Fido: {0}" -f $_.Exception.Message)
+            $script:ExitCode = 2
+            return
+        }
+        # Fido's default language pick can choose English International on
+        # an en-US PC, and setup then blocks the keep-apps upgrade
+        # (0xC1900204). Ask for the language matching this PC's UI culture.
+        $fidoArgs = @('-ExecutionPolicy', 'Bypass', '-File', $fido, '-Win', 'Windows 11', '-Rel', 'Latest', '-Ed', 'Pro', '-Arch', 'x64', '-PlatformArch', 'x64', '-GetUrl')
+        if ($uiCulture -eq 'en-US') {
+            $fidoArgs += @('-Lang', '^English$')
+            Write-Line 'ISO language: English (en-US host).'
+        } elseif ($uiCulture -like 'en-*') {
+            $fidoArgs += @('-Lang', 'International')
+            Write-Line ("ISO language: English International ({0} host)." -f $uiCulture)
+        }
+        $url = $null
+        $fidoOut = @()
+        # Microsoft's download protection ("Sentinel marked this request
+        # as rejected") trips on repeated Fido calls from one address and
+        # takes a while to clear, so retry slowly instead of hammering it.
+        for ($attempt = 1; $attempt -le 3 -and -not $url; $attempt++) {
+            $fidoOut = @(& powershell.exe @fidoArgs 2>&1)
+            $url = $fidoOut | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
+            if (-not $url -and $attempt -lt 3) {
+                Write-Line 'Fido returned no URL. Waiting 60 seconds before trying again.'
+                Start-Sleep -Seconds 60
+            }
+        }
+        if (-not $url) {
+            Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
+            $fidoOut | Select-Object -Last 5 | ForEach-Object {
+                $t = [string]$_
+                if ($t.Length -gt 200) { $t = $t.Substring(0, 200) }
+                Write-Line ("Fido output: {0}" -f $t)
+            }
+            Write-Line ("Workaround: download the Windows 11 ISO once in a browser from microsoft.com/software-download/windows11, copy it into {0}, and rerun. A cached ISO is used without calling Fido." -f $dir)
+            $script:ExitCode = 2
+            return
+        }
+        $isoName = [IO.Path]::GetFileName(($url -split '\?')[0])
+        if ([string]::IsNullOrWhiteSpace($isoName)) { $isoName = 'Win11_Latest_x64.iso' }
+        $iso = Join-Path $dir $isoName
+        Write-Line ("ISO: {0}" -f $iso)
         Write-Line 'This call prints nothing new until the ISO download finishes.'
         $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
         if ($curl) {
@@ -549,6 +563,28 @@ function Invoke-FeatureIsoUpgrade {
             return
         } finally {
             if ($mounted) { Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue | Out-Null }
+        }
+    }
+
+    # A language mismatch blocks the keep-apps upgrade (0xC1900204)
+    # before setup does any work. Catch it here, where it is cheap.
+    $langIni = Join-Path $media 'Sources\lang.ini'
+    if ($uiCulture -and (Test-Path -LiteralPath $langIni)) {
+        $mediaLang = $null
+        $inLangSection = $false
+        foreach ($line in @(Get-Content -LiteralPath $langIni -ErrorAction SilentlyContinue)) {
+            if ($line -match '^\[Available UI Languages\]') { $inLangSection = $true; continue }
+            if ($inLangSection -and $line -match '^\[') { break }
+            if ($inLangSection -and $line -match '^\s*([a-z]{2}-[a-z]{2})\s*=') { $mediaLang = $Matches[1]; break }
+        }
+        if ($mediaLang) {
+            Write-Line ("ISO media language: {0} (host {1})." -f $mediaLang, $uiCulture)
+            if ($mediaLang -ne $uiCulture.ToLower()) {
+                Write-Line ("Result: ISO language {0} does not match this PC's {1}. Setup would block the upgrade (0xC1900204). Not running setup." -f $mediaLang, $uiCulture)
+                Write-Line ("Replace the ISO in {0} with one in {1}, delete the '{2}' folder so the media is copied again, and rerun." -f $dir, $uiCulture, $media)
+                $script:ExitCode = 2
+                return
+            }
         }
     }
 
