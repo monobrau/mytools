@@ -512,6 +512,22 @@ function Invoke-FeatureIsoUpgrade {
         Where-Object { $_.Length -gt 5GB } |
         Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
+    # A truncated ISO still passes a size floor and then fails as
+    # "corrupted and unreadable" when its files are copied. When the
+    # caller supplied the source URL, only trust the cache if its size
+    # matches what the server says the file is.
+    if ($cachedIso -and -not [string]::IsNullOrWhiteSpace($IsoUrl)) {
+        $remoteSize = $null
+        try {
+            $head = @(& curl.exe -sI -L $IsoUrl 2>$null)
+            $lenLine = $head | Where-Object { $_ -match '^Content-Length:' } | Select-Object -Last 1
+            if ($lenLine -match '(\d+)\s*$') { $remoteSize = [int64]$Matches[1] }
+        } catch { }
+        if ($remoteSize -and $remoteSize -ne $cachedIso.Length) {
+            Write-Line ("Cached ISO is {0:N0} bytes but the source is {1:N0} bytes. It is incomplete and will be resumed, not reused." -f $cachedIso.Length, $remoteSize)
+            $cachedIso = $null
+        }
+    }
     if ($cachedIso) {
         $iso = $cachedIso.FullName
         $isoName = $cachedIso.Name
@@ -601,9 +617,18 @@ function Invoke-FeatureIsoUpgrade {
     # child processes cannot load from the mounted drive.
     $media = Join-Path $dir 'media'
     $setupPath = Join-Path $media 'setup.exe'
-    if (Test-Path -LiteralPath $setupPath) {
+    $mediaComplete = (Test-Path -LiteralPath $setupPath) -and
+        ((Test-Path -LiteralPath (Join-Path $media 'Sources\install.wim')) -or
+         (Test-Path -LiteralPath (Join-Path $media 'Sources\install.esd')))
+    if ($mediaComplete) {
         Write-Line 'ISO media already copied locally. Reusing it.'
     } else {
+        # A copy interrupted partway leaves a setup.exe behind and looks
+        # reusable. Clear any partial media so setup gets a full set.
+        if (Test-Path -LiteralPath $media) {
+            Write-Line 'Removing incomplete local media copy.'
+            Remove-Item -LiteralPath $media -Recurse -Force -ErrorAction SilentlyContinue
+        }
         $mounted = $false
         try {
             $img = Mount-DiskImage -ImagePath $iso -PassThru -ErrorAction Stop
