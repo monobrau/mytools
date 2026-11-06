@@ -5,9 +5,10 @@ latest stable Windows 11 from ISO, or install **BIOS / system firmware**
 only. Quality and firmware use the Windows Update Agent COM API (no extra
 module). A feature upgrade downloads the latest stable Windows 11 ISO from
 Microsoft (the download link is resolved by the latest Fido release),
-caches it under `C:\Temp\WindowsFeatureISO`, and runs
-`setup.exe /Auto Upgrade /Quiet /NoReboot`. It does not wait for Windows
-Update to offer the version upgrade.
+caches it under `C:\Temp\WindowsFeatureISO`, copies the media to a local
+folder (setup launched from a mounted ISO can exit `0x8007007F`), and runs
+`setup.exe /Auto Upgrade /Quiet /NoReboot` from there. It does not wait for
+Windows Update to offer the version upgrade.
 
 Firmware mode searches driver updates and keeps titles or driver classes that
 are BIOS, UEFI, or system firmware. Other drivers are listed and skipped.

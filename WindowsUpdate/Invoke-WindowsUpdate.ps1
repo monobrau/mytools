@@ -472,32 +472,50 @@ function Invoke-FeatureIsoUpgrade {
     }
     Write-Line ("ISO size: {0:N0} bytes" -f (Get-Item -LiteralPath $iso).Length)
 
-    $setupExit = $null
-    $mounted = $false
-    try {
-        $img = Mount-DiskImage -ImagePath $iso -PassThru -ErrorAction Stop
-        $mounted = $true
-        $drive = ($img | Get-Volume).DriveLetter
-        if (-not $drive) { throw 'Mounted ISO has no drive letter.' }
-
-        if ($isoName -match '_(\d{5})_') {
-            $isoBuild = [int]$Matches[1]
-            if ($script:OsBuild -ge $isoBuild) {
-                Write-Line ("Result: This PC is on build {0}; the ISO is build {1}. Nothing to install." -f $script:OsBuild, $isoBuild)
-                $script:ExitCode = 0
-                return
-            }
-            Write-Line ("Upgrading build {0} to build {1} from ISO." -f $script:OsBuild, $isoBuild)
+    if ($isoName -match '_(\d{5})_') {
+        $isoBuild = [int]$Matches[1]
+        if ($script:OsBuild -ge $isoBuild) {
+            Write-Line ("Result: This PC is on build {0}; the ISO is build {1}. Nothing to install." -f $script:OsBuild, $isoBuild)
+            $script:ExitCode = 0
+            return
         }
+        Write-Line ("Upgrading build {0} to build {1} from ISO." -f $script:OsBuild, $isoBuild)
+    }
 
-        $setup = Start-Process -FilePath ("{0}:\setup.exe" -f $drive) -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru -ErrorAction Stop
+    # Copy the media to a local folder and run setup from there. Setup
+    # launched straight from a mounted ISO can exit 0x8007007F when its
+    # child processes cannot load from the mounted drive.
+    $media = Join-Path $dir 'media'
+    $setupPath = Join-Path $media 'setup.exe'
+    if (Test-Path -LiteralPath $setupPath) {
+        Write-Line 'ISO media already copied locally. Reusing it.'
+    } else {
+        $mounted = $false
+        try {
+            $img = Mount-DiskImage -ImagePath $iso -PassThru -ErrorAction Stop
+            $mounted = $true
+            $drive = ($img | Get-Volume).DriveLetter
+            if (-not $drive) { throw 'Mounted ISO has no drive letter.' }
+            New-Item -ItemType Directory -Force -Path $media | Out-Null
+            Write-Line 'Copying ISO media to a local folder before running setup.'
+            Copy-Item -Path ("{0}:\*" -f $drive) -Destination $media -Recurse -Force -ErrorAction Stop
+        } catch {
+            Write-Line ("Result: Could not copy ISO media locally: {0}" -f $_.Exception.Message)
+            $script:ExitCode = 2
+            return
+        } finally {
+            if ($mounted) { Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue | Out-Null }
+        }
+    }
+
+    $setupExit = $null
+    try {
+        $setup = Start-Process -FilePath $setupPath -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru -ErrorAction Stop
         $setupExit = $setup.ExitCode
     } catch {
         Write-Line ("Result: ISO setup did not start: {0}" -f $_.Exception.Message)
         $script:ExitCode = 2
         return
-    } finally {
-        if ($mounted) { Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue | Out-Null }
     }
 
     Write-Line ("Setup exit: {0} ({1})" -f $setupExit, (Format-WuHResult $setupExit))
