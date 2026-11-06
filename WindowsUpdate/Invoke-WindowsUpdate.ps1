@@ -439,9 +439,42 @@ function Invoke-FeatureIsoUpgrade {
         $script:ExitCode = 2
         return
     }
-    $url = @(& powershell -ExecutionPolicy Bypass -File $fido -Win 'Windows 11' -Rel 'Latest' -Ed 'Pro' -Arch 'x64' -PlatformArch 'x64' -GetUrl) | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
+    # Fido's default language pick can choose English International on an
+    # en-US PC, and setup then blocks the keep-apps upgrade (0xC1900204).
+    # Ask for the language that matches this PC's UI culture.
+    $uiCulture = ''
+    try { $uiCulture = [System.Globalization.CultureInfo]::CurrentUICulture.Name } catch { }
+    if (-not $uiCulture) {
+        try { $uiCulture = (Get-WinSystemLocale -ErrorAction Stop).Name } catch { }
+    }
+    $fidoArgs = @('-ExecutionPolicy', 'Bypass', '-File', $fido, '-Win', 'Windows 11', '-Rel', 'Latest', '-Ed', 'Pro', '-Arch', 'x64', '-PlatformArch', 'x64', '-GetUrl')
+    if ($uiCulture -eq 'en-US') {
+        $fidoArgs += @('-Lang', '^English$')
+        Write-Line 'ISO language: English (en-US host).'
+    } elseif ($uiCulture -like 'en-*') {
+        $fidoArgs += @('-Lang', 'International')
+        Write-Line ("ISO language: English International ({0} host)." -f $uiCulture)
+    }
+    $url = $null
+    $fidoOut = @()
+    # Microsoft's download protection ("Sentinel marked this request as
+    # rejected") trips on repeated Fido calls from one address and takes
+    # a while to clear, so retry slowly instead of hammering it.
+    for ($attempt = 1; $attempt -le 3 -and -not $url; $attempt++) {
+        $fidoOut = @(& powershell.exe @fidoArgs 2>&1)
+        $url = $fidoOut | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
+        if (-not $url -and $attempt -lt 3) {
+            Write-Line 'Fido returned no URL. Waiting 60 seconds before trying again.'
+            Start-Sleep -Seconds 60
+        }
+    }
     if (-not $url) {
         Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
+        $fidoOut | Select-Object -Last 5 | ForEach-Object {
+            $t = [string]$_
+            if ($t.Length -gt 200) { $t = $t.Substring(0, 200) }
+            Write-Line ("Fido output: {0}" -f $t)
+        }
         $script:ExitCode = 2
         return
     }
@@ -509,13 +542,73 @@ function Invoke-FeatureIsoUpgrade {
     }
 
     $setupExit = $null
-    try {
-        $setup = Start-Process -FilePath $setupPath -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru -ErrorAction Stop
-        $setupExit = $setup.ExitCode
-    } catch {
-        Write-Line ("Result: ISO setup did not start: {0}" -f $_.Exception.Message)
-        $script:ExitCode = 2
-        return
+    $mySession = 1
+    try { $mySession = (Get-Process -Id $PID -ErrorAction Stop).SessionId } catch { }
+    if ($mySession -ne 0) {
+        try {
+            $setup = Start-Process -FilePath $setupPath -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru -ErrorAction Stop
+            $setupExit = $setup.ExitCode
+        } catch {
+            Write-Line ("Result: ISO setup did not start: {0}" -f $_.Exception.Message)
+            $script:ExitCode = 2
+            return
+        }
+    } else {
+        # setup.exe dies in session 0 (Backstage) during automation
+        # initialization (0x8007007F). Run it in the signed-in user's
+        # session instead, through a scheduled task, and wait here for
+        # the result file. /Quiet still applies, so nothing pops up.
+        Write-Line 'Session 0 (Backstage) cannot run setup.exe. Launching it in the signed-in user session.'
+        $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $explorerProc) {
+            Write-Line 'Result: No user is signed in at the desktop, so setup has no interactive session to run in. Sign in, then run -Feature again (from Backstage is fine).'
+            $script:ExitCode = 1
+            return
+        }
+        $owner = $null
+        try {
+            $proc = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId={0}" -f $explorerProc.Id) -ErrorAction Stop
+            $o = Invoke-CimMethod -InputObject $proc -MethodName GetOwner -ErrorAction Stop
+            if ($o.ReturnValue -eq 0) { $owner = "{0}\{1}" -f $o.Domain, $o.User }
+        } catch { }
+        if (-not $owner) {
+            Write-Line 'Result: Could not tell which user is signed in. Run -Feature again.'
+            $script:ExitCode = 1
+            return
+        }
+        $runner = Join-Path $dir 'Run-FeatureSetup.ps1'
+        $resultFile = Join-Path $dir 'setup-result.txt'
+        Remove-Item -LiteralPath $resultFile -Force -ErrorAction SilentlyContinue
+        @(
+            ("`$p = Start-Process -FilePath '{0}' -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru" -f $setupPath),
+            ("Set-Content -LiteralPath '{0}' -Value `$p.ExitCode" -f $resultFile)
+        ) | Set-Content -LiteralPath $runner -Encoding ASCII
+        $taskName = 'mytools-FeatureUpgrade'
+        $taskRun = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runner`""
+        $taskAt = (Get-Date).AddMinutes(2).ToString('HH:mm')
+        & schtasks.exe /Create /TN $taskName /TR $taskRun /SC ONCE /ST $taskAt /RL HIGHEST /IT /RU $owner /F | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Line 'Result: Could not create the scheduled task that runs setup in the user session.'
+            $script:ExitCode = 2
+            return
+        }
+        & schtasks.exe /Run /TN $taskName | Out-Null
+        Write-Line ("Setup launched for {0}. Waiting here for it to finish; staging can take an hour and prints nothing." -f $owner)
+        $deadline = (Get-Date).AddHours(4)
+        while (-not (Test-Path -LiteralPath $resultFile) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 20
+        }
+        & schtasks.exe /Delete /TN $taskName /F | Out-Null
+        if (-not (Test-Path -LiteralPath $resultFile)) {
+            Write-Line 'Result: Setup did not report back within 4 hours. It may still be running in the user session; check for SetupHost before starting anything else.'
+            $script:ExitCode = 1
+            return
+        }
+        try { $setupExit = [int](Get-Content -LiteralPath $resultFile -Raw).Trim() } catch {
+            Write-Line 'Result: Setup finished but its exit code could not be read.'
+            $script:ExitCode = 2
+            return
+        }
     }
 
     Write-Line ("Setup exit: {0} ({1})" -f $setupExit, (Format-WuHResult $setupExit))

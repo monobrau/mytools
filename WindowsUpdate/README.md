@@ -97,8 +97,20 @@ Use ScToolLauncher (**Software updates** → Windows Update quality / feature / 
 Scan first. Prefer elevated. Feature installs can take hours — use Backstage
 or a long Commands timeout (4 hours). Reload the launcher after pull (`1.1.2`). Servers need Allow Windows Server, then Yes on the copy prompt.
 
-A feature install from Backstage does not need someone signed in at the desktop.
-It installs pending driver updates first. It will not start a second copy
-while setup is already running. `setup.exe` stages the upgrade with
-`/NoReboot`; `-Reboot` restarts the PC only after staging succeeds. Leave
-that switch off to stop and report `PENDING_REBOOT` without restarting.
+A feature install installs pending driver updates first. It will not start
+a second copy while setup is already running. `setup.exe` stages the
+upgrade with `/NoReboot`; `-Reboot` restarts the PC only after staging
+succeeds. Leave that switch off to stop and report `PENDING_REBOOT`
+without restarting.
+
+Two things that cost real time in testing:
+
+- `setup.exe` cannot run in session 0. From Backstage it exits
+  `-2147024769` (`0x8007007F`, automation initialization) within seconds.
+  The script detects session 0 and launches setup in the signed-in user's
+  session through a scheduled task, then waits for the result. A user must
+  be signed in at the desktop; `/Quiet` still applies, so nothing pops up.
+- The ISO language must match the PC's UI language or setup returns
+  `0xC1900204` (migration choice blocked). Fido's default pick can choose
+  English International on an en-US PC, so the script requests the host's
+  language explicitly (`^English$` for en-US).
