@@ -107,11 +107,14 @@ without restarting.
 
 Two things that cost real time in testing:
 
-- `setup.exe` cannot run in session 0. From Backstage it exits
-  `-2147024769` (`0x8007007F`, automation initialization) within seconds.
-  The script detects session 0 and launches setup in the signed-in user's
-  session through a scheduled task, then waits for the result. A user must
-  be signed in at the desktop; `/Quiet` still applies, so nothing pops up.
+- `setup.exe` launched straight out of Backstage exits `-2147024769`
+  (`0x8007007F`, automation initialization) within seconds. That is
+  Backstage's process environment, not SYSTEM in session 0: from
+  Backstage the script launches setup through a one-time scheduled task
+  running as SYSTEM (proper service context, works with nobody signed
+  in) and waits for its result file. If the SYSTEM task still returns
+  `0x8007007F`, it retries in the signed-in user's session when one
+  exists. `/Quiet` applies in both cases, so nothing pops up.
 - The ISO language must match the PC's UI language or setup returns
   `0xC1900204` (migration choice blocked). Fido's default pick can choose
   English International on an en-US PC, so the script requests the host's

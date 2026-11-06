@@ -427,6 +427,38 @@ function Get-LatestFidoScript {
     return $path
 }
 
+function Invoke-FeatureSetupTask {
+    param(
+        [string]$Dir,
+        [string]$SetupPath,
+        [string]$Account,
+        [switch]$Interactive
+    )
+    $runner = Join-Path $Dir 'Run-FeatureSetup.ps1'
+    $resultFile = Join-Path $Dir 'setup-result.txt'
+    Remove-Item -LiteralPath $resultFile -Force -ErrorAction SilentlyContinue
+    @(
+        ("`$p = Start-Process -FilePath '{0}' -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru" -f $SetupPath),
+        ("Set-Content -LiteralPath '{0}' -Value `$p.ExitCode" -f $resultFile)
+    ) | Set-Content -LiteralPath $runner -Encoding ASCII
+    $taskName = 'mytools-FeatureUpgrade'
+    $taskRun = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runner`""
+    $taskAt = (Get-Date).AddMinutes(2).ToString('HH:mm')
+    $createArgs = @('/Create', '/TN', $taskName, '/TR', $taskRun, '/SC', 'ONCE', '/ST', $taskAt, '/RL', 'HIGHEST', '/RU', $Account, '/F')
+    if ($Interactive) { $createArgs += '/IT' }
+    & schtasks.exe @createArgs | Out-Null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    & schtasks.exe /Run /TN $taskName | Out-Null
+    Write-Line ("Setup launched as {0}. Waiting here for it to finish; staging can take an hour and prints nothing." -f $Account)
+    $deadline = (Get-Date).AddHours(4)
+    while (-not (Test-Path -LiteralPath $resultFile) -and (Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 20
+    }
+    & schtasks.exe /Delete /TN $taskName /F | Out-Null
+    if (-not (Test-Path -LiteralPath $resultFile)) { return $null }
+    try { return [int](Get-Content -LiteralPath $resultFile -Raw).Trim() } catch { return $null }
+}
+
 function Invoke-FeatureIsoUpgrade {
     Write-Section 'Feature upgrade (ISO)'
     if (Test-FeatureSetupRunning) {
@@ -613,59 +645,32 @@ function Invoke-FeatureIsoUpgrade {
             return
         }
     } else {
-        # setup.exe dies in session 0 (Backstage) during automation
-        # initialization (0x8007007F). Run it in the signed-in user's
-        # session instead, through a scheduled task, and wait here for
-        # the result file. /Quiet still applies, so nothing pops up.
-        Write-Line 'Session 0 (Backstage) cannot run setup.exe. Launching it in the signed-in user session.'
-        $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $explorerProc) {
-            Write-Line 'Result: No user is signed in at the desktop, so setup has no interactive session to run in. Sign in, then run -Feature again (from Backstage is fine).'
+        # Running setup.exe straight out of Backstage dies during
+        # automation initialization (0x8007007F); Backstage's process
+        # environment is the problem, not SYSTEM in session 0. A
+        # scheduled task running as SYSTEM gets a proper service
+        # context and works with nobody signed in. Only if that still
+        # returns 0x8007007F do we fall back to the signed-in session.
+        Write-Line 'Backstage session: launching setup through a scheduled task as SYSTEM.'
+        $setupExit = Invoke-FeatureSetupTask -Dir $dir -SetupPath $setupPath -Account 'SYSTEM'
+        if ($setupExit -eq -2147024769) {
+            $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
+            $owner = $null
+            if ($explorerProc) {
+                try {
+                    $proc = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId={0}" -f $explorerProc.Id) -ErrorAction Stop
+                    $o = Invoke-CimMethod -InputObject $proc -MethodName GetOwner -ErrorAction Stop
+                    if ($o.ReturnValue -eq 0) { $owner = "{0}\{1}" -f $o.Domain, $o.User }
+                } catch { }
+            }
+            if ($owner) {
+                Write-Line ("Setup as SYSTEM returned 0x8007007F. Retrying in the signed-in session ({0})." -f $owner)
+                $setupExit = Invoke-FeatureSetupTask -Dir $dir -SetupPath $setupPath -Account $owner -Interactive
+            }
+        }
+        if ($null -eq $setupExit) {
+            Write-Line 'Result: Setup did not report back. It may still be running; check for SetupHost before starting anything else.'
             $script:ExitCode = 1
-            return
-        }
-        $owner = $null
-        try {
-            $proc = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId={0}" -f $explorerProc.Id) -ErrorAction Stop
-            $o = Invoke-CimMethod -InputObject $proc -MethodName GetOwner -ErrorAction Stop
-            if ($o.ReturnValue -eq 0) { $owner = "{0}\{1}" -f $o.Domain, $o.User }
-        } catch { }
-        if (-not $owner) {
-            Write-Line 'Result: Could not tell which user is signed in. Run -Feature again.'
-            $script:ExitCode = 1
-            return
-        }
-        $runner = Join-Path $dir 'Run-FeatureSetup.ps1'
-        $resultFile = Join-Path $dir 'setup-result.txt'
-        Remove-Item -LiteralPath $resultFile -Force -ErrorAction SilentlyContinue
-        @(
-            ("`$p = Start-Process -FilePath '{0}' -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru" -f $setupPath),
-            ("Set-Content -LiteralPath '{0}' -Value `$p.ExitCode" -f $resultFile)
-        ) | Set-Content -LiteralPath $runner -Encoding ASCII
-        $taskName = 'mytools-FeatureUpgrade'
-        $taskRun = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$runner`""
-        $taskAt = (Get-Date).AddMinutes(2).ToString('HH:mm')
-        & schtasks.exe /Create /TN $taskName /TR $taskRun /SC ONCE /ST $taskAt /RL HIGHEST /IT /RU $owner /F | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Write-Line 'Result: Could not create the scheduled task that runs setup in the user session.'
-            $script:ExitCode = 2
-            return
-        }
-        & schtasks.exe /Run /TN $taskName | Out-Null
-        Write-Line ("Setup launched for {0}. Waiting here for it to finish; staging can take an hour and prints nothing." -f $owner)
-        $deadline = (Get-Date).AddHours(4)
-        while (-not (Test-Path -LiteralPath $resultFile) -and (Get-Date) -lt $deadline) {
-            Start-Sleep -Seconds 20
-        }
-        & schtasks.exe /Delete /TN $taskName /F | Out-Null
-        if (-not (Test-Path -LiteralPath $resultFile)) {
-            Write-Line 'Result: Setup did not report back within 4 hours. It may still be running in the user session; check for SetupHost before starting anything else.'
-            $script:ExitCode = 1
-            return
-        }
-        try { $setupExit = [int](Get-Content -LiteralPath $resultFile -Raw).Trim() } catch {
-            Write-Line 'Result: Setup finished but its exit code could not be read.'
-            $script:ExitCode = 2
             return
         }
     }
