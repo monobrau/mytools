@@ -449,9 +449,21 @@ function Invoke-FeatureSetupTask {
     & schtasks.exe @createArgs | Out-Null
     if ($LASTEXITCODE -ne 0) { return $null }
     & schtasks.exe /Run /TN $taskName | Out-Null
-    Write-Line ("Setup launched as {0}. Waiting here for it to finish; staging can take an hour and prints nothing." -f $Account)
+    Write-Line ("Setup launched as {0}. Waiting here for it to finish; staging can take an hour." -f $Account)
+    Write-Line 'Setup status prints below only when the percent moves.'
     $deadline = (Get-Date).AddHours(4)
+    $lastProgress = $null
+    $lastHost = $null
     while (-not (Test-Path -LiteralPath $resultFile) -and (Get-Date) -lt $deadline) {
+        $progress = $null
+        try { $progress = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\Setup\MoSetup\Volatile' -ErrorAction Stop).SetupProgress } catch { }
+        if ($null -eq $progress) { $progress = 'n/a' }
+        $hostUp = [bool](Get-Process -Name SetupHost -ErrorAction SilentlyContinue)
+        if ($progress -ne $lastProgress -or $hostUp -ne $lastHost) {
+            Write-Line ("Setup status: {0:HH:mm:ss} progress={1} host={2}" -f (Get-Date), $progress, $hostUp)
+            $lastProgress = $progress
+            $lastHost = $hostUp
+        }
         Start-Sleep -Seconds 20
     }
     & schtasks.exe /Delete /TN $taskName /F | Out-Null
