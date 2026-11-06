@@ -1,8 +1,13 @@
 # Windows Update (quality + feature + BIOS/firmware)
 
-Scan or install **quality** (non-feature) Windows Updates, **feature**
-updates / enablement packages, or **BIOS / system firmware** only. Uses the
-Windows Update Agent COM API (no extra module).
+Scan or install **quality** (non-feature) Windows Updates, upgrade to the
+latest stable Windows 11 from ISO, or install **BIOS / system firmware**
+only. Quality and firmware use the Windows Update Agent COM API (no extra
+module). A feature upgrade downloads the latest stable Windows 11 ISO from
+Microsoft (the download link is resolved by the latest Fido release),
+caches it under `C:\Temp\WindowsFeatureISO`, and runs
+`setup.exe /Auto Upgrade /Quiet /NoReboot`. It does not wait for Windows
+Update to offer the version upgrade.
 
 Firmware mode searches driver updates and keeps titles or driver classes that
 are BIOS, UEFI, or system firmware. Other drivers are listed and skipped.
@@ -27,6 +32,11 @@ Scan and Apply always run a pre-check:
 - `DisableWindowsUpdateAccess` and broken WSUS (`UseWUServer=1` with empty URL)
 - Pending reboot (CBS / WU / file rename)
 - Feature only: under 4 GB RAM is Fail
+- Feature only: SentinelOne installed is Fail. Its protected files fail
+  the Safe OS phase (`0x80070005`) and roll the upgrade back. Uninstall it
+  normally (SentinelOne console, or Programs and Features with the site
+  passphrase), reboot, rerun, and reinstall it after the upgrade. `-Force`
+  does not bypass this gate.
 
 Apply stops on Fail unless `-Force`. Critical disk (under 5 GB quality / 10 GB
 feature) always stops.
@@ -64,7 +74,7 @@ the install.
 | --- | --- |
 | `-CheckOnly` | Search and report only |
 | `-Quality` | Cumulative / security / SSU (default) |
-| `-Feature` | Feature Update / Enablement Package only |
+| `-Feature` | Upgrade to the latest stable Windows 11 from ISO (pending cumulative/driver updates still install via Windows Update first) |
 | `-Firmware` | BIOS, UEFI, and system-firmware drivers only |
 | `-Reboot` | Auto-reboot when required |
 | `-Force` | Include Preview; continue after non-critical pre-check Fail |
@@ -74,7 +84,7 @@ the install.
 
 ## Progress
 
-`Get-WindowsUpdateProgress.ps1` only reports status. Run it in a second window while a feature install is sitting on `=== Download ===`. It does not start a download and it does not walk the download tree.
+`Get-WindowsUpdateProgress.ps1` only reports status for Windows Update downloads. It does not start a download and it does not walk the download tree. During an ISO feature upgrade, watch `HKLM:\SYSTEM\Setup\MoSetup\Volatile` (`SetupProgress`) and `C:\$WINDOWS.~BT\Sources\Panther\setupact.log` instead.
 
 `OSDownloadSize` 0 and `TaskCount` 0 mean the OS image is not downloading. A new timestamp on `ActionList.xml` only means Windows Update rewrote the plan. `-WatchSeconds 90` takes a second sample and says whether those counters increased.
 
@@ -86,11 +96,8 @@ Use ScToolLauncher (**Software updates** → Windows Update quality / feature / 
 Scan first. Prefer elevated. Feature installs can take hours — use Backstage
 or a long Commands timeout (4 hours). Reload the launcher after pull (`1.1.2`). Servers need Allow Windows Server, then Yes on the copy prompt.
 
-A feature install skips the download call when Windows Update already marks the update downloaded. That call prints nothing until it returns, so a second run was sitting on `=== Download ===` even after the files were on disk.
-
 A feature install from Backstage does not need someone signed in at the desktop.
-It installs pending driver updates first, because those keep the version upgrade
-at "Downloading 0%". It will not start a second copy while one is already in
-progress. `-Reboot` restarts the PC only when Windows Update sets
-`RebootRequired`. Leave that switch off to stop and report a required reboot
-without restarting.
+It installs pending driver updates first. It will not start a second copy
+while setup is already running. `setup.exe` stages the upgrade with
+`/NoReboot`; `-Reboot` restarts the PC only after staging succeeds. Leave
+that switch off to stop and report `PENDING_REBOOT` without restarting.

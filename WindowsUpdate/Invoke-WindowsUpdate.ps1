@@ -4,9 +4,15 @@
     Scan or install Windows Update quality, feature, or BIOS/firmware updates.
 
 .DESCRIPTION
-    Uses the Windows Update Agent COM API (no PSWindowsUpdate module).
+    Quality and Firmware use the Windows Update Agent COM API (no
+    PSWindowsUpdate module).
     Quality: cumulative / security / SSU / .NET  -  excludes Feature Update titles.
-    Feature: Feature Update and Enablement Package only.
+    Feature: downloads the latest stable Windows 11 ISO from Microsoft
+    (link resolved by the latest Fido release) and runs setup.exe
+    /Auto Upgrade /Quiet /NoReboot. It does not depend on Windows Update
+    offering the version upgrade, and it stages first; -Reboot restarts
+    only after setup has staged. SentinelOne must be uninstalled before
+    a feature upgrade (see the SentinelOne pre-check).
     Firmware: BIOS, UEFI, and system-firmware drivers only. Other drivers stay.
 
     Always runs a pre-check (disk space, recovery partition, WU services,
@@ -30,7 +36,10 @@
     Target non-feature Windows Updates (default if neither switch is set).
 
 .PARAMETER Feature
-    Target feature updates / enablement packages only.
+    Upgrade Windows 11 to the latest stable version from ISO media.
+    Pending cumulative and driver updates still go through Windows
+    Update first. The ISO is cached under C:\Temp\WindowsFeatureISO
+    and reused on later runs.
 
 .PARAMETER Firmware
     Target BIOS, UEFI, and system-firmware driver updates only.
@@ -241,6 +250,7 @@ function Get-WuResultHint {
         0x80240022L { return 'Every update in the batch failed.' }
         0x8007045BL { return 'A shutdown or restart is already in progress. Wait until the PC is back, then run the install again.' }
         0x80070643L { return 'On build 22631 this is usually WinRE. Enable it and keep the recovery partition at 250 MB or larger.' }
+        0x8007139FL { return 'ERROR_INVALID_STATE (0x8007139F): the update was not fully staged before install ran, or a prior setup state in C:\$WINDOWS.~BT is incomplete.' }
         0xC1900208L { return 'The version upgrade is blocked by an incompatible app or driver.' }
         0xC1900200L { return 'This PC does not meet the requirements for that Windows version.' }
         default { return $null }
@@ -359,6 +369,152 @@ function Test-FeatureSetupRunning {
         if (Get-Process -Name $n -ErrorAction SilentlyContinue) { return $true }
     }
     return $false
+}
+
+function Get-SentinelOneState {
+    $services = @(Get-Service -Name '*Sentinel*' -ErrorAction SilentlyContinue)
+    $procs = @(Get-Process -Name '*Sentinel*' -ErrorAction SilentlyContinue)
+    $uninst = @()
+    foreach ($hive in @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')) {
+        $uninst += @(Get-ItemProperty -Path $hive -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -match 'Sentinel' })
+    }
+    # An empty leftover folder is not an install; the agent exe is.
+    $agentExe = $false
+    if (Test-Path -LiteralPath 'C:\Program Files\SentinelOne') {
+        $agentExe = [bool](Get-ChildItem -LiteralPath 'C:\Program Files\SentinelOne' -Recurse -Filter 'SentinelAgent.exe' -File -ErrorAction SilentlyContinue | Select-Object -First 1)
+    }
+    $installed = ($services.Count -gt 0 -or $procs.Count -gt 0 -or $uninst.Count -gt 0 -or $agentExe)
+    [pscustomobject]@{
+        Installed = $installed
+        Detail    = ("services={0} processes={1} uninstallEntries={2} agentExe={3}" -f $services.Count, $procs.Count, $uninst.Count, $agentExe)
+    }
+}
+
+function Write-SentinelOneCheck {
+    $s1 = Get-SentinelOneState
+    if ($s1.Installed) {
+        Write-Check Fail 'SentinelOne' ("Installed ({0}). Setup cannot move SentinelOne-protected files in the Safe OS phase (0x80070005) and the upgrade rolls back." -f $s1.Detail)
+    } else {
+        Write-Check Pass 'SentinelOne' ("Not installed ({0})." -f $s1.Detail)
+    }
+}
+
+function Get-LatestFidoScript {
+    param([string]$Dir)
+    $tag = 'master'
+    try {
+        $rel = Invoke-RestMethod -Uri 'https://api.github.com/repos/pbatard/Fido/releases/latest' -UseBasicParsing -ErrorAction Stop
+        if ([string]$rel.tag_name -match '^v[0-9]') { $tag = [string]$rel.tag_name }
+    } catch { }
+    $path = Join-Path $Dir 'Fido.ps1'
+    Invoke-WebRequest -Uri ("https://raw.githubusercontent.com/pbatard/Fido/{0}/Fido.ps1" -f $tag) -OutFile $path -UseBasicParsing -ErrorAction Stop
+    Write-Line ("Fido: {0}" -f $tag)
+    return $path
+}
+
+function Invoke-FeatureIsoUpgrade {
+    Write-Section 'Feature upgrade (ISO)'
+    if (Test-FeatureSetupRunning) {
+        Write-Line 'Result: Setup is already running. Not starting another copy.'
+        $script:ExitCode = 1
+        return
+    }
+    # Hard gate, even with -Force: a staged ISO upgrade still rolls back
+    # in Safe OS while SentinelOne protects its files.
+    $s1 = Get-SentinelOneState
+    if ($s1.Installed) {
+        Write-Line ("Result: SentinelOne is installed ({0}). Not starting the upgrade." -f $s1.Detail)
+        Write-Line 'Uninstall it with the normal methods first: SentinelOne console (select the device, Actions, Uninstall), or Programs and Features with the site passphrase when prompted. Reboot, then run -Feature again. Reinstall SentinelOne after the upgrade.'
+        $script:ExitCode = 4
+        return
+    }
+
+    $dir = Join-Path $env:SystemDrive 'Temp\WindowsFeatureISO'
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch { }
+
+    $fido = $null
+    try { $fido = Get-LatestFidoScript -Dir $dir } catch {
+        Write-Line ("Result: Could not download Fido: {0}" -f $_.Exception.Message)
+        $script:ExitCode = 2
+        return
+    }
+    $url = @(& powershell -ExecutionPolicy Bypass -File $fido -Win 'Windows 11' -Rel 'Latest' -Ed 'Pro' -Arch 'x64' -PlatformArch 'x64' -GetUrl) | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
+    if (-not $url) {
+        Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
+        $script:ExitCode = 2
+        return
+    }
+    $isoName = [IO.Path]::GetFileName(($url -split '\?')[0])
+    if ([string]::IsNullOrWhiteSpace($isoName)) { $isoName = 'Win11_Latest_x64.iso' }
+    $iso = Join-Path $dir $isoName
+    Write-Line ("ISO: {0}" -f $iso)
+
+    if ((Test-Path -LiteralPath $iso) -and (Get-Item -LiteralPath $iso).Length -gt 5GB) {
+        Write-Line 'ISO already downloaded. Reusing it.'
+    } else {
+        Write-Line 'This call prints nothing new until the ISO download finishes.'
+        $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+        if ($curl) {
+            & curl.exe -L --fail --retry 3 -C - -o $iso $url
+            if ($LASTEXITCODE -ne 0) {
+                Write-Line ("Result: ISO download failed (curl exited {0})." -f $LASTEXITCODE)
+                $script:ExitCode = 2
+                return
+            }
+        } else {
+            try { Start-BitsTransfer -Source $url -Destination $iso -ErrorAction Stop } catch {
+                Write-Line ("Result: ISO download failed: {0}" -f $_.Exception.Message)
+                $script:ExitCode = 2
+                return
+            }
+        }
+    }
+    Write-Line ("ISO size: {0:N0} bytes" -f (Get-Item -LiteralPath $iso).Length)
+
+    $setupExit = $null
+    $mounted = $false
+    try {
+        $img = Mount-DiskImage -ImagePath $iso -PassThru -ErrorAction Stop
+        $mounted = $true
+        $drive = ($img | Get-Volume).DriveLetter
+        if (-not $drive) { throw 'Mounted ISO has no drive letter.' }
+
+        if ($isoName -match '_(\d{5})_') {
+            $isoBuild = [int]$Matches[1]
+            if ($script:OsBuild -ge $isoBuild) {
+                Write-Line ("Result: This PC is on build {0}; the ISO is build {1}. Nothing to install." -f $script:OsBuild, $isoBuild)
+                $script:ExitCode = 0
+                return
+            }
+            Write-Line ("Upgrading build {0} to build {1} from ISO." -f $script:OsBuild, $isoBuild)
+        }
+
+        $setup = Start-Process -FilePath ("{0}:\setup.exe" -f $drive) -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru -ErrorAction Stop
+        $setupExit = $setup.ExitCode
+    } catch {
+        Write-Line ("Result: ISO setup did not start: {0}" -f $_.Exception.Message)
+        $script:ExitCode = 2
+        return
+    } finally {
+        if ($mounted) { Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue | Out-Null }
+    }
+
+    Write-Line ("Setup exit: {0} ({1})" -f $setupExit, (Format-WuHResult $setupExit))
+    if ($setupExit -ne 0) {
+        Write-Line 'Result: Setup stopped before staging. Not rebooting. Check C:\$WINDOWS.~BT\Sources\Panther\setuperr.log.'
+        $script:ExitCode = 2
+        return
+    }
+    Write-Line 'PENDING_REBOOT'
+    if ($Reboot) {
+        Write-Line 'Reboot: restarting now because the upgrade is staged (ScreenConnect session will drop).'
+        $script:ExitCode = 3
+        Restart-Computer -Force
+        return
+    }
+    Write-Line 'Result: Upgrade staged. Reboot is required. Not rebooting.'
+    $script:ExitCode = 1
 }
 
 function Test-FeatureInstallInProgress {
@@ -524,6 +680,10 @@ function Invoke-UpdatePreCheck {
 
     if ($Feature -and $script:IsBuild22631) {
         Write-SafeguardHolds
+    }
+
+    if ($Feature) {
+        Write-SentinelOneCheck
     }
 
     if ($Feature -and $os) {
@@ -975,6 +1135,9 @@ if ($CheckOnly) {
     } elseif ($Feature -and @($found.Drivers).Count -gt 0) {
         Write-Line ("Result: {0} driver update(s) pending before a version upgrade." -f @($found.Drivers).Count)
         $script:ExitCode = 1
+    } elseif ($Feature) {
+        Write-Line 'Result: No quality or driver updates waiting. Running -Feature without -CheckOnly stages the latest stable Windows 11 from ISO, whether or not Windows Update offers it.'
+        $script:ExitCode = 1
     } else {
         Write-Line 'Result: Nothing to install.'
         $script:ExitCode = 0
@@ -1009,5 +1172,9 @@ if ($Feature -and $driverQueue.Count -gt 0 -and -not $script:QualityFirst) {
 }
 
 Write-Line 'Action: Install'
-Install-WindowsUpdates -Session $found.Session -Updates $found.Updates
+if ($Feature -and -not $script:QualityFirst) {
+    Invoke-FeatureIsoUpgrade
+} else {
+    Install-WindowsUpdates -Session $found.Session -Updates $found.Updates
+}
 if ($Exit) { exit $script:ExitCode }
