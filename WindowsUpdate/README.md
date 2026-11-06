@@ -77,6 +77,7 @@ the install.
 | `-CheckOnly` | Search and report only |
 | `-Quality` | Cumulative / security / SSU (default) |
 | `-Feature` | Upgrade to the latest stable Windows 11 from ISO (pending cumulative/driver updates still install via Windows Update first) |
+| `-IsoUrl <url>` | Feature only: download the ISO from this URL instead of asking Microsoft through Fido. An ISO already in `C:\Temp\WindowsFeatureISO` is still used first |
 | `-Firmware` | BIOS, UEFI, and system-firmware drivers only |
 | `-Reboot` | Auto-reboot when required |
 | `-Force` | Include Preview; continue after non-critical pre-check Fail |

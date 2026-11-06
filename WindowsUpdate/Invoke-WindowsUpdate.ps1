@@ -56,6 +56,12 @@
     Run on Windows Server and domain controllers. Without this switch the
     script exits before it changes services or searches for updates.
 
+.PARAMETER IsoUrl
+    Feature only. Download the Windows 11 ISO from this URL instead of
+    asking Microsoft for a link through Fido. An ISO already in
+    C:\Temp\WindowsFeatureISO is still used first. Use this where
+    Microsoft's download service refuses the PC's network.
+
 .PARAMETER AllowSentinelOne
     Feature only. Continue the ISO upgrade even though SentinelOne is
     installed. Without this switch a feature upgrade stops when
@@ -77,6 +83,7 @@ param(
     [switch]$Reboot,
     [switch]$Force,
     [switch]$AllowServer,
+    [string]$IsoUrl,
     [switch]$AllowSentinelOne,
     [switch]$NoExit,
     [switch]$Exit
@@ -466,46 +473,51 @@ function Invoke-FeatureIsoUpgrade {
         $isoName = $cachedIso.Name
         Write-Line ("Using ISO already on this PC: {0}. Not calling Fido." -f $iso)
     } else {
-        $fido = $null
-        try { $fido = Get-LatestFidoScript -Dir $dir } catch {
-            Write-Line ("Result: Could not download Fido: {0}" -f $_.Exception.Message)
-            $script:ExitCode = 2
-            return
-        }
-        # Fido's default language pick can choose English International on
-        # an en-US PC, and setup then blocks the keep-apps upgrade
-        # (0xC1900204). Ask for the language matching this PC's UI culture.
-        $fidoArgs = @('-ExecutionPolicy', 'Bypass', '-File', $fido, '-Win', 'Windows 11', '-Rel', 'Latest', '-Ed', 'Pro', '-Arch', 'x64', '-PlatformArch', 'x64', '-GetUrl')
-        if ($uiCulture -eq 'en-US') {
-            $fidoArgs += @('-Lang', '^English$')
-            Write-Line 'ISO language: English (en-US host).'
-        } elseif ($uiCulture -like 'en-*') {
-            $fidoArgs += @('-Lang', 'International')
-            Write-Line ("ISO language: English International ({0} host)." -f $uiCulture)
-        }
         $url = $null
-        $fidoOut = @()
-        # Microsoft's download protection ("Sentinel marked this request
-        # as rejected") trips on repeated Fido calls from one address and
-        # takes a while to clear, so retry slowly instead of hammering it.
-        for ($attempt = 1; $attempt -le 3 -and -not $url; $attempt++) {
-            $fidoOut = @(& powershell.exe @fidoArgs 2>&1)
-            $url = $fidoOut | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
-            if (-not $url -and $attempt -lt 3) {
-                Write-Line 'Fido returned no URL. Waiting 60 seconds before trying again.'
-                Start-Sleep -Seconds 60
+        if (-not [string]::IsNullOrWhiteSpace($IsoUrl)) {
+            $url = $IsoUrl.Trim()
+            Write-Line ("ISO source: {0}" -f $url)
+        } else {
+            $fido = $null
+            try { $fido = Get-LatestFidoScript -Dir $dir } catch {
+                Write-Line ("Result: Could not download Fido: {0}" -f $_.Exception.Message)
+                $script:ExitCode = 2
+                return
             }
-        }
-        if (-not $url) {
-            Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
-            $fidoOut | Select-Object -Last 5 | ForEach-Object {
-                $t = [string]$_
-                if ($t.Length -gt 200) { $t = $t.Substring(0, 200) }
-                Write-Line ("Fido output: {0}" -f $t)
+            # Fido's default language pick can choose English International
+            # on an en-US PC, and setup then blocks the keep-apps upgrade
+            # (0xC1900204). Ask for the language matching this PC's UI culture.
+            $fidoArgs = @('-ExecutionPolicy', 'Bypass', '-File', $fido, '-Win', 'Windows 11', '-Rel', 'Latest', '-Ed', 'Pro', '-Arch', 'x64', '-PlatformArch', 'x64', '-GetUrl')
+            if ($uiCulture -eq 'en-US') {
+                $fidoArgs += @('-Lang', '^English$')
+                Write-Line 'ISO language: English (en-US host).'
+            } elseif ($uiCulture -like 'en-*') {
+                $fidoArgs += @('-Lang', 'International')
+                Write-Line ("ISO language: English International ({0} host)." -f $uiCulture)
             }
-            Write-Line ("Workaround: download the Windows 11 ISO once in a browser from microsoft.com/software-download/windows11, copy it into {0}, and rerun. A cached ISO is used without calling Fido." -f $dir)
-            $script:ExitCode = 2
-            return
+            $fidoOut = @()
+            # Microsoft's download protection ("Sentinel marked this
+            # request as rejected") trips on repeated Fido calls from one
+            # address and takes a while to clear, so retry slowly.
+            for ($attempt = 1; $attempt -le 3 -and -not $url; $attempt++) {
+                $fidoOut = @(& powershell.exe @fidoArgs 2>&1)
+                $url = $fidoOut | ForEach-Object { if ($_ -match '(https://\S+)') { $Matches[1] } } | Select-Object -Last 1
+                if (-not $url -and $attempt -lt 3) {
+                    Write-Line 'Fido returned no URL. Waiting 60 seconds before trying again.'
+                    Start-Sleep -Seconds 60
+                }
+            }
+            if (-not $url) {
+                Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
+                $fidoOut | Select-Object -Last 5 | ForEach-Object {
+                    $t = [string]$_
+                    if ($t.Length -gt 200) { $t = $t.Substring(0, 200) }
+                    Write-Line ("Fido output: {0}" -f $t)
+                }
+                Write-Line ("Workaround: copy a Windows 11 ISO into {0} and rerun (a cached ISO is used without calling Fido), or pass -IsoUrl." -f $dir)
+                $script:ExitCode = 2
+                return
+            }
         }
         $isoName = [IO.Path]::GetFileName(($url -split '\?')[0])
         if ([string]::IsNullOrWhiteSpace($isoName)) { $isoName = 'Win11_Latest_x64.iso' }
