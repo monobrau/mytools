@@ -36,7 +36,7 @@ Categories start **collapsed**. Related tools sit in **subfolders** (Webroot, Hu
 | Dell SupportAssist | mytools `DellSupportAssistUpdate` — update only when already installed; leaves OS Recovery, Remediation, and TechHub |
 | Classic Teams remnants | mytools |
 | Windows Update → quality | mytools `WindowsUpdate` — pre-check + CU/security/SSU. Default no reboot; optional auto reboot. Servers skipped unless Allow Windows Server is confirmed |
-| Windows Update → feature | mytools `WindowsUpdate` — pre-check + in-place Windows 11 ISO upgrade. Fido first, fallback ISO if Fido fails. 4h timeout. Default no reboot. Servers skipped unless confirmed |
+| Windows Update → feature | mytools `WindowsUpdate` — pre-check + in-place Windows 11 ISO upgrade. Fido first, fallback ISO if Fido fails. Skip Fido downloads the hosted ISO directly. 4h timeout. Default no reboot. Servers skipped unless confirmed |
 | Windows Update → BIOS / firmware | mytools `WindowsUpdate` — BIOS, UEFI, and system firmware only. Other drivers stay. Default no reboot. Servers skipped unless confirmed |
 
 ### ScreenConnect

@@ -35,7 +35,7 @@ HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
 ;        PowerIdle FastStartup EolAudit EolAuditGpo PupBlock
-;        BackstageOnly AutoReboot AllowServer Help StaleAge
+;        BackstageOnly AutoReboot AllowServer SkipFido Help StaleAge
 HelpIntroText := Format("
 (
 SC Tool Launcher copies a ScreenConnect-ready snippet to the clipboard.
@@ -324,8 +324,8 @@ Mozilla Firefox
         "TimeoutScan", 600000,
         "TimeoutUpdate", 14400000,
         "DefaultArgs", "-Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows.iso'",
-        "Flags", "CheckOnly Force AutoReboot AllowServer NoExit",
-        "Note", "Keeps files, apps, and settings. Tries Microsoft through Fido, then the fallback ISO if Fido returns nothing. A complete ISO already in C:\Temp\WindowsFeatureISO is used as-is. Backstage launches setup as a SYSTEM scheduled task. Driver updates install first. Leave Auto reboot off to stage and stop. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Do not start a second run while one is in progress. 4-hour timeout."
+        "Flags", "CheckOnly Force AutoReboot AllowServer SkipFido NoExit",
+        "Note", "Keeps files, apps, and settings. Tries Microsoft through Fido, then the fallback ISO if Fido returns nothing. Skip Fido downloads the hosted ISO and does not ask Microsoft. A complete ISO already in C:\Temp\WindowsFeatureISO is used as-is. Backstage launches setup as a SYSTEM scheduled task. Driver updates install first. Leave Auto reboot off to stage and stop. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Do not start a second run while one is in progress. 4-hour timeout."
     ),
     Map(
         "Category", "Updates",
@@ -1537,6 +1537,7 @@ ShowGui(*) {
     gCtrls["AutoReboot"] := gGui.Add("Checkbox", "vOptAutoReboot", "Auto reboot when required")
     gCtrls["AutoReboot"].OnEvent("Click", OnAutoRebootOptClick)
     gCtrls["AllowServer"] := gGui.Add("Checkbox", "vOptAllowServer", "Allow Windows Server (asks before copy)")
+    gCtrls["SkipFido"] := gGui.Add("Checkbox", "vOptSkipFido", "Skip Fido (download the hosted ISO)")
     gCtrls["LblHuntressRebootAt"] := gGui.Add("Text", "Section", "Reboot at (endpoint local time)")
     gCtrls["HuntressRebootAt"] := gGui.Add("DateTime", "w220 vHuntressRebootAt", "yyyy-MM-dd HH:mm")
     gCtrls["HuntressRebootAt"].Value := DefaultHuntressRebootAt()
@@ -1647,7 +1648,7 @@ ShowGui(*) {
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
-        "AutoReboot", "AllowServer", "LblHuntressRebootAt", "HuntressRebootAt",
+        "AutoReboot", "AllowServer", "SkipFido", "LblHuntressRebootAt", "HuntressRebootAt",
         "LblProduct", "Product",
         "LblPupFamily", "PupFamily",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
@@ -1745,7 +1746,7 @@ ReflowGui() {
         else if (InStr(key, "Mode") = 1 || InStr(key, "Fmt") = 1 || key = "Force" || key = "ForceAppShutdown"
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
             || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "SkipIfRunning"
-            || key = "ResetPlatform" || key = "AutoReboot" || key = "AllowServer"
+            || key = "ResetPlatform" || key = "AutoReboot" || key = "AllowServer" || key = "SkipFido"
             || key = "S1Quiet" || key = "AutomateLinkToDomain")
             ch := 20
 
@@ -2008,7 +2009,7 @@ RefreshOptionEnable(*) {
             "LblMode", "ModeScan", "ModeUpdate", "LblOptions",
             "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
             "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning",
-            "ResetPlatform", "AutoReboot", "AllowServer", "LblHuntressRebootAt", "HuntressRebootAt",
+            "ResetPlatform", "AutoReboot", "AllowServer", "SkipFido", "LblHuntressRebootAt", "HuntressRebootAt",
             "LblProduct", "Product", "LblPupFamily", "PupFamily",
             "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
             "LblDomainController", "DomainController", "LblDomain", "Domain",
@@ -2071,6 +2072,7 @@ RefreshOptionEnable(*) {
     ; so do not require Apply mode to show the schedule/reboot checkbox.
     showAutoReboot := ToolHasFlag(t, "AutoReboot") && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     showAllowServer := ToolHasFlag(t, "AllowServer")
+    showSkipFido := ToolHasFlag(t, "SkipFido")
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showSentinelOneUnload := ToolHasFlag(t, "SentinelOneUnload")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
@@ -2112,6 +2114,7 @@ RefreshOptionEnable(*) {
     SetCtrlShown(gCtrls["AllowServer"], showAllowServer)
     if !showAllowServer
         gCtrls["AllowServer"].Value := 0
+    SetCtrlShown(gCtrls["SkipFido"], showSkipFido)
     if (showHuntress) {
         if gCtrls["Force"].Value && gCtrls["AutoReboot"].Value
             gCtrls["AutoReboot"].Value := 0
@@ -2218,7 +2221,7 @@ RefreshOptionEnable(*) {
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning || showResetPlatform
-        || showAutoReboot || showGpoLink
+        || showAutoReboot || showAllowServer || showSkipFido || showGpoLink
     SetCtrlShown(gCtrls["LblOptions"], anyOpt)
 
     ; Find-only tools: hide "Apply" mode entirely
@@ -2941,6 +2944,9 @@ BuildSnippet(tool, isScan, isCommands) {
         defaultArgs := ToolGet(tool, "DefaultArgs", "")
         if (defaultArgs != "")
             switches .= " " defaultArgs
+        ; -IsoUrl skips Fido. -IsoFallbackUrl tries Fido once, then the same file.
+        if ToolHasFlag(tool, "SkipFido") && CtrlActive(gCtrls["SkipFido"]) && gCtrls["SkipFido"].Value
+            switches := StrReplace(switches, "-IsoFallbackUrl", "-IsoUrl")
 
         if (fetch = "IrmOutFile") {
             ; Download to %TEMP% and run with a one-time Process-scoped execution policy exception.
@@ -3199,6 +3205,8 @@ DescribeSelection(tool, isScan) {
         parts.Push("Auto reboot")
     if CtrlActive(gCtrls["AllowServer"]) && gCtrls["AllowServer"].Value
         parts.Push("Allow Server")
+    if CtrlActive(gCtrls["SkipFido"]) && gCtrls["SkipFido"].Value
+        parts.Push("Skip Fido")
     if ToolHasFlag(tool, "BackupsOnlyDefault") {
         if CtrlActive(gCtrls["ClearAllBackupContent"]) && gCtrls["ClearAllBackupContent"].Value
             parts.Push("All Backup content")
