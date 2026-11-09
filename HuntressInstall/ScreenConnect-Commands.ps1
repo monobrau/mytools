@@ -6,13 +6,13 @@
 # $schedule=$true = SYSTEM tasks + cleanup in 30 min + reboot at $rebootAt (host local).
 # Official /ACCT_KEY= (not /ACCOUNT_KEY=).
 try{[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor 3072}catch{try{[Net.ServicePointManager]::SecurityProtocol=3072}catch{}}
-$acct='fddd1009b6541feb66431b905f6fc870'
+$acct = [string]$env:HUNTRESS_ACCOUNT_KEY
 $org='YOUR_ORG_KEY'
 $tags=''
 $force=$false
 $schedule=$false
 $rebootAt='' # required when $schedule; host-local e.g. '2026-09-18 17:30'
-if(-not $acct -or $acct.Length -ne 32 -or $acct -eq 'YOUR_ACCOUNT_KEY'){throw ('Bad Huntress account key length '+[string]$acct.Length+' (need 32).')}
+if(-not $acct -or $acct.Length -ne 32){throw 'Set HUNTRESS_ACCOUNT_KEY to the 32-character Huntress account key.'}
 if(-not $org -or $org -eq 'YOUR_ORG_KEY'){throw 'Set $org to the Huntress organization key (client short name).'}
 $svc=Get-Service -Name HuntressAgent -EA SilentlyContinue
 if($schedule){

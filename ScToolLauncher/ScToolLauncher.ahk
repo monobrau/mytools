@@ -19,9 +19,8 @@ DefaultOwner := "monobrau"
 DefaultRepo := "mytools"
 DefaultRef := "main"
 MaxLength := "200000"
-; Huntress account key is permanent for this tenant. local-defaults.ini can override.
+; Huntress account key comes from HUNTRESS_ACCOUNT_KEY. local-defaults.ini can override.
 LocalDefaultsPath := A_ScriptDir "\local-defaults.ini"
-HuntressAccountKeyDefault := "fddd1009b6541feb66431b905f6fc870"
 
 ; Fetch: Contents (api.github.com + Accept raw) | Raw (raw.githubusercontent.com?v=)
 ;        Inline (Body is the snippet; no GitHub download)
@@ -625,7 +624,7 @@ HP Support Assistant AppX
         "Category", "Agents",
         "Folder", "Huntress",
         "Name", "Huntress silent install",
-        "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Account key is built in. Org key is per-client. Force = rip and replace. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
+        "Summary", "Download HuntressInstaller.exe and silent-install with /ACCT_KEY + /ORG_KEY /S. Account key comes from HUNTRESS_ACCOUNT_KEY. Org key is per-client. Force = rip and replace. Uses official /ACCT_KEY (not /ACCOUNT_KEY).",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/HuntressInstall",
         "Fetch", "Contents",
         "Path", "HuntressInstall",
@@ -1584,7 +1583,7 @@ ShowGui(*) {
     gCtrls["S1Passphrase"] := gGui.Add("Edit", "w" UiContentW " Password vS1Passphrase", "")
 
     huntressAcctDefault := LoadHuntressAccountKey()
-    huntressAcctLabel := "Huntress account key (built in; rarely change)"
+    huntressAcctLabel := "Huntress account key (HUNTRESS_ACCOUNT_KEY)"
     gCtrls["LblHuntressAcct"] := gGui.Add("Text", "Section", huntressAcctLabel)
     gCtrls["HuntressAccountKey"] := gGui.Add("Edit", "w" UiContentW " Password vHuntressAccountKey", huntressAcctDefault)
     gCtrls["LblHuntressOrg"] := gGui.Add("Text", , "Huntress organization key (client short name)")
@@ -1795,13 +1794,13 @@ ReflowGui() {
 }
 
 LoadHuntressAccountKey() {
-    global LocalDefaultsPath, HuntressAccountKeyDefault
+    global LocalDefaultsPath
     if FileExist(LocalDefaultsPath) {
         ini := Trim(IniRead(LocalDefaultsPath, "Huntress", "AccountKey", ""))
         if (ini != "")
             return ini
     }
-    return HuntressAccountKeyDefault
+    return EnvGet("HUNTRESS_ACCOUNT_KEY")
 }
 
 LoadAutomateServer() {

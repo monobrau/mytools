@@ -37,8 +37,9 @@ reboot with `shutdown /a`.
 
 ## Safety
 
-- Account key is baked into `ScreenConnect-Commands.ps1` and ScToolLauncher
-  (this tenant key does not rotate). Org key is still pasted per client.
+- Account key is the `HUNTRESS_ACCOUNT_KEY` environment variable on the machine
+  that builds the command. `local-defaults.ini` can override it for the launcher.
+  Org key is still pasted per client.
 - Do not paste live org keys into tickets.
 - Prefer elevated ScreenConnect **Backstage** / SYSTEM.
 - Troubleshoot with `C:\Windows\Temp\HuntressInstaller.log` if exit ≠ 0.

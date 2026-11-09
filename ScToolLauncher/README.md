@@ -85,13 +85,13 @@ AV passwords/keys are only embedded in the clipboard snippet if you type them �
 | SentinelOne unload (passphrase) | Inline — finds `SentinelCtl.exe` and runs `unload -slam -k`. Passphrase is GUI-only and is not saved |
 | ConnectSecure → silent install | mytools `ConnectSecureInstall` — paste the official install script; `-c`, `-e`, and `-j` are filled from it and are not saved. OS dropdown defaults to Windows (agentlink + leftover cleanup). Mac, Linux, ARM, and ARM-32 copy the portal shell command. Default option on Windows: skip if agent is Running |
 | ConnectSecure → agent repair + reinstall | mytools — wipe then reinstall (same pasted script). Default option: skip if agent is Running; uncheck to force wipe |
-| Huntress → silent install | mytools `HuntressInstall` — account key built in; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
+| Huntress → silent install | mytools `HuntressInstall` — account key from `HUNTRESS_ACCOUNT_KEY`; org key in GUI; Force = rip and replace now (no reboot); optional schedule = SYSTEM tasks + cleanup + reboot at a date/time you pick |
 | Huntress → Verify scheduled reboot | Inline — host time, recent User32 1074 shutdown events, HuntressSC task query |
 | Huntress → Cancel scheduled reboot | Inline `shutdown.exe /a` — aborts a pending shutdown.exe countdown (use if Huntress schedule armed a reboot) |
 | Automate → agent uninstall | mytools `AutomateUninstall` — scan or remove the LabTech / Automate remote agent. ScreenConnect stays. Force = allow a probe agent |
 | Automate → agent reinstall | mytools `AutomateUninstall` — reinstall from the server, location, and cached MSI already on the PC. No token. New agent ID, same location |
 
-Huntress account key is built into the launcher and `HuntressInstall/ScreenConnect-Commands.ps1`. Org keys, ConnectSecure tokens, SentinelOne tokens and uninstall passphrases, Automate installer tokens, and the RemoteOps enroll token stay GUI-only. The RemoteOps portal URL is `[RemoteOps] Portal=` in `local-defaults.ini`. Do not paste live tokens into tickets or git.
+Huntress account key is the user environment variable `HUNTRESS_ACCOUNT_KEY`. The launcher reads it when copying a snippet. Org keys, ConnectSecure tokens, SentinelOne tokens and uninstall passphrases, Automate installer tokens, and the RemoteOps enroll token stay GUI-only. The RemoteOps portal URL is `[RemoteOps] Portal=` in `local-defaults.ini`. Do not paste live tokens into tickets or git.
 
 ### Forensics
 
