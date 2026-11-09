@@ -112,6 +112,7 @@ Harkins / Forensic Investigator use **Process-scoped** `Set-ExecutionPolicy Bypa
 | Inky / IPW transport rules | mytools — requires `Connect-ExchangeOnline` on an admin workstation; Scan lists, Delete removes (no `Read-Host`) |
 | INKY / usecure / Skout enterprise apps | mytools `EntraVendorAppRemoval` — PowerShell one-liner only, pasted into Backstage on an admin PC. Scan lists matches. Apply opens the picker. App ids differ per tenant |
 | Entra users, service accounts, BitLocker | mytools `EntraIntuneEvidence` — PowerShell one-liner only, pasted into Backstage on an admin PC. One run writes the authorized-user list, likely service accounts, and BitLocker per workstation to OneDrive |
+| M365 access review | mytools `EntraIntuneEvidence` — user-list workbook under the same OneDrive folder. Summary and suggestions are off unless that option is checked |
 
 ### This PC
 

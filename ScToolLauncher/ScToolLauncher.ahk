@@ -34,7 +34,7 @@ LocalDefaultsPath := A_ScriptDir "\local-defaults.ini"
 ;        ScanOnly RunOnly PositionalDry Domain CacheBust RebootAdvisory AlwaysNote ConnectSecure
 ;        SkipIfRunning ResetPlatform SentinelOneInstall SentinelOneUnload HuntressInstall AutomateGpo ScreenConnectGpo WebrootUninstallGpo BackupsOnlyDefault ClearAllBackupContent
 ;        PowerIdle FastStartup EolAudit EolAuditGpo PupBlock
-;        BackstageOnly AutoReboot AllowServer SkipFido Help StaleAge
+;        BackstageOnly AutoReboot AllowServer SkipFido IncludeSummary Help StaleAge
 HelpIntroText := Format("
 (
 SC Tool Launcher copies a ScreenConnect-ready snippet to the clipboard.
@@ -856,6 +856,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
         "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Signs into Microsoft Graph and writes AuthorizedUsers.csv, ServiceAccounts.csv, and BitLocker-Workstations.csv under OneDrive\EntraIntuneEvidence. Review the service-account file before you send it.",
         "ClipboardNote", "NOTE: Admin PC Backstage PowerShell. Exports authorized users, likely service accounts, and BitLocker per workstation to OneDrive. Review ServiceAccounts.csv before sending."
     ),
+    Map(
+        "Category", "Microsoft 365",
+        "Name", "M365 access review",
+        "Summary", "Export one row per Entra user for an access review. The workbook is the user list. Summary and suggestions are optional.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/EntraIntuneEvidence",
+        "Fetch", "Contents",
+        "Path", "EntraIntuneEvidence",
+        "Script", "Export-M365AccessReview.ps1",
+        "UaPrefix", "M365AccessReview-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 1800000,
+        "TimeoutUpdate", 1800000,
+        "Flags", "RunOnly AlwaysNote BackstageOnly IncludeSummary",
+        "Note", "Paste the PowerShell one-liner into Backstage or a local window on this PC, not a client session. Signs into Microsoft Graph and writes the user list workbook under OneDrive\EntraIntuneEvidence. Leave the option off for the user list only. Check it to add summary counts and suggestions.",
+        "ClipboardNote", "NOTE: Admin PC Backstage PowerShell. User-list workbook under OneDrive. Summary and suggestions are included only when that option is checked."
+    ),
     ; --- Untested (move here until validated) ---
     Map(
         "Category", "This PC",
@@ -1537,6 +1553,7 @@ ShowGui(*) {
     gCtrls["AutoReboot"].OnEvent("Click", OnAutoRebootOptClick)
     gCtrls["AllowServer"] := gGui.Add("Checkbox", "vOptAllowServer", "Allow Windows Server (asks before copy)")
     gCtrls["SkipFido"] := gGui.Add("Checkbox", "vOptSkipFido", "Skip Fido (download the hosted ISO)")
+    gCtrls["IncludeSummary"] := gGui.Add("Checkbox", "vOptIncludeSummary", "Include summary and suggestions")
     gCtrls["LblHuntressRebootAt"] := gGui.Add("Text", "Section", "Reboot at (endpoint local time)")
     gCtrls["HuntressRebootAt"] := gGui.Add("DateTime", "w220 vHuntressRebootAt", "yyyy-MM-dd HH:mm")
     gCtrls["HuntressRebootAt"].Value := DefaultHuntressRebootAt()
@@ -1647,7 +1664,7 @@ ShowGui(*) {
         "LblMode", "ModeScan", "ModeUpdate",
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
-        "AutoReboot", "AllowServer", "SkipFido", "LblHuntressRebootAt", "HuntressRebootAt",
+        "AutoReboot", "AllowServer", "SkipFido", "IncludeSummary", "LblHuntressRebootAt", "HuntressRebootAt",
         "LblProduct", "Product",
         "LblPupFamily", "PupFamily",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
@@ -1745,7 +1762,7 @@ ReflowGui() {
         else if (InStr(key, "Mode") = 1 || InStr(key, "Fmt") = 1 || key = "Force" || key = "ForceAppShutdown"
             || key = "IncludeBrowsers" || key = "Uninstall" || key = "Detailed" || key = "BlockReinstall"
             || key = "RemoveSupportAssistant" || key = "ClearAllBackupContent" || key = "SkipIfRunning"
-            || key = "ResetPlatform" || key = "AutoReboot" || key = "AllowServer" || key = "SkipFido"
+            || key = "ResetPlatform" || key = "AutoReboot" || key = "AllowServer" || key = "SkipFido" || key = "IncludeSummary"
             || key = "S1Quiet" || key = "AutomateLinkToDomain")
             ch := 20
 
@@ -2008,7 +2025,7 @@ RefreshOptionEnable(*) {
             "LblMode", "ModeScan", "ModeUpdate", "LblOptions",
             "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
             "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning",
-            "ResetPlatform", "AutoReboot", "AllowServer", "SkipFido", "LblHuntressRebootAt", "HuntressRebootAt",
+            "ResetPlatform", "AutoReboot", "AllowServer", "SkipFido", "IncludeSummary", "LblHuntressRebootAt", "HuntressRebootAt",
             "LblProduct", "Product", "LblPupFamily", "PupFamily",
             "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
             "LblDomainController", "DomainController", "LblDomain", "Domain",
@@ -2072,6 +2089,7 @@ RefreshOptionEnable(*) {
     showAutoReboot := ToolHasFlag(t, "AutoReboot") && (ToolHasFlag(t, "RunOnly") || !gCtrls["ModeScan"].Value)
     showAllowServer := ToolHasFlag(t, "AllowServer")
     showSkipFido := ToolHasFlag(t, "SkipFido")
+    showIncludeSummary := ToolHasFlag(t, "IncludeSummary")
     showSentinelOne := ToolHasFlag(t, "SentinelOneInstall")
     showSentinelOneUnload := ToolHasFlag(t, "SentinelOneUnload")
     showHuntress := ToolHasFlag(t, "HuntressInstall")
@@ -2114,6 +2132,7 @@ RefreshOptionEnable(*) {
     if !showAllowServer
         gCtrls["AllowServer"].Value := 0
     SetCtrlShown(gCtrls["SkipFido"], showSkipFido)
+    SetCtrlShown(gCtrls["IncludeSummary"], showIncludeSummary)
     if (showHuntress) {
         if gCtrls["Force"].Value && gCtrls["AutoReboot"].Value
             gCtrls["AutoReboot"].Value := 0
@@ -2220,7 +2239,7 @@ RefreshOptionEnable(*) {
 
     anyOpt := showForce || showForceApp || showBrowsers || showUninstall || showDetailed
         || showBlock || showRmHpsa || showClearAllBackup || showSkipIfRunning || showResetPlatform
-        || showAutoReboot || showAllowServer || showSkipFido || showGpoLink
+        || showAutoReboot || showAllowServer || showSkipFido || showIncludeSummary || showGpoLink
     SetCtrlShown(gCtrls["LblOptions"], anyOpt)
 
     ; Find-only tools: hide "Apply" mode entirely
@@ -2374,8 +2393,11 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "List matching apps"
         gCtrls["ModeUpdate"].Text := "Pick apps and delete"
     }
-    if ToolHasFlag(t, "RunOnly") && InStr(ToolGet(t, "Path", ""), "EntraIntuneEvidence") {
+    if ToolHasFlag(t, "RunOnly") && (ToolGet(t, "Script", "") = "Get-EntraIntuneEvidence.ps1") {
         gCtrls["ModeUpdate"].Text := "Export to OneDrive"
+    }
+    if ToolHasFlag(t, "RunOnly") && (ToolGet(t, "Script", "") = "Export-M365AccessReview.ps1") {
+        gCtrls["ModeUpdate"].Text := "Export workbook"
     }
     if ToolHasFlag(t, "AdReview") {
         gCtrls["ModeUpdate"].Text := "Review AD over the tunnel"
@@ -2520,6 +2542,8 @@ BuildSwitches(tool, isScan, isCommands) {
         sw.Push("-Reinstall")
     if CtrlActive(gCtrls["Detailed"]) && gCtrls["Detailed"].Value
         sw.Push("-Detailed")
+    if CtrlActive(gCtrls["IncludeSummary"]) && gCtrls["IncludeSummary"].Value
+        sw.Push("-IncludeSummary")
 
     if ToolHasFlag(tool, "Delete") && !isScan
         sw.Push("-Delete")
@@ -3034,8 +3058,10 @@ DescribeSelection(tool, isScan) {
             mode := "Remove HP bloat"
         else if (ToolGet(tool, "Script", "") = "Start-PaleMoonPortable.ps1")
             mode := "Launch Pale Moon"
-        else if InStr(ToolGet(tool, "Path", ""), "EntraIntuneEvidence")
+        else if (ToolGet(tool, "Script", "") = "Get-EntraIntuneEvidence.ps1")
             mode := "Export evidence"
+        else if (ToolGet(tool, "Script", "") = "Export-M365AccessReview.ps1")
+            mode := "M365 access review"
         else if ToolHasFlag(tool, "AdReview")
             mode := "AD review of " Trim(gCtrls["AdTarget"].Value)
         else
@@ -3204,6 +3230,8 @@ DescribeSelection(tool, isScan) {
         parts.Push("Auto reboot")
     if CtrlActive(gCtrls["AllowServer"]) && gCtrls["AllowServer"].Value
         parts.Push("Allow Server")
+    if CtrlActive(gCtrls["IncludeSummary"]) && gCtrls["IncludeSummary"].Value
+        parts.Push("Summary and suggestions")
     if CtrlActive(gCtrls["SkipFido"]) && gCtrls["SkipFido"].Value
         parts.Push("Skip Fido")
     if ToolHasFlag(tool, "BackupsOnlyDefault") {

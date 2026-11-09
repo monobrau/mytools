@@ -59,3 +59,16 @@ Prune `ServiceAccounts.csv` before you send it. One-word application names and M
 ## BitLocker
 
 `BitLockerDeployed` is `Yes` when the Intune report says the device is encrypted and the OS volume is not reported unprotected. `IntunePolicyNames` is the encryption policy Intune attached to that workstation. Mac, iPhone, iPad, and Android devices are left out of the workstation file.
+
+## Access review workbook
+
+`Export-M365AccessReview.ps1` writes one formatted workbook, one row per Entra user, sorted by last name and first name. The sheet is the user list: name, sign-in, mailbox, MFA enforcement, registration, and licenses.
+
+Summary counts and suggestions are not in the file unless `-IncludeSummary` is set. The launcher checkbox is off until you check it. Suggestions cover enabled accounts whose MFA is not enforced, and enabled accounts with no registered MFA method when that report is available.
+
+```powershell
+.\Export-M365AccessReview.ps1
+.\Export-M365AccessReview.ps1 -IncludeSummary
+```
+
+The workbook is saved under `OneDrive\EntraIntuneEvidence\<tenant>\<timestamp>\`. `-OutputFolder` overrides that folder. `-SkipExchange` skips the Exchange Online connection; mailbox type then comes from a Graph probe when the mailbox is visible.
