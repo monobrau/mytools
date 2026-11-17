@@ -178,6 +178,21 @@ Mozilla Firefox
     ),
     Map(
         "Category", "Updates",
+        "Name", "Microsoft Edge",
+        "Summary", "Checks or updates installed Microsoft Edge stable. Does not install Edge when it is missing.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/MicrosoftEdgeUpdate",
+        "Fetch", "Contents",
+        "Path", "MicrosoftEdgeUpdate",
+        "Script", "Update-MicrosoftEdge.ps1",
+        "UaPrefix", "MicrosoftEdgeUpdate-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 180000,
+        "TimeoutUpdate", 600000,
+        "Flags", "CheckOnly Force NoExit",
+        "Note", "Uses the Edge updater already on the PC. Open Edge windows can keep the old version until they close. Does not reboot. Reload launcher after pull."
+    ),
+    Map(
+        "Category", "Updates",
         "Name", ".NET runtime / SDK patches",
         "Summary", "Patches installed .NET 6+ Runtime/Desktop/ASP.NET/SDK to the latest same-major security release only.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/DotNetUpdate",
@@ -2341,6 +2356,10 @@ RefreshOptionEnable(*) {
     } else if InStr(ToolGet(t, "Path", ""), "AutomateUninstall") {
         gCtrls["ModeScan"].Text := "Scan Automate agent"
         gCtrls["ModeUpdate"].Text := "Uninstall Automate agent"
+    }
+    if InStr(ToolGet(t, "Path", ""), "MicrosoftEdgeUpdate") {
+        gCtrls["ModeScan"].Text := "Check Edge version"
+        gCtrls["ModeUpdate"].Text := "Update Microsoft Edge"
     }
     if InStr(ToolGet(t, "Path", ""), "WindowsUpdate") {
         if InStr(ToolGet(t, "DefaultArgs", ""), "-Firmware") {
