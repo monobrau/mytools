@@ -79,7 +79,7 @@ Prefer **Commands tab** (`#!ps`) — see [ScreenConnect-Commands.ps1](ScreenConn
 #!ps
 #timeout=900000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.11'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/VulnSoftwareUpdate/Update-VulnSoftware.ps1?ref=main'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','VulnSoftwareUpdate-bootstrap/1.4.12'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://raw.githubusercontent.com/monobrau/mytools/main/VulnSoftwareUpdate/Update-VulnSoftware.ps1'); & ([scriptblock]::Create($script)) -CheckOnly -Exit
 ```
 
 ## Notes

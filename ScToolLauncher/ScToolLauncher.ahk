@@ -142,7 +142,7 @@ Mozilla Firefox
         "Path", "VulnSoftwareUpdate",
         "Script", "Update-VulnSoftware.ps1",
         "UaPrefix", "VulnSoftwareUpdate-bootstrap",
-        "UaVer", "1.4.11",
+        "UaVer", "1.4.12",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers ProductMulti NoExit",
@@ -3121,9 +3121,9 @@ BuildSnippet(tool, isScan, isCommands) {
             path := ToolGet(tool, "Path", "")
             script := tool["Script"]
             if (path != "")
-                url := "https://api.github.com/repos/" owner "/" repo "/contents/" path "/" script "?ref=" DefaultRef
+                url := "https://raw.githubusercontent.com/" owner "/" repo "/" DefaultRef "/" path "/" script
             else
-                url := "https://api.github.com/repos/" owner "/" repo "/contents/" script "?ref=" DefaultRef
+                url := "https://raw.githubusercontent.com/" owner "/" repo "/" DefaultRef "/" script
             body := ps5 "$ProgressPreference='SilentlyContinue'; " tls "; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','" ua "'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('" url "'); if ($script -match '(?i)<html|github.com/login|&redirect') { throw 'Download returned HTML, not a script.' }; & ([scriptblock]::Create($script))" switches
         }
     }

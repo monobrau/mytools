@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.11'
+$ScriptVersion = '1.4.12'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -336,7 +336,7 @@ function Get-VulnCatalog {
         }
         [pscustomobject]@{
             Id = 'Firefox'; Name = 'Mozilla Firefox'; Method = 'Winget'; WingetId = 'Mozilla.Firefox'
-            Match = @('^Mozilla Firefox$', '^Mozilla Firefox \(', '^Firefox$')
+            Match = @('^Mozilla Firefox($| \d| \()', '^Firefox$')
             OptionalGroup = 'Browsers'
             Notes = 'Opt-in (-IncludeBrowsers). Stable only (skips ESR/Beta/Dev by name). Uses winget, or the Mozilla installer when winget is missing. May close sessions'
         }
@@ -387,6 +387,101 @@ function Test-NameMatch {
 function Find-InstalledMatches {
     param($CatalogItem, $InstalledApps)
     @($InstalledApps | Where-Object { Test-NameMatch -DisplayName $_.DisplayName -Patterns $CatalogItem.Match })
+}
+
+function Test-StableFirefoxName {
+    param([string]$Name)
+    if ($Name -match 'ESR|Beta|Developer|Nightly|Aurora') { return $false }
+    return ($Name -match '^Mozilla Firefox($| \d| \()' -or $Name -match '^Firefox$')
+}
+
+function Get-FirefoxInstalls {
+    param($InstalledApps)
+    $rows = New-Object System.Collections.Generic.List[object]
+    foreach ($app in @($InstalledApps)) {
+        if ($app -and (Test-StableFirefoxName $app.DisplayName)) { [void]$rows.Add($app) }
+    }
+    if ($rows.Count -gt 0) { return @(Select-UniqueFirefoxInstall $rows) }
+
+    $keys = @(
+        'HKLM:\SOFTWARE\Mozilla\Mozilla Firefox'
+        'HKLM:\SOFTWARE\WOW6432Node\Mozilla\Mozilla Firefox'
+    )
+    try {
+        Get-ChildItem 'Registry::HKEY_USERS' -ErrorAction SilentlyContinue | Where-Object {
+            $_.PSChildName -match '^S-1-5-21-'
+        } | ForEach-Object {
+            $keys += (Join-Path $_.PSPath 'Software\Mozilla\Mozilla Firefox')
+        }
+    }
+    catch { }
+
+    foreach ($key in $keys) {
+        if (-not (Test-Path -LiteralPath $key)) { continue }
+        $current = ''
+        try { $current = [string](Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue).CurrentVersion } catch { }
+        if (-not $current -or $current -match 'ESR|Beta|Developer|Nightly|Aurora') { continue }
+        $dir = ''
+        try {
+            $main = Join-Path $key ($current + '\Main')
+            $props = Get-ItemProperty -LiteralPath $main -ErrorAction SilentlyContinue
+            if ($props) { $dir = [string]$props.'Install Directory' }
+        }
+        catch { }
+        $ver = ''
+        if ($current -match '^(\d+(?:\.\d+){1,3})') { $ver = $Matches[1] }
+        [void]$rows.Add([pscustomobject]@{
+                DisplayName     = ('Mozilla Firefox ({0})' -f $current)
+                DisplayVersion  = $ver
+                Publisher       = 'Mozilla'
+                InstallLocation = $dir
+                PSPath          = $key
+            })
+    }
+    if ($rows.Count -gt 0) { return @(Select-UniqueFirefoxInstall $rows) }
+
+    foreach ($exe in @(
+            (Join-Path $env:ProgramFiles 'Mozilla Firefox\firefox.exe'),
+            (Join-Path ${env:ProgramFiles(x86)} 'Mozilla Firefox\firefox.exe')
+        )) {
+        if (-not $exe -or -not (Test-Path -LiteralPath $exe)) { continue }
+        $channelFile = Join-Path (Split-Path -Parent $exe) 'defaults\pref\channel-prefs.js'
+        if (Test-Path -LiteralPath $channelFile) {
+            $channel = Get-Content -LiteralPath $channelFile -Raw -ErrorAction SilentlyContinue
+            if ($channel -match 'esr|beta|aurora|nightly') { continue }
+        }
+        $ver = ''
+        try {
+            $product = [string]([Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion)
+            if ($product -match '^(\d+(?:\.\d+){1,3})') { $ver = $Matches[1] }
+        }
+        catch { }
+        [void]$rows.Add([pscustomobject]@{
+                DisplayName     = 'Mozilla Firefox'
+                DisplayVersion  = $ver
+                Publisher       = 'Mozilla'
+                InstallLocation = (Split-Path -Parent $exe)
+                PSPath          = $exe
+            })
+    }
+    return @(Select-UniqueFirefoxInstall $rows)
+}
+
+function Select-UniqueFirefoxInstall {
+    param([object[]]$Rows)
+    $seen = @{}
+    $unique = New-Object System.Collections.Generic.List[object]
+    foreach ($row in $Rows) {
+        if (-not $row) { continue }
+        $key = [string]$row.InstallLocation
+        if (-not $key) { $key = [string]$row.DisplayVersion }
+        $key = $key.ToLower()
+        if ($key.EndsWith('\')) { $key = $key.Substring(0, $key.Length - 1) }
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        [void]$unique.Add($row)
+    }
+    return @($unique.ToArray())
 }
 
 function Resolve-RealExecutable {
@@ -898,7 +993,7 @@ function Invoke-SevenZipKeepLatest {
 
 function Get-MyToolsScript {
     param([Parameter(Mandatory)][string]$RelativePath)
-    $uri = "https://api.github.com/repos/$MyToolsRepo/contents/$RelativePath`?ref=$MyToolsRef"
+    $uri = "https://raw.githubusercontent.com/$MyToolsRepo/$MyToolsRef/$RelativePath"
     Write-VulnLog ("Fetching mytools script: {0}" -f $RelativePath)
     $wc = New-Object Net.WebClient
     $wc.Headers.Add('User-Agent', "VulnSoftwareUpdate/$ScriptVersion")
@@ -1253,10 +1348,19 @@ foreach ($item in $selected) {
                 Invoke-SevenZipKeepLatest -WingetPath $winget -CheckOnly:$CheckOnly -Force:$Force
                 break
             }
-            $hits = Find-InstalledMatches -CatalogItem $item -InstalledApps $installedApps
+            if ($item.Id -eq 'Firefox') {
+                $hits = @(Get-FirefoxInstalls -InstalledApps $installedApps)
+            }
+            else {
+                $hits = Find-InstalledMatches -CatalogItem $item -InstalledApps $installedApps
+            }
             if ($hits.Count -eq 0) {
+                $missing = 'Not detected in uninstall registry.'
+                if ($item.Id -eq 'Firefox') {
+                    $missing = 'Not detected in the uninstall registry, the Mozilla registry key, or Program Files.'
+                }
                 Add-Result -Id $item.Id -Name $item.Name -Status 'SKIPPED_NOT_INSTALLED' `
-                    -Detail 'Not detected in uninstall registry.'
+                    -Detail $missing
                 break
             }
             $localVer = ($hits | Select-Object -First 1).DisplayVersion
