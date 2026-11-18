@@ -22,6 +22,7 @@ Double-click [ScToolLauncher.cmd](ScToolLauncher.cmd) in this folder to open the
 | [KeeperSsh](KeeperSsh/) | Run SSH commands on switches, firewalls, and Linux hosts with the Keeper login for that IP; the password stays in a local helper process |
 | [M365AppsUpdate](M365AppsUpdate/) | Silent M365 Apps Click-to-Run check/update; clear up-to-date verdict; does not close Office apps by default |
 | [MicrosoftEdgeUpdate](MicrosoftEdgeUpdate/) | Check or update installed Microsoft Edge stable. Does not install Edge when it is missing |
+| [MmioStaleData](MmioStaleData/) | Set the Intel MMIO stale-data registry mitigation. Does not install software or reboot. AMD is left alone |
 | [OutlookDisableCache](OutlookDisableCache/) | Force classic Outlook online-only on a shared lab PC: every profile plus Default, optional delete of `.ost` / `.nst` |
 | [StaleUserProfile](StaleUserProfile/) | List Windows user profiles older than a chosen age on a shared lab PC (default 2 months), then remove only that list. Accounts stay |
 | [PhpUse](PhpUse/) | Read-only check, for workstations and Windows Server, for whether PHP is running or set up to run, and whether `php.exe` is installed. Servers are not skipped |

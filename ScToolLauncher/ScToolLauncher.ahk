@@ -1004,6 +1004,22 @@ Browser Assistant — Blaze Media helper, updater, BAv MSI
     ),
     Map(
         "Category", "Hardening",
+        "Name", "MMIO stale data",
+        "Summary", "Set the Intel MMIO stale-data registry mitigation (CVE-2022-21123 and related). Does not install anything or reboot. AMD is left alone.",
+        "DocsUrl", "https://github.com/monobrau/mytools/tree/main/MmioStaleData",
+        "Fetch", "Contents",
+        "Path", "MmioStaleData",
+        "Script", "Enable-MmioStaleDataMitigation.ps1",
+        "UaPrefix", "MmioStaleData-bootstrap",
+        "UaVer", "1.0.0",
+        "TimeoutScan", 120000,
+        "TimeoutUpdate", 120000,
+        "Flags", "CheckOnly Remediate NoExit",
+        "Note", "Prefer elevated PowerShell. Scan reports CPU, BIOS, and the current override. Apply writes 72 when Hyper-Threading is on, or 8264 when it is already off. It does not turn Hyper-Threading off, and it does not replace a value that is already set. AMD is a false positive. Restart is required and is not done here. BHI (8388680 / 8396872) is -IncludeBhi, which this button does not pass.",
+        "ClipboardNote", "NOTE: Scan is dry-run. Apply sets FeatureSettingsOverride for Intel MMIO stale data only when the keys are missing. Does not reboot. AMD is not changed."
+    ),
+    Map(
+        "Category", "Hardening",
         "Name", "Disable PowerShell 2.0",
         "Summary", "Disable the Windows PowerShell 2.0 optional features (MicrosoftWindowsPowerShellV2 and V2Root). Apply only. Does not restart the PC.",
         "DocsUrl", "https://github.com/monobrau/mytools/tree/main/PowerShellV2Disable",
@@ -2398,6 +2414,10 @@ RefreshOptionEnable(*) {
         gCtrls["ModeScan"].Text := "Check SSBD mitigation"
         gCtrls["ModeUpdate"].Text := "Enable SSBD mitigation"
     }
+    if InStr(ToolGet(t, "Path", ""), "MmioStaleData") {
+        gCtrls["ModeScan"].Text := "Check MMIO mitigation"
+        gCtrls["ModeUpdate"].Text := "Set MMIO registry keys"
+    }
     if InStr(ToolGet(t, "Path", ""), "PowerShellV2Disable") {
         gCtrls["ModeUpdate"].Text := "Disable PowerShell 2.0"
     }
@@ -3161,6 +3181,12 @@ DescribeSelection(tool, isScan) {
             mode := "Check SSBD mitigation"
         else
             mode := "Enable SSBD mitigation"
+    }
+    if InStr(ToolGet(tool, "Path", ""), "MmioStaleData") {
+        if isScan
+            mode := "Check MMIO mitigation"
+        else
+            mode := "Set MMIO registry keys"
     }
     if InStr(ToolGet(tool, "Path", ""), "PowerShellV2Disable") {
         mode := "Disable PowerShell 2.0"
