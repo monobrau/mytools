@@ -55,7 +55,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.0.0'
+$ScriptVersion = '1.0.1'
 $SubKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
 $OverrideWithHt = [uint32]72
 $OverrideWithoutHt = [uint32]8264
@@ -215,9 +215,12 @@ try {
     $cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
     $manufacturer = [string]$cs.Manufacturer
     $model = [string]$cs.Model
-    if ($cs.HypervisorPresent) { $vm = $true }
-    if ("$manufacturer $model" -match 'VMware|Virtual|KVM|Xen|QEMU|Hyper-V') { $vm = $true }
-    Write-MmioLog ("Computer: {0} {1}. VM={2}" -f $manufacturer.Trim(), $model.Trim(), $vm)
+    $id = ("{0} {1}" -f $manufacturer, $model).Trim()
+    if ($id -match 'VMware|VirtualBox|Virtual Machine|KVM|Xen|QEMU|HVM domU|\bAHV\b') { $vm = $true }
+    Write-MmioLog ("Computer: {0}. VM={1}. HypervisorPresent={2}" -f $id, $vm, [bool]$cs.HypervisorPresent)
+    if ($cs.HypervisorPresent -and -not $vm) {
+        Write-MmioLog 'HypervisorPresent is set on a physical model. That is VBS, WSL, or the Hyper-V platform, not a guest VM.'
+    }
 }
 catch {
     Write-MmioLog 'Win32_ComputerSystem could not be read.' 'WARN'
@@ -228,8 +231,17 @@ $biosDate = ''
 try {
     $bios = Get-CimInstance -ClassName Win32_BIOS -ErrorAction Stop
     $biosVersion = [string]$bios.SMBIOSBIOSVersion
-    if ($bios.ReleaseDate) {
-        $biosDate = ([Management.ManagementDateTimeConverter]::ToDateTime([string]$bios.ReleaseDate)).ToString('yyyy-MM-dd')
+    $rawDate = $bios.ReleaseDate
+    if ($rawDate -is [datetime]) {
+        $biosDate = $rawDate.ToString('yyyy-MM-dd')
+    }
+    elseif ($rawDate) {
+        try {
+            $biosDate = ([Management.ManagementDateTimeConverter]::ToDateTime([string]$rawDate)).ToString('yyyy-MM-dd')
+        }
+        catch {
+            Write-MmioLog ("BIOS date could not be parsed: {0}" -f $rawDate) 'WARN'
+        }
     }
     Write-MmioLog ("BIOS: {0} {1}" -f $biosVersion, $biosDate)
     if ($biosDate -and ([datetime]$biosDate) -lt [datetime]'2022-06-14') {
