@@ -142,7 +142,7 @@ Mozilla Firefox
         "Path", "VulnSoftwareUpdate",
         "Script", "Update-VulnSoftware.ps1",
         "UaPrefix", "VulnSoftwareUpdate-bootstrap",
-        "UaVer", "1.4.9",
+        "UaVer", "1.4.10",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
         "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers ProductMulti NoExit",

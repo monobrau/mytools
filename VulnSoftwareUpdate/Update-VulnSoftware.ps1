@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.9'
+$ScriptVersion = '1.4.10'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -465,30 +465,48 @@ function Get-WingetVersionFromLine {
     return $null
 }
 
+function Read-WingetListedPackage {
+    param([string]$Text, [string]$WingetId)
+    $found = $null
+    foreach ($line in ($Text -split "`r?`n")) {
+        $parsed = Get-WingetVersionFromLine -Line $line -WingetId $WingetId
+        if ($parsed) { $found = $parsed }
+    }
+    return $found
+}
+
 function Get-WingetPackageState {
     param([string]$WingetPath, [string]$WingetId)
     # IMPORTANT: never call `winget upgrade --id ...` here - that APPLIES updates.
-    # Use `winget list` only (with --upgrade-available when supported).
+    # --upgrade-available lists only packages with a newer version. An empty
+    # result means "no upgrade", not "not installed".
+    $plainArgs = @(
+        'list', '--id', $WingetId, '--exact',
+        '--accept-source-agreements', '--disable-interactivity'
+    )
     $list = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
         'list', '--id', $WingetId, '--exact',
         '--upgrade-available',
         '--accept-source-agreements', '--disable-interactivity'
     ) -TimeoutSec 180 -QuietOutput
 
+    $filtered = $true
     # Older winget may not support --upgrade-available; fall back to plain list
     if ($list.ExitCode -ne 0 -or ($list.StdErr -match 'upgrade-available|unrecognized')) {
-        $list = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
-            'list', '--id', $WingetId, '--exact',
-            '--accept-source-agreements', '--disable-interactivity'
-        ) -TimeoutSec 180 -QuietOutput
+        $filtered = $false
+        $list = Invoke-Winget -WingetPath $WingetPath -ArgumentList $plainArgs -TimeoutSec 180 -QuietOutput
+    }
+
+    $parsed = Read-WingetListedPackage -Text $list.StdOut -WingetId $WingetId
+    if ($filtered -and -not $parsed) {
+        $list = Invoke-Winget -WingetPath $WingetPath -ArgumentList $plainArgs -TimeoutSec 180 -QuietOutput
+        $parsed = Read-WingetListedPackage -Text $list.StdOut -WingetId $WingetId
     }
 
     $installed = $null
     $available = $null
     $needsUpdate = $false
-    foreach ($line in ($list.StdOut -split "`r?`n")) {
-        $parsed = Get-WingetVersionFromLine -Line $line -WingetId $WingetId
-        if (-not $parsed) { continue }
+    if ($parsed) {
         $installed = $parsed.Installed
         if ($parsed.HasUpgradeColumn -and $parsed.Available) {
             $available = $parsed.Available
@@ -496,8 +514,11 @@ function Get-WingetPackageState {
         }
     }
 
-    # Fallback: full upgrade *listing* (no package id => does not apply updates)
-    if ($installed -and -not $needsUpdate) {
+    # Older winget has no --upgrade-available column. A full upgrade listing
+    # (no package id, so it does not apply updates) is the only remaining signal.
+    # Current winget already answered with the filtered list, and that full
+    # listing can sit until the timeout on a quiet package.
+    if ($installed -and -not $needsUpdate -and -not $filtered) {
         $upgradeList = Invoke-Winget -WingetPath $WingetPath -ArgumentList @(
             'upgrade', '--accept-source-agreements', '--disable-interactivity', '--include-unknown'
         ) -TimeoutSec 180 -QuietOutput
@@ -722,7 +743,8 @@ function Invoke-SevenZipKeepLatest {
     $needsWinget = $false
     if ($WingetPath) {
         $state = Get-WingetPackageState -WingetPath $WingetPath -WingetId '7zip.7zip'
-        $needsWinget = [bool]($state.NeedsUpdate -or $Force -or -not $state.Present)
+        # Force retries an upgrade later. It does not invent an available update.
+        $needsWinget = [bool]($state.NeedsUpdate -or -not $state.Present)
     }
     $stale = ($extra.Count -gt 0) -or (-not $keeper)
 
@@ -750,7 +772,9 @@ function Invoke-SevenZipKeepLatest {
         return
     }
 
-    if ($WingetPath -and $needsWinget) {
+    $wingetChanged = $false
+    $wingetCurrent = $false
+    if ($WingetPath -and ($needsWinget -or ($Force -and $state.Present))) {
         if ($state.Present) {
             $up = Update-WingetPackage -WingetPath $WingetPath -WingetId '7zip.7zip'
             Write-VulnLog ("7-Zip winget upgrade exit {0}" -f $up.ExitCode)
@@ -759,6 +783,10 @@ function Invoke-SevenZipKeepLatest {
             $up = Install-WingetPackage -WingetPath $WingetPath -WingetId '7zip.7zip'
             Write-VulnLog ("7-Zip winget install exit {0}" -f $up.ExitCode)
         }
+        $wingetText = [string]$up.StdOut + [string]$up.StdErr
+        # 0x8A15002B: no newer package version is available.
+        $wingetCurrent = ($up.ExitCode -eq -1978335189) -or ($wingetText -match 'No available upgrade found|No newer package versions are available')
+        $wingetChanged = ($up.ExitCode -eq 0) -and -not $wingetCurrent
     }
 
     $current = @(Get-SevenZipInstalls)
@@ -797,7 +825,7 @@ function Invoke-SevenZipKeepLatest {
     $left = @(Get-SevenZipInstalls)
     $leftText = Format-SevenZipList -Installs $left
     $stillBehind = $false
-    if ($WingetPath -and $needsWinget) {
+    if ($WingetPath -and $needsWinget -and -not $wingetCurrent) {
         $after = Get-WingetPackageState -WingetPath $WingetPath -WingetId '7zip.7zip'
         $stillBehind = [bool]($after.NeedsUpdate -or -not $after.Present)
     }
@@ -815,7 +843,7 @@ function Invoke-SevenZipKeepLatest {
         return
     }
 
-    $status = if ($needsWinget -or $removed -gt 0) { 'UPDATED' } else { 'UP_TO_DATE' }
+    $status = if ($wingetChanged -or $removed -gt 0) { 'UPDATED' } else { 'UP_TO_DATE' }
     Add-Result -Id 'SevenZip' -Name '7-Zip' -Status $status `
         -Detail ("Remaining: {0}. Removed {1} older install(s)." -f $leftText, $removed) `
         -InstalledVersion $leftText
