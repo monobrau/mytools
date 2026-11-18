@@ -145,7 +145,8 @@ Mozilla Firefox
         "UaVer", "1.4.9",
         "TimeoutScan", 900000,
         "TimeoutUpdate", 1800000,
-        "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers Product NoExit"
+        "Flags", "CheckOnly Force ForceAppShutdown IncludeBrowsers ProductMulti NoExit",
+        "ProductList", "All|7-Zip=SevenZip|.NET 6+=DotNet|Adobe Acrobat / Reader=AdobeAcrobat|AWS CLI=AwsCli|Azure CLI=AzureCLI|Dell SupportAssist=DellSupportAssist|FileZilla=FileZilla|Foxit PDF Reader=FoxitReader|GIMP=GIMP|Git=Git|GitHub CLI=GitHubCli|Google Chrome=Chrome|Greenshot=Greenshot|HP Support Assistant=HpSupportAssistant|KeePass=KeePass|KeePassXC=KeePassXC|Microsoft 365 Apps=M365Apps|Microsoft Edge=Edge|Microsoft Edge WebView2=WebView2|Mozilla Firefox=Firefox|Notepad++=NotepadPlusPlus|PowerShell 7=PowerShell7|PowerToys=PowerToys|PuTTY=PuTTY|Python 3.11=Python311|Python 3.12=Python312|Python 3.13=Python313|Python 3.14=Python314|ShareX=ShareX|SumatraPDF=SumatraPDF|Sysinternals Suite=SysinternalsSuite|Teams Network Assessment=TeamsNetworkAssessment|TreeSize Free=TreeSizeFree|UltraVNC=UltraVNC|Visual C++ 2005-2013=VcRedistLegacy|Visual C++ 2015+ x64=VcRedistX64|Visual C++ 2015+ x86=VcRedistX86|Visual Studio Code=VSCode|VLC=VLC|Winamp=Winamp|Windows Terminal=WindowsTerminal|WinRAR=WinRAR|WinSCP=WinSCP"
     ),
     Map(
         "Category", "Updates",
@@ -1156,6 +1157,8 @@ gLastToolIndex := 1     ; last real tool selection (survives category collapse)
 gTreeFilling := false   ; ignore tree selection events while the filter rebuilds it
 gFlowKeys := []         ; control stack order for ReflowGui
 gPupFamilySource := ""  ; last ProductList loaded into the PUP family dropdown
+gProductMultiSource := ""
+gProductMultiIds := []
 
 ; --- tray / identity ---
 ; Keep the AHK v2 tray menu (includes Reload Script / Edit / Exit).
@@ -1591,6 +1594,7 @@ ShowGui(*) {
 
     gCtrls["LblProduct"] := gGui.Add("Text", "Section", "Product filter (e.g. DotNet, ShareX)")
     gCtrls["Product"] := gGui.Add("Edit", "w" UiContentW " vProduct", "")
+    gCtrls["ProductMulti"] := gGui.Add("ListBox", "w" UiContentW " r8 Multi vProductMulti", ["All"])
     gCtrls["LblPupFamily"] := gGui.Add("Text", "Section", "PUP family")
     gCtrls["PupFamily"] := gGui.Add("DropDownList", "w" UiContentW " vPupFamily", ["All on host"])
 
@@ -1696,7 +1700,7 @@ ShowGui(*) {
         "LblOptions", "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
         "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning", "ResetPlatform",
         "AutoReboot", "AllowServer", "SkipFido", "IncludeSummary", "LblHuntressRebootAt", "HuntressRebootAt",
-        "LblProduct", "Product",
+        "LblProduct", "Product", "ProductMulti",
         "LblPupFamily", "PupFamily",
         "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
         "LblDomainController", "DomainController", "LblDomain", "Domain",
@@ -1765,6 +1769,8 @@ ReflowGui() {
         cw := contentW
         if (key = "CsInstallScript")
             ch := 72
+        else if (key = "ProductMulti")
+            ch := 132
         else if (key = "Summary")
             ch := 52
         else if (key = "HelpBody")
@@ -2013,6 +2019,57 @@ FillPupFamilyList(tool) {
         gCtrls["PupFamily"].Choose(1)
 }
 
+FillProductMultiList(tool) {
+    global gCtrls, gProductMultiSource, gProductMultiIds
+    raw := ToolGet(tool, "ProductList", "")
+    if (raw = gProductMultiSource)
+        return
+    gProductMultiSource := raw
+    labels := []
+    gProductMultiIds := []
+    for part in StrSplit(raw, "|") {
+        p := Trim(part)
+        if (p = "")
+            continue
+        eq := InStr(p, "=")
+        if (eq > 1) {
+            labels.Push(SubStr(p, 1, eq - 1))
+            gProductMultiIds.Push(SubStr(p, eq + 1))
+        } else {
+            labels.Push(p)
+            gProductMultiIds.Push("")
+        }
+    }
+    gCtrls["ProductMulti"].Delete()
+    if labels.Length
+        gCtrls["ProductMulti"].Add(labels)
+    if labels.Length
+        gCtrls["ProductMulti"].Choose(1)
+}
+
+ProductMultiArg() {
+    global gCtrls, gProductMultiIds
+    sel := gCtrls["ProductMulti"].Value
+    indexes := []
+    if (sel is Array)
+        indexes := sel
+    else if (sel is Integer && sel > 0)
+        indexes.Push(sel)
+    ids := []
+    for index in indexes {
+        if (index < 1 || index > gProductMultiIds.Length)
+            continue
+        id := gProductMultiIds[index]
+        if (id = "")
+            return ""
+        ids.Push(id)
+    }
+    out := ""
+    for id in ids
+        out .= (out = "" ? "" : ",") . id
+    return out
+}
+
 SelectedTool() {
     global Tools, gCtrls, gToolByNode, gLastToolIndex
     node := gCtrls["ToolTree"].GetSelection()
@@ -2057,7 +2114,7 @@ RefreshOptionEnable(*) {
             "Force", "ForceAppShutdown", "IncludeBrowsers", "Uninstall", "Detailed",
             "BlockReinstall", "RemoveSupportAssistant", "ClearAllBackupContent", "SkipIfRunning",
             "ResetPlatform", "AutoReboot", "AllowServer", "SkipFido", "IncludeSummary", "LblHuntressRebootAt", "HuntressRebootAt",
-            "LblProduct", "Product", "LblPupFamily", "PupFamily",
+            "LblProduct", "Product", "ProductMulti", "LblPupFamily", "PupFamily",
             "LblVendor", "Vendor", "LblAvSecret", "AvSecret",
             "LblDomainController", "DomainController", "LblDomain", "Domain",
             "LblCsOs", "CsOs",
@@ -2102,6 +2159,7 @@ RefreshOptionEnable(*) {
     showRmHpsa := ToolHasFlag(t, "RemoveSupportAssistant")
     showClearAllBackup := ToolHasFlag(t, "ClearAllBackupContent")
     showProduct := ToolHasFlag(t, "Product")
+    showProductMulti := ToolHasFlag(t, "ProductMulti")
     showPupFamily := ToolHasFlag(t, "ProductList")
     showVendor := ToolHasFlag(t, "Vendor")
     showDomain := ToolHasFlag(t, "Domain")
@@ -2175,8 +2233,15 @@ RefreshOptionEnable(*) {
     showHuntressRebootAt := showHuntress && showAutoReboot && gCtrls["AutoReboot"].Value
     SetCtrlShown(gCtrls["LblHuntressRebootAt"], showHuntressRebootAt)
     SetCtrlShown(gCtrls["HuntressRebootAt"], showHuntressRebootAt)
-    SetCtrlShown(gCtrls["LblProduct"], showProduct)
+    SetCtrlShown(gCtrls["LblProduct"], showProduct || showProductMulti)
+    if (showProductMulti)
+        gCtrls["LblProduct"].Text := "Products (All, or Ctrl/Shift+click)"
+    else
+        gCtrls["LblProduct"].Text := "Product filter (e.g. DotNet, ShareX)"
     SetCtrlShown(gCtrls["Product"], showProduct)
+    if (showProductMulti)
+        FillProductMultiList(t)
+    SetCtrlShown(gCtrls["ProductMulti"], showProductMulti)
     if showPupFamily {
         if ToolHasFlag(t, "PupBlock")
             gCtrls["LblPupFamily"].Text := "PUP family (All catalog = every family)"
@@ -2499,12 +2564,17 @@ ShowAffectsPopup(*) {
         if (prod != "")
             scope .= "This copy is limited to catalog id(s): " prod "`r`n`r`n"
     }
+    if ToolHasFlag(tool, "ProductMulti") && CtrlActive(gCtrls["ProductMulti"]) {
+        picked := ProductMultiArg()
+        if (picked != "")
+            scope .= "This copy is limited to catalog id(s): " picked "`r`n`r`n"
+    }
     if ToolHasFlag(tool, "ProductList") && CtrlActive(gCtrls["PupFamily"]) {
         fam := Trim(gCtrls["PupFamily"].Text)
         if (fam != "" && fam != "All on host" && fam != "All catalog")
             scope .= "This copy is limited to family: " fam "`r`n`r`n"
     }
-    if ToolHasFlag(tool, "IncludeBrowsers") {
+    if ToolHasFlag(tool, "IncludeBrowsers") && !(ToolHasFlag(tool, "ProductMulti") && CtrlActive(gCtrls["ProductMulti"]) && ProductMultiArg() != "") {
         if CtrlActive(gCtrls["IncludeBrowsers"]) && gCtrls["IncludeBrowsers"].Value
             scope .= "Include browsers is checked, so Chrome, Edge, and Firefox are in this copy.`r`n`r`n"
         else
@@ -2640,6 +2710,11 @@ BuildSwitches(tool, isScan, isCommands) {
             else
                 sw.Push("-Product " prod)
         }
+    }
+    if ToolHasFlag(tool, "ProductMulti") && CtrlActive(gCtrls["ProductMulti"]) {
+        picked := ProductMultiArg()
+        if (picked != "")
+            sw.Push("-Product " picked)
     }
 
     if ToolHasFlag(tool, "ProductList") && CtrlActive(gCtrls["PupFamily"]) {
@@ -3291,6 +3366,11 @@ DescribeSelection(tool, isScan) {
         prod := Trim(gCtrls["Product"].Value)
         if prod != ""
             parts.Push("Product=" prod)
+    }
+    if CtrlActive(gCtrls["ProductMulti"]) {
+        picked := ProductMultiArg()
+        if (picked != "")
+            parts.Push("Product=" picked)
     }
     if CtrlActive(gCtrls["PupFamily"]) {
         fam := Trim(gCtrls["PupFamily"].Text)
