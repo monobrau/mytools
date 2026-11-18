@@ -58,7 +58,7 @@ Set-StrictMode -Off
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$ScriptVersion = '1.4.10'
+$ScriptVersion = '1.4.11'
 $MyToolsRepo = 'monobrau/mytools'
 $MyToolsRef = 'main'
 
@@ -338,7 +338,7 @@ function Get-VulnCatalog {
             Id = 'Firefox'; Name = 'Mozilla Firefox'; Method = 'Winget'; WingetId = 'Mozilla.Firefox'
             Match = @('^Mozilla Firefox$', '^Mozilla Firefox \(', '^Firefox$')
             OptionalGroup = 'Browsers'
-            Notes = 'Opt-in (-IncludeBrowsers). Stable only (skips ESR/Beta/Dev by name); may close sessions'
+            Notes = 'Opt-in (-IncludeBrowsers). Stable only (skips ESR/Beta/Dev by name). Uses winget, or the Mozilla installer when winget is missing. May close sessions'
         }
     )
 }
@@ -389,16 +389,52 @@ function Find-InstalledMatches {
     @($InstalledApps | Where-Object { Test-NameMatch -DisplayName $_.DisplayName -Patterns $CatalogItem.Match })
 }
 
+function Resolve-RealExecutable {
+    param([string]$Path)
+    if (-not $Path) { return $null }
+    $item = Get-Item -LiteralPath $Path -ErrorAction SilentlyContinue
+    # App execution aliases are 0-byte reparse points and do not run as SYSTEM.
+    if ($item -and -not $item.PSIsContainer -and $item.Length -gt 0) { return $item.FullName }
+    return $null
+}
+
 function Get-WingetPath {
     $cmd = Get-Command winget.exe -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    $candidates = @(
-        (Join-Path $env:LocalAppData 'Microsoft\WindowsApps\winget.exe')
-        (Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe')
-    )
-    foreach ($c in $candidates) {
-        $resolved = Get-Item $c -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($resolved) { return $resolved.FullName }
+    if ($cmd -and $cmd.Source) { return $cmd.Source }
+
+    $roots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ }
+    foreach ($root in $roots) {
+        $base = Join-Path $root 'WindowsApps'
+        if (-not (Test-Path -LiteralPath $base)) { continue }
+        $dirs = @(Get-ChildItem -LiteralPath $base -Directory -Filter 'Microsoft.DesktopAppInstaller_*' -ErrorAction SilentlyContinue |
+                Sort-Object Name -Descending)
+        foreach ($dir in $dirs) {
+            $exe = Resolve-RealExecutable (Join-Path $dir.FullName 'winget.exe')
+            if ($exe) { return $exe }
+        }
+    }
+
+    $packages = @()
+    try {
+        $packages = @(Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' -AllUsers -ErrorAction SilentlyContinue)
+    }
+    catch { }
+    if ($packages.Count -eq 0) {
+        try {
+            Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList' -ErrorAction SilentlyContinue | ForEach-Object {
+                if ($_.PSChildName -notmatch '^S-1-5-21-') { return }
+                try {
+                    $packages += @(Get-AppxPackage -Name 'Microsoft.DesktopAppInstaller' -User $_.PSChildName -ErrorAction SilentlyContinue)
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
+    foreach ($pkg in ($packages | Sort-Object { try { [version]$_.Version } catch { [version]'0.0' } } -Descending)) {
+        if (-not $pkg.InstallLocation) { continue }
+        $exe = Resolve-RealExecutable (Join-Path $pkg.InstallLocation 'winget.exe')
+        if ($exe) { return $exe }
     }
     return $null
 }
@@ -425,6 +461,17 @@ function Invoke-Winget {
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.CreateNoWindow = $true
+    $wingetDir = Split-Path -Parent $WingetPath
+    if ($wingetDir) {
+        $psi.WorkingDirectory = $wingetDir
+        try {
+            $oldPath = [string]$psi.EnvironmentVariables['Path']
+            if ($oldPath -notlike ($wingetDir + '*')) {
+                $psi.EnvironmentVariables['Path'] = $wingetDir + ';' + $oldPath
+            }
+        }
+        catch { }
+    }
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo = $psi
     [void]$p.Start()
@@ -896,6 +943,152 @@ function Resolve-AdobeWingetId {
     return 'Adobe.Acrobat.Reader.64-bit'
 }
 
+function ConvertTo-DottedVersion {
+    param([string]$Text)
+    if ($Text -match '(\d+(?:\.\d+){1,3})') {
+        $parts = @($Matches[1].Split('.'))
+        while ($parts.Count -lt 3) { $parts += '0' }
+        try { return [version]($parts[0..2] -join '.') } catch { }
+    }
+    return $null
+}
+
+function Get-PeMachine {
+    param([string]$Path)
+    $stream = $null
+    $reader = $null
+    try {
+        $stream = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+        $reader = New-Object IO.BinaryReader $stream
+        $stream.Position = 0x3C
+        $pe = $reader.ReadInt32()
+        $stream.Position = $pe + 4
+        return [int]$reader.ReadUInt16()
+    }
+    catch { return 0 }
+    finally {
+        if ($reader) { $reader.Dispose() }
+        elseif ($stream) { $stream.Dispose() }
+    }
+}
+
+function Get-FirefoxOsToken {
+    param($Hit)
+    $name = [string]$Hit.DisplayName
+    $loc = [string]$Hit.InstallLocation
+    if ($name -match 'ARM64|aarch64') { return 'win64-aarch64' }
+    $exe = $null
+    if ($loc) { $exe = Join-Path $loc 'firefox.exe' }
+    if ($exe -and (Test-Path -LiteralPath $exe)) {
+        $machine = Get-PeMachine $exe
+        if ($machine -eq 0x14C) { return 'win' }
+        if ($machine -eq 0xAA64) { return 'win64-aarch64' }
+        if ($machine -eq 0x8664) { return 'win64' }
+    }
+    if ($name -match '\bx86\b' -or $loc -match 'Program Files \(x86\)') { return 'win' }
+    return 'win64'
+}
+
+function Get-FirefoxLocale {
+    param([string]$DisplayName)
+    if ($DisplayName -match '\b([a-z]{2,3}-[A-Za-z]{2})\b') { return $Matches[1] }
+    return 'en-US'
+}
+
+function Get-MozillaLatestFirefoxVersion {
+    $wc = New-Object Net.WebClient
+    $wc.Headers.Add('User-Agent', "VulnSoftwareUpdate/$ScriptVersion")
+    $raw = $wc.DownloadString('https://product-details.mozilla.org/1.0/firefox_versions.json')
+    $json = $raw | ConvertFrom-Json
+    $latest = [string]$json.LATEST_FIREFOX_VERSION
+    if (-not $latest) { throw 'Mozilla did not return LATEST_FIREFOX_VERSION.' }
+    return $latest
+}
+
+function Install-MozillaFirefoxLatest {
+    param([string]$Os, [string]$Lang)
+    $url = "https://download.mozilla.org/?product=firefox-latest-ssl&os=$Os&lang=$Lang"
+    $dest = Join-Path $env:TEMP 'mytools-FirefoxSetup.exe'
+    if (Test-Path -LiteralPath $dest) { Remove-Item -LiteralPath $dest -Force }
+    Write-VulnLog ("Downloading Firefox installer ({0}, {1})" -f $Os, $Lang)
+    $wc = New-Object Net.WebClient
+    $wc.Headers.Add('User-Agent', "VulnSoftwareUpdate/$ScriptVersion")
+    $wc.DownloadFile($url, $dest)
+    $size = (Get-Item -LiteralPath $dest).Length
+    if ($size -lt 1MB) { throw "Firefox installer download was too small ($size bytes)." }
+    Write-VulnLog 'Running Firefox installer /S'
+    $proc = Start-Process -FilePath $dest -ArgumentList '/S' -Wait -PassThru -WindowStyle Hidden
+    return [int]$proc.ExitCode
+}
+
+function Update-FirefoxWithoutWinget {
+    param(
+        $Hits,
+        [switch]$CheckOnly
+    )
+    $chosen = @($Hits | Where-Object { $_.DisplayName -notmatch 'ESR|Beta|Developer Edition|Nightly' } | Select-Object -First 1)
+    if (-not $chosen) {
+        Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'MANUAL' `
+            -Detail 'Only a non-stable Firefox channel is installed. The rapid-release installer was not run.'
+        return
+    }
+    $localText = [string]$chosen.DisplayVersion
+    $local = ConvertTo-DottedVersion $localText
+    try {
+        $latestText = Get-MozillaLatestFirefoxVersion
+    }
+    catch {
+        Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'ERROR' `
+            -Detail ("winget is not installed, and Mozilla's version list could not be read. {0}" -f $_.Exception.Message) `
+            -InstalledVersion $localText
+        return
+    }
+    $latest = ConvertTo-DottedVersion $latestText
+    $behind = $true
+    if ($local -and $latest) { $behind = ($local -lt $latest) }
+    if (-not $behind) {
+        Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'UP_TO_DATE' `
+            -Detail ("Installed {0}. Mozilla latest is {1}. winget is not installed." -f $localText, $latestText) `
+            -InstalledVersion $localText -TargetVersion $latestText
+        return
+    }
+    $os = Get-FirefoxOsToken $chosen
+    $lang = Get-FirefoxLocale $chosen.DisplayName
+    if ($CheckOnly) {
+        Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'UPDATE_AVAILABLE' `
+            -Detail ("Installed {0}. Mozilla latest is {1}. winget is not installed; would run the {2} {3} installer." -f $localText, $latestText, $os, $lang) `
+            -InstalledVersion $localText -TargetVersion $latestText
+        return
+    }
+    try {
+        $code = Install-MozillaFirefoxLatest -Os $os -Lang $lang
+    }
+    catch {
+        Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'ERROR' `
+            -Detail $_.Exception.Message -InstalledVersion $localText -TargetVersion $latestText
+        return
+    }
+    $afterText = $localText
+    $afterHit = @(Get-InstalledApps | Where-Object { $_.DisplayName -eq $chosen.DisplayName } | Select-Object -First 1)
+    if ($afterHit) { $afterText = [string]$afterHit.DisplayVersion }
+    $after = ConvertTo-DottedVersion $afterText
+    if ($code -eq 0 -and $after -and $latest -and $after -ge $latest) {
+        Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'UPDATED' `
+            -Detail ("Mozilla installer exit 0. Now {0}." -f $afterText) `
+            -InstalledVersion $afterText -TargetVersion $latestText
+        return
+    }
+    if ($code -eq 0) {
+        Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'UPDATE_AVAILABLE' `
+            -Detail ("Mozilla installer exit 0, but the registry still shows {0}. Latest is {1}." -f $afterText, $latestText) `
+            -InstalledVersion $afterText -TargetVersion $latestText
+        return
+    }
+    Add-Result -Id 'Firefox' -Name 'Mozilla Firefox' -Status 'ERROR' `
+        -Detail ("Mozilla installer exit {0}. Installed {1}; latest {2}." -f $code, $afterText, $latestText) `
+        -InstalledVersion $afterText -TargetVersion $latestText
+}
+
 function Add-Result {
     param(
         [string]$Id,
@@ -1068,6 +1261,11 @@ foreach ($item in $selected) {
             }
             $localVer = ($hits | Select-Object -First 1).DisplayVersion
             if (-not $winget) {
+                if ($item.Id -eq 'Firefox') {
+                    Write-VulnLog 'winget not found. Updating Firefox from Mozilla.' 'WARN'
+                    Update-FirefoxWithoutWinget -Hits $hits -CheckOnly:$CheckOnly
+                    break
+                }
                 Add-Result -Id $item.Id -Name $item.Name -Status 'MANUAL' `
                     -Detail ("Installed {0} but winget missing - update manually." -f $localVer) `
                     -InstalledVersion $localVer
