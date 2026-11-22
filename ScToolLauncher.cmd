@@ -1,9 +1,10 @@
 @echo off
 setlocal
-rem Starts SC Tool Launcher (ScToolLauncher\ScToolLauncher.ahk) with AutoHotkey v2.
-set "SCRIPT=%~dp0ScToolLauncher\ScToolLauncher.ahk"
+rem The launcher lives in the work_ahk repo. This starts that copy when it sits next to mytools.
+set "SCRIPT=%~dp0..\work_ahk\ScToolLauncher\ScToolLauncher.ahk"
 if not exist "%SCRIPT%" (
-  echo ScToolLauncher.ahk was not found next to this file.
+  echo ScToolLauncher.ahk has moved to the work_ahk repo.
+  echo Clone https://github.com/monobrau/work_ahk next to this folder, or run ScToolLauncher.cmd there.
   pause
   exit /b 1
 )

@@ -2,7 +2,7 @@
 
 Public collection of work tools and scripts.
 
-Double-click [ScToolLauncher.cmd](ScToolLauncher.cmd) in this folder to open the tool launcher (requires [AutoHotkey v2](https://www.autohotkey.com/)).
+Double-click [ScToolLauncher.cmd](ScToolLauncher.cmd) in this folder to open the tool launcher. The AutoHotkey script lives in [work_ahk](https://github.com/monobrau/work_ahk/tree/main/ScToolLauncher) (requires [AutoHotkey v2](https://www.autohotkey.com/)).
 
 ## Tools
 
@@ -34,7 +34,7 @@ Double-click [ScToolLauncher.cmd](ScToolLauncher.cmd) in this folder to open the
 | [PythonCleanup](PythonCleanup/) | Uninstall vulnerable CPython (end of life, or older than the current security release). A newer install on the same PC does not keep the old one |
 | [ScreenConnectGpoDeploy](ScreenConnectGpoDeploy/) | Stage a ScreenConnect client MSI on NETLOGON and install it with a workstation Immediate Task GPO |
 | [ScreenConnectRogueHunt](ScreenConnectRogueHunt/) | Hunt that prints each distinct ScreenConnect instance ID once. Scan by default. `-Remediate` deletes installs that are not on the allow list |
-| [ScToolLauncher](ScToolLauncher/) | AutoHotkey v2 hotkey GUI — ScreenConnect tool shortcuts (any workflow): pick tool/mode and copy `#!ps` / Backstage bootstrap to clipboard |
+| [ScToolLauncher](ScToolLauncher/) | Moved to [work_ahk](https://github.com/monobrau/work_ahk/tree/main/ScToolLauncher). `ScToolLauncher.cmd` still starts it when that repo is next to this one |
 | [TeamsClassicRemnantCheck](TeamsClassicRemnantCheck/) | Post-cleanup check for Classic / per-user Microsoft Teams remnants (vuln-scan evidence; GitHub + ScreenConnect) |
 | [UnquotedServicePath](UnquotedServicePath/) | Read-only unquoted service path check. Prints an elevated `sc.exe` quote command when a user can write a split folder. Leaves Defender and Sense alone |
 | [VulnSoftwareUpdate](VulnSoftwareUpdate/) | Multi-product vuln remediation updater (M365/HPSA/DotNet/VC++ 2005-2013 delegates + winget; ScreenConnect `#!ps`) |
