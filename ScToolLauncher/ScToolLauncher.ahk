@@ -338,7 +338,7 @@ Mozilla Firefox
         "UaVer", "1.1.2",
         "TimeoutScan", 600000,
         "TimeoutUpdate", 14400000,
-        "DefaultArgs", "-Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows.iso'",
+        "DefaultArgs", "-Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows11_Client_x64_en-us_26300_9457.iso'",
         "Flags", "CheckOnly Force AutoReboot AllowServer SkipFido NoExit",
         "Note", "Keeps files, apps, and settings. Tries Microsoft through Fido, then the fallback ISO if Fido returns nothing. Skip Fido downloads the hosted ISO and does not ask Microsoft. A complete ISO already in C:\Temp\WindowsFeatureISO is used as-is. Backstage launches setup as a SYSTEM scheduled task. Driver updates install first. Leave Auto reboot off to stage and stop. Servers are skipped unless Allow Windows Server is checked and confirmed on Copy. Do not start a second run while one is in progress. 4-hour timeout."
     ),

@@ -25,19 +25,19 @@ $ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProto
 #!ps
 #timeout=600000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.1.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Invoke-WindowsUpdate.ps1?ref=main'); & ([scriptblock]::Create($script)) -Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows.iso' -CheckOnly -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.1.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Invoke-WindowsUpdate.ps1?ref=main'); & ([scriptblock]::Create($script)) -Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows11_Client_x64_en-us_26300_9457.iso' -CheckOnly -Exit
 
 # Feature install, no reboot
 #!ps
 #timeout=14400000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.1.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Invoke-WindowsUpdate.ps1?ref=main'); & ([scriptblock]::Create($script)) -Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows.iso' -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.1.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Invoke-WindowsUpdate.ps1?ref=main'); & ([scriptblock]::Create($script)) -Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows11_Client_x64_en-us_26300_9457.iso' -Exit
 
 # Feature install, auto reboot
 #!ps
 #timeout=14400000
 #maxlength=200000
-$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.1.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Invoke-WindowsUpdate.ps1?ref=main'); & ([scriptblock]::Create($script)) -Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows.iso' -Reboot -Exit
+$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $wc=New-Object Net.WebClient; $wc.Headers.Add('User-Agent','WindowsUpdate-bootstrap/1.1.2'); $wc.Headers.Add('Accept','application/vnd.github.raw'); $script=$wc.DownloadString('https://api.github.com/repos/monobrau/mytools/contents/WindowsUpdate/Invoke-WindowsUpdate.ps1?ref=main'); & ([scriptblock]::Create($script)) -Feature -IsoFallbackUrl 'https://www.famousashtray.com/stuff/Windows11_Client_x64_en-us_26300_9457.iso' -Reboot -Exit
 
 # Firmware / BIOS scan
 #!ps
