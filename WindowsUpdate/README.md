@@ -1,10 +1,10 @@
 # Windows Update (quality + feature + BIOS/firmware)
 
-Scan or install **quality** (non-feature) Windows Updates, upgrade to the
-latest stable Windows 11 from ISO, or install **BIOS / system firmware**
-only. Quality and firmware use the Windows Update Agent COM API (no extra
-module). A feature upgrade downloads the latest stable Windows 11 ISO from
-Microsoft (the download link is resolved by the latest Fido release),
+Scan or install **quality** (non-feature) Windows Updates, upgrade straight
+to **Windows 11 26H2** from ISO, or install **BIOS / system firmware**
+only. 22H2 and 23H2 skip 24H2 and 25H2. Quality and firmware use the
+Windows Update Agent COM API (no extra module). A feature upgrade uses a
+build 26300 ISO (Fido when it returns 26H2, otherwise the fallback URL),
 caches it under `C:\Temp\WindowsFeatureISO`, copies the media to a local
 folder (setup launched from a mounted ISO can exit `0x8007007F`), and runs
 `setup.exe /Auto Upgrade /Quiet /NoReboot` from there. It does not wait for
@@ -26,7 +26,7 @@ change services or search. The launcher adds `-AllowServer` only when
 
 Scan and Apply always run a pre-check:
 
-- System-drive free space (quality: fail under 8 GB; feature: fail under 20 GB)
+- System-drive free space (quality: fail under 8 GB; feature: fail under 20 GB; 22H2/23H2 to 26H2: fail under 32 GB)
 - Recovery / WinRE partition size (fail under 250 MB; warn under 500 / 750 MB)
 - WinRE enabled (`reagentc /info`); Disabled is Fail for feature, Warn for quality
 - `wuauserv`, `bits`, `TrustedInstaller`, `cryptsvc` not Disabled
@@ -54,16 +54,23 @@ that search or install once.
 A download that finishes with errors installs only the updates that actually
 downloaded. The rest are listed and skipped.
 
-## Windows 11 23H2 (build 22631)
+## Windows 11 22H2 and 23H2
 
-Version upgrades from build 22631 fail more often than later builds. Apply
-(not a scan) on that build:
+Builds before 26100 (22H2 and 23H2) upgrade straight to Windows 11 26H2.
+24H2 and 25H2 are not installed in between. An ISO whose name is older
+than build 26300 is ignored. Apply (not a scan) on those builds:
 
 - Runs `reagentc /enable` when Windows RE is disabled
-- Installs pending cumulative and servicing-stack updates before a feature
-  update, then stops so you can reboot and run `-Feature` again
-- Prints the Windows Update `HResult` when a download or install fails.
-  `0x80070643` on this build is usually WinRE
+- Installs pending cumulative and servicing-stack updates before the
+  26H2 upgrade, then stops so you can reboot and run `-Feature` again
+- Requires about 32 GB free and a recovery partition of about 1 GB
+- Stops when a CBS or Windows Update reboot is still pending
+- Runs `setup.exe /Compat ScanOnly` and does not start the upgrade when
+  that scan reports a hard block
+- Turns Dynamic Update on for the upgrade so setup can fetch Safe OS
+  and driver fixes
+- Prints setup errors and compatibility blocks, then removes a failed
+  `C:\$WINDOWS.~BT` so the next run does not reuse it
 
 A feature scan reports those cumulative updates and any safeguard hold
 (`GStatus=0`) or red upgrade block, and does not change the PC.
@@ -76,8 +83,8 @@ the install.
 | --- | --- |
 | `-CheckOnly` | Search and report only |
 | `-Quality` | Cumulative / security / SSU (default) |
-| `-Feature` | Upgrade to the latest stable Windows 11 from ISO (pending cumulative/driver updates still install via Windows Update first) |
-| `-IsoUrl <url>` | Feature only: download the ISO from this URL instead of asking Microsoft through Fido. An ISO already in `C:\Temp\WindowsFeatureISO` is still used first |
+| `-Feature` | Upgrade straight to Windows 11 26H2 from ISO. 22H2 and 23H2 skip 24H2 and 25H2. Pending cumulative/driver updates still install via Windows Update first |
+| `-IsoUrl <url>` | Feature only: download the ISO from this URL instead of asking Microsoft through Fido. A cached ISO is used first only when its name is build 26300 or newer |
 | `-IsoFallbackUrl <url>` | Feature only: try Fido first. If Fido cannot be downloaded or returns no URL, download this URL instead. The launcher passes `https://www.famousashtray.com/stuff/Windows11_Client_x64_en-us_26300_9457.iso`. `-IsoUrl` skips Fido and takes priority |
 | `-Firmware` | BIOS, UEFI, and system-firmware drivers only |
 | `-Reboot` | Auto-reboot when required |
@@ -125,5 +132,7 @@ Two things that cost real time in testing:
   address ("Sentinel marked this request as rejected") and takes a while
   to clear. The launcher passes `-IsoFallbackUrl`, so a feature run that
   gets no URL from Fido downloads `https://www.famousashtray.com/stuff/Windows11_Client_x64_en-us_26300_9457.iso`
-  instead. An ISO already in `C:\Temp\WindowsFeatureISO` is still used
-  without calling Fido at all.
+  instead. A cached ISO is used without calling Fido only when its name
+  is Windows 11 26H2 (build 26300) or newer. Older media, including a
+  cached 24H2 or 25H2 ISO, is left on disk and skipped. Extracted media
+  is reused only when `media\iso-source.txt` names that same ISO.

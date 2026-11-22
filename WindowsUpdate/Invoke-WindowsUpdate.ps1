@@ -7,11 +7,13 @@
     Quality and Firmware use the Windows Update Agent COM API (no
     PSWindowsUpdate module).
     Quality: cumulative / security / SSU / .NET  -  excludes Feature Update titles.
-    Feature: uses the latest stable Windows 11 ISO from Microsoft and
-    runs setup.exe /Auto Upgrade /Quiet /NoReboot. An ISO already in
-    C:\Temp\WindowsFeatureISO is used as-is; otherwise the download link
-    is resolved by the latest Fido release. It does not depend on Windows
-    Update offering the version upgrade, and it stages first; -Reboot
+    Feature: upgrades to Windows 11 26H2 (build 26300). 22H2 and 23H2 go
+    there in one hop and do not stop on 24H2 or 25H2. Media older than
+    build 26300 is not used. Setup runs as
+    setup.exe /Auto Upgrade /Quiet /NoReboot. An ISO already in
+    C:\Temp\WindowsFeatureISO is used when its name is build 26300 or
+    newer; otherwise the download link is resolved by Fido and rejected
+    unless it is 26H2, then the fallback URL. It stages first; -Reboot
     restarts only after setup has staged. SentinelOne must be
     uninstalled before a feature upgrade (see the SentinelOne pre-check).
     Firmware: BIOS, UEFI, and system-firmware drivers only. Other drivers stay.
@@ -27,8 +29,8 @@
     Windows Server and domain controllers exit before any change unless
     -AllowServer is set. The launcher adds that switch only after a
     confirmation.
-    On Windows 11 23H2 (build 22631), Apply also turns WinRE back on and
-    installs pending cumulative updates before a feature update.
+    On Windows 11 22H2 and 23H2 (builds before 26100), Apply turns WinRE
+    back on and installs pending cumulative updates before the 26H2 upgrade.
 
 .PARAMETER CheckOnly
     Search and report only. No download or install.
@@ -37,10 +39,10 @@
     Target non-feature Windows Updates (default if neither switch is set).
 
 .PARAMETER Feature
-    Upgrade Windows 11 to the latest stable version from ISO media.
-    Pending cumulative and driver updates still go through Windows
-    Update first. The ISO is cached under C:\Temp\WindowsFeatureISO
-    and reused on later runs.
+    Upgrade to Windows 11 26H2 from ISO media. 22H2 and 23H2 skip 24H2
+    and 25H2. Pending cumulative and driver updates still go through
+    Windows Update first. A build 26300 ISO is cached under
+    C:\Temp\WindowsFeatureISO and reused on later runs.
 
 .PARAMETER Firmware
     Target BIOS, UEFI, and system-firmware driver updates only.
@@ -58,9 +60,9 @@
 
 .PARAMETER IsoUrl
     Feature only. Download the Windows 11 ISO from this URL instead of
-    asking Microsoft for a link through Fido. An ISO already in
-    C:\Temp\WindowsFeatureISO is still used first. Use this where
-    Microsoft's download service refuses the PC's network.
+    asking Microsoft for a link through Fido. A cached ISO is used first
+    only when its name is build 26300 or newer. Use this where Microsoft's
+    download service refuses the PC's network.
 
 .PARAMETER IsoFallbackUrl
     Feature only. Try Fido first. If Fido cannot be downloaded or returns
@@ -114,12 +116,13 @@ if ($modeCount -gt 1) {
 if ($modeCount -eq 0) { $Quality = $true }
 $script:Channel = $(if ($Firmware) { 'Firmware' } elseif ($Feature) { 'Feature' } else { 'Quality' })
 $script:OsBuild = 0
-$script:IsBuild22631 = $false
+$script:FeatureTargetBuild = 26300
+$script:PreGermanium = $false
 $script:QualityFirst = $false
 $script:DriversFirst = $false
 try {
     $script:OsBuild = [int](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).BuildNumber
-    $script:IsBuild22631 = ($script:OsBuild -eq 22631)
+    $script:PreGermanium = ($script:OsBuild -gt 0 -and $script:OsBuild -lt 26100)
 } catch { }
 
 function Write-Line([string]$Message) {
@@ -232,8 +235,8 @@ function Invoke-UpdateServicePrep {
     return $true
 }
 
-function Invoke-Build22631Prep {
-    Write-Section 'Prep (build 22631)'
+function Invoke-PreGermaniumPrep {
+    Write-Section 'Prep (before 24H2)'
     [void](Invoke-UpdateServicePrep)
     $winre = Get-WinReStatus
     if ($winre -and $winre.Enabled -eq 'Disabled') {
@@ -271,10 +274,12 @@ function Get-WuResultHint {
         0x80240034L { return 'Download failed. BITS, Delivery Optimization (dosvc), or access to Windows Update is the usual cause.' }
         0x80240022L { return 'Every update in the batch failed.' }
         0x8007045BL { return 'A shutdown or restart is already in progress. Wait until the PC is back, then run the install again.' }
-        0x80070643L { return 'On build 22631 this is usually WinRE. Enable it and keep the recovery partition at 250 MB or larger.' }
+        0x80070643L { return 'Usually WinRE. Enable it and keep the recovery partition at 1 GB or larger before a 22H2/23H2 jump to 26H2.' }
         0x8007139FL { return 'ERROR_INVALID_STATE (0x8007139F): the update was not fully staged before install ran, or a prior setup state in C:\$WINDOWS.~BT is incomplete.' }
+        0xC1900101L { return 'A driver failed in the Safe OS phase and setup rolled back. The compatibility scan names the driver.' }
         0xC1900208L { return 'The version upgrade is blocked by an incompatible app or driver.' }
         0xC1900200L { return 'This PC does not meet the requirements for that Windows version.' }
+        0xC1900210L { return 'Compatibility scan found no hard block.' }
         default { return $null }
     }
 }
@@ -296,6 +301,64 @@ function Write-UpdateOperationResults {
         Write-Line ("{0} failed: {1} | ResultCode={2} | HResult={3}" -f $Stage, $title, $one.ResultCode, $hrText)
         $hint = Get-WuResultHint -HResult $hr
         if ($hint) { Write-Line ("Hint: {0}" -f $hint) }
+    }
+}
+
+function Get-IsoBuildFromName {
+    param([string]$Name)
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $null }
+    if ($Name -match '_(\d{5})_') { return [int]$Matches[1] }
+    if ($Name -match '(?i)26H2') { return 26300 }
+    if ($Name -match '(?i)25H2|24H2') { return 26100 }
+    return $null
+}
+
+function Test-IsoMeetsFeatureTarget {
+    param([string]$Name)
+    $build = Get-IsoBuildFromName $Name
+    if ($null -eq $build) { return $false }
+    return ($build -ge $script:FeatureTargetBuild)
+}
+
+function Write-FeatureSetupDetail {
+    $panther = Join-Path $env:SystemDrive '$WINDOWS.~BT\Sources\Panther'
+    $errLog = Join-Path $panther 'setuperr.log'
+    if (Test-Path -LiteralPath $errLog) {
+        $lines = @(Get-Content -LiteralPath $errLog -Tail 80 -ErrorAction SilentlyContinue |
+                Where-Object { $_ -match 'Error|0xC190|0x8007|Fail' })
+        foreach ($line in @($lines | Select-Object -Last 8)) {
+            $text = ([string]$line).Trim()
+            if ($text.Length -gt 240) { $text = $text.Substring(0, 240) }
+            Write-Line ("setuperr: {0}" -f $text)
+        }
+    }
+    $xml = Get-ChildItem -LiteralPath $panther -Filter 'CompatData*.xml' -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if (-not $xml) { return }
+    $raw = ''
+    try { $raw = [IO.File]::ReadAllText($xml.FullName) } catch { return }
+    $shown = 0
+    foreach ($m in [regex]::Matches($raw, '(?i)(?:inf|friendlyName|name)="([^"]+)"[^>]{0,180}blockMigration="True"|blockMigration="True"[^>]{0,180}(?:inf|friendlyName|name)="([^"]+)"')) {
+        $name = $m.Groups[1].Value
+        if ([string]::IsNullOrWhiteSpace($name)) { $name = $m.Groups[2].Value }
+        if ([string]::IsNullOrWhiteSpace($name)) { continue }
+        Write-Line ("Compat block: {0}" -f $name)
+        $shown++
+        if ($shown -ge 8) { break }
+    }
+}
+
+function Clear-FailedFeatureState {
+    if (Test-FeatureSetupRunning) {
+        Write-Line 'Setup is still running. Leaving C:\$WINDOWS.~BT in place.'
+        return
+    }
+    $bt = Join-Path $env:SystemDrive '$WINDOWS.~BT'
+    if (-not (Test-Path -LiteralPath $bt)) { return }
+    Write-Line 'Removing the failed setup folder so the next run does not reuse it.'
+    try { Remove-Item -LiteralPath $bt -Recurse -Force -ErrorAction Stop } catch {
+        Write-Line ("Could not remove {0}: {1}" -f $bt, $_.Exception.Message)
     }
 }
 
@@ -336,6 +399,21 @@ function Get-RecoveryPartitions {
         $out += [pscustomobject]@{ Disk = $disk; Partition = $num; SizeMB = $mb }
     }
     return $out
+}
+
+function Get-EfiPartitionMB {
+    $smallest = $null
+    $parts = @()
+    try { $parts = @(Get-Partition -ErrorAction Stop) } catch { return $null }
+    foreach ($p in $parts) {
+        $gpt = ''
+        try { $gpt = [string]$p.GptType } catch { }
+        if ($gpt -ne '{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}') { continue }
+        $mb = 0
+        try { $mb = [math]::Round([double]$p.Size / 1MB, 0) } catch { }
+        if ($null -eq $smallest -or $mb -lt $smallest) { $smallest = $mb }
+    }
+    return $smallest
 }
 
 function Get-WinReStatus {
@@ -439,13 +517,15 @@ function Invoke-FeatureSetupTask {
         [string]$Dir,
         [string]$SetupPath,
         [string]$Account,
+        [string]$ArgumentList,
+        [int]$TimeoutHours = 4,
         [switch]$Interactive
     )
     $runner = Join-Path $Dir 'Run-FeatureSetup.ps1'
     $resultFile = Join-Path $Dir 'setup-result.txt'
     Remove-Item -LiteralPath $resultFile -Force -ErrorAction SilentlyContinue
     @(
-        ("`$p = Start-Process -FilePath '{0}' -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru" -f $SetupPath),
+        ("`$p = Start-Process -FilePath '{0}' -ArgumentList '{1}' -Wait -PassThru" -f $SetupPath, $ArgumentList),
         ("Set-Content -LiteralPath '{0}' -Value `$p.ExitCode" -f $resultFile)
     ) | Set-Content -LiteralPath $runner -Encoding ASCII
     $taskName = 'mytools-FeatureUpgrade'
@@ -456,9 +536,9 @@ function Invoke-FeatureSetupTask {
     & schtasks.exe @createArgs | Out-Null
     if ($LASTEXITCODE -ne 0) { return $null }
     & schtasks.exe /Run /TN $taskName | Out-Null
-    Write-Line ("Setup launched as {0}. Waiting here for it to finish; staging can take an hour." -f $Account)
+    Write-Line ("Setup launched as {0}. Waiting here for it to finish." -f $Account)
     Write-Line 'Setup status prints below only when the percent moves.'
-    $deadline = (Get-Date).AddHours(4)
+    $deadline = (Get-Date).AddHours($TimeoutHours)
     $lastProgress = $null
     $lastHost = $null
     while (-not (Test-Path -LiteralPath $resultFile) -and (Get-Date) -lt $deadline) {
@@ -476,6 +556,43 @@ function Invoke-FeatureSetupTask {
     & schtasks.exe /Delete /TN $taskName /F | Out-Null
     if (-not (Test-Path -LiteralPath $resultFile)) { return $null }
     try { return [int](Get-Content -LiteralPath $resultFile -Raw).Trim() } catch { return $null }
+}
+
+function Invoke-FeatureSetupOnce {
+    param(
+        [string]$Dir,
+        [string]$SetupPath,
+        [string]$ArgumentList,
+        [int]$TimeoutHours = 4
+    )
+    $mySession = 1
+    try { $mySession = (Get-Process -Id $PID -ErrorAction Stop).SessionId } catch { }
+    if ($mySession -ne 0) {
+        $setup = Start-Process -FilePath $SetupPath -ArgumentList $ArgumentList -Wait -PassThru -ErrorAction Stop
+        return $setup.ExitCode
+    }
+    # Running setup.exe straight out of Backstage dies during
+    # automation initialization (0x8007007F). A scheduled task running
+    # as SYSTEM gets a proper service context. Only if that still
+    # returns 0x8007007F do we fall back to the signed-in session.
+    Write-Line 'Backstage session: launching setup through a scheduled task as SYSTEM.'
+    $setupExit = Invoke-FeatureSetupTask -Dir $Dir -SetupPath $SetupPath -Account 'SYSTEM' -ArgumentList $ArgumentList -TimeoutHours $TimeoutHours
+    if ($setupExit -eq -2147024769) {
+        $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
+        $owner = $null
+        if ($explorerProc) {
+            try {
+                $proc = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId={0}" -f $explorerProc.Id) -ErrorAction Stop
+                $o = Invoke-CimMethod -InputObject $proc -MethodName GetOwner -ErrorAction Stop
+                if ($o.ReturnValue -eq 0) { $owner = "{0}\{1}" -f $o.Domain, $o.User }
+            } catch { }
+        }
+        if ($owner) {
+            Write-Line ("Setup as SYSTEM returned 0x8007007F. Retrying in the signed-in session ({0})." -f $owner)
+            $setupExit = Invoke-FeatureSetupTask -Dir $Dir -SetupPath $SetupPath -Account $owner -ArgumentList $ArgumentList -TimeoutHours $TimeoutHours -Interactive
+        }
+    }
+    return $setupExit
 }
 
 function Invoke-FeatureIsoUpgrade {
@@ -509,16 +626,21 @@ function Invoke-FeatureIsoUpgrade {
         try { $uiCulture = (Get-WinSystemLocale -ErrorAction Stop).Name } catch { }
     }
 
-    # An ISO already in the cache folder wins, and Fido is not called at
-    # all. Microsoft's download protection rejects repeated Fido calls
-    # from one address, so seeding this folder with one browser-downloaded
-    # ISO (copied to each PC) is the reliable way to supply media.
+    # A cached ISO is used only when its name is Windows 11 26H2 (build
+    # 26300) or newer. 24H2 and 25H2 media is left on disk and ignored.
+    # 22H2 and 23H2 go straight to 26H2.
     $iso = $null
     $isoName = $null
-    $cachedIso = Get-ChildItem -LiteralPath $dir -Filter '*.iso' -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.Length -gt 5GB } |
-        Sort-Object LastWriteTime -Descending |
-        Select-Object -First 1
+    $cachedCandidates = @(Get-ChildItem -LiteralPath $dir -Filter '*.iso' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Length -gt 5GB } |
+            Sort-Object LastWriteTime -Descending)
+    $cachedIso = $null
+    foreach ($cand in $cachedCandidates) {
+        if (Test-IsoMeetsFeatureTarget $cand.Name) { $cachedIso = $cand; break }
+    }
+    if (-not $cachedIso -and $cachedCandidates.Count -gt 0) {
+        Write-Line ("Skipping cached ISO {0}. Feature target is Windows 11 26H2 (build {1})." -f $cachedCandidates[0].Name, $script:FeatureTargetBuild)
+    }
     # A truncated ISO still passes a size floor and then fails as
     # "corrupted and unreadable" when its files are copied. When the
     # caller supplied the source URL, only trust the cache if its size
@@ -587,9 +709,16 @@ function Invoke-FeatureIsoUpgrade {
                     }
                 }
             }
+            if ($url -and [string]::IsNullOrWhiteSpace($IsoUrl)) {
+                $fidoName = [IO.Path]::GetFileName(($url -split '\?')[0])
+                if (-not (Test-IsoMeetsFeatureTarget $fidoName)) {
+                    Write-Line ("Fido media '{0}' is not Windows 11 26H2. It will not be used." -f $fidoName)
+                    $url = $null
+                }
+            }
             if (-not $url -and -not [string]::IsNullOrWhiteSpace($IsoFallbackUrl)) {
                 $url = $IsoFallbackUrl.Trim()
-                Write-Line ("Fido did not return an ISO URL. Using fallback: {0}" -f $url)
+                Write-Line ("Fido did not return a 26H2 ISO URL. Using fallback: {0}" -f $url)
             }
             if (-not $url) {
                 Write-Line 'Result: Fido did not return an ISO download URL from Microsoft.'
@@ -598,7 +727,7 @@ function Invoke-FeatureIsoUpgrade {
                     if ($t.Length -gt 200) { $t = $t.Substring(0, 200) }
                     Write-Line ("Fido output: {0}" -f $t)
                 }
-                Write-Line ("Workaround: copy a Windows 11 ISO into {0} and rerun (a cached ISO is used without calling Fido), or pass -IsoUrl or -IsoFallbackUrl." -f $dir)
+                Write-Line ("Workaround: copy a Windows 11 26H2 ISO (build {0}) into {1} and rerun, or pass -IsoUrl or -IsoFallbackUrl." -f $script:FeatureTargetBuild, $dir)
                 $script:ExitCode = 2
                 return
             }
@@ -625,6 +754,11 @@ function Invoke-FeatureIsoUpgrade {
         }
     }
     Write-Line ("ISO size: {0:N0} bytes" -f (Get-Item -LiteralPath $iso).Length)
+    if (-not (Test-IsoMeetsFeatureTarget $isoName)) {
+        Write-Line ("Result: ISO '{0}' is not Windows 11 26H2 (build {1}). 24H2 and 25H2 media is not used. Not starting setup." -f $isoName, $script:FeatureTargetBuild)
+        $script:ExitCode = 2
+        return
+    }
 
     if ($isoName -match '_(\d{5})_') {
         $isoBuild = [int]$Matches[1]
@@ -641,16 +775,27 @@ function Invoke-FeatureIsoUpgrade {
     # child processes cannot load from the mounted drive.
     $media = Join-Path $dir 'media'
     $setupPath = Join-Path $media 'setup.exe'
+    $mediaStamp = Join-Path $media 'iso-source.txt'
     $mediaComplete = (Test-Path -LiteralPath $setupPath) -and
         ((Test-Path -LiteralPath (Join-Path $media 'Sources\install.wim')) -or
          (Test-Path -LiteralPath (Join-Path $media 'Sources\install.esd')))
-    if ($mediaComplete) {
+    $stampOk = $false
+    if ($mediaComplete -and (Test-Path -LiteralPath $mediaStamp)) {
+        $stampName = ''
+        try { $stampName = (Get-Content -LiteralPath $mediaStamp -Raw -ErrorAction Stop).Trim() } catch { }
+        $stampOk = ($stampName -eq $isoName)
+    }
+    if ($mediaComplete -and $stampOk) {
         Write-Line 'ISO media already copied locally. Reusing it.'
     } else {
         # A copy interrupted partway leaves a setup.exe behind and looks
         # reusable. Clear any partial media so setup gets a full set.
         if (Test-Path -LiteralPath $media) {
-            Write-Line 'Removing incomplete local media copy.'
+            if ($mediaComplete) {
+                Write-Line 'Local media is from a different ISO. Removing it so 26H2 media is copied.'
+            } else {
+                Write-Line 'Removing incomplete local media copy.'
+            }
             Remove-Item -LiteralPath $media -Recurse -Force -ErrorAction SilentlyContinue
         }
         $mounted = $false
@@ -662,6 +807,7 @@ function Invoke-FeatureIsoUpgrade {
             New-Item -ItemType Directory -Force -Path $media | Out-Null
             Write-Line 'Copying ISO media to a local folder before running setup.'
             Copy-Item -Path ("{0}:\*" -f $drive) -Destination $media -Recurse -Force -ErrorAction Stop
+            Set-Content -LiteralPath $mediaStamp -Value $isoName -Encoding ASCII
         } catch {
             Write-Line ("Result: Could not copy ISO media locally: {0}" -f $_.Exception.Message)
             $script:ExitCode = 2
@@ -693,52 +839,59 @@ function Invoke-FeatureIsoUpgrade {
         }
     }
 
-    $setupExit = $null
-    $mySession = 1
-    try { $mySession = (Get-Process -Id $PID -ErrorAction Stop).SessionId } catch { }
-    if ($mySession -ne 0) {
+    $setupArgs = '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept'
+    if ($script:PreGermanium) {
+        $setupArgs = '/Auto Upgrade /Quiet /DynamicUpdate Enable /Compat IgnoreWarning /NoReboot /EULA Accept'
+        Write-Line '22H2/23H2 to 26H2: Dynamic Update is on so setup can fetch Safe OS and driver fixes.'
+        Write-Line 'Compatibility scan before the 26H2 upgrade.'
+        $scanExit = $null
         try {
-            $setup = Start-Process -FilePath $setupPath -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat IgnoreWarning /NoReboot /EULA Accept' -Wait -PassThru -ErrorAction Stop
-            $setupExit = $setup.ExitCode
+            $scanExit = Invoke-FeatureSetupOnce -Dir $dir -SetupPath $setupPath -ArgumentList '/Auto Upgrade /Quiet /DynamicUpdate Disable /Compat ScanOnly /NoReboot /EULA Accept' -TimeoutHours 1
         } catch {
-            Write-Line ("Result: ISO setup did not start: {0}" -f $_.Exception.Message)
+            Write-Line ("Result: Compatibility scan did not start: {0}" -f $_.Exception.Message)
             $script:ExitCode = 2
             return
         }
-    } else {
-        # Running setup.exe straight out of Backstage dies during
-        # automation initialization (0x8007007F); Backstage's process
-        # environment is the problem, not SYSTEM in session 0. A
-        # scheduled task running as SYSTEM gets a proper service
-        # context and works with nobody signed in. Only if that still
-        # returns 0x8007007F do we fall back to the signed-in session.
-        Write-Line 'Backstage session: launching setup through a scheduled task as SYSTEM.'
-        $setupExit = Invoke-FeatureSetupTask -Dir $dir -SetupPath $setupPath -Account 'SYSTEM'
-        if ($setupExit -eq -2147024769) {
-            $explorerProc = Get-Process -Name explorer -ErrorAction SilentlyContinue | Select-Object -First 1
-            $owner = $null
-            if ($explorerProc) {
-                try {
-                    $proc = Get-CimInstance -ClassName Win32_Process -Filter ("ProcessId={0}" -f $explorerProc.Id) -ErrorAction Stop
-                    $o = Invoke-CimMethod -InputObject $proc -MethodName GetOwner -ErrorAction Stop
-                    if ($o.ReturnValue -eq 0) { $owner = "{0}\{1}" -f $o.Domain, $o.User }
-                } catch { }
-            }
-            if ($owner) {
-                Write-Line ("Setup as SYSTEM returned 0x8007007F. Retrying in the signed-in session ({0})." -f $owner)
-                $setupExit = Invoke-FeatureSetupTask -Dir $dir -SetupPath $setupPath -Account $owner -Interactive
-            }
-        }
-        if ($null -eq $setupExit) {
-            Write-Line 'Result: Setup did not report back. It may still be running; check for SetupHost before starting anything else.'
+        if ($null -eq $scanExit) {
+            Write-Line 'Result: Compatibility scan did not report back. Setup was not started.'
             $script:ExitCode = 1
             return
         }
+        $scanCode = ConvertTo-WuHResult $scanExit
+        Write-Line ("Compatibility scan exit: {0} ({1})" -f $scanExit, (Format-WuHResult $scanExit))
+        if ($scanCode -ne 0 -and $scanCode -ne 0xC1900210L) {
+            Write-Line 'Result: Compatibility scan blocked the 26H2 upgrade. Setup was not started.'
+            $hint = Get-WuResultHint $scanExit
+            if ($hint) { Write-Line $hint }
+            Write-FeatureSetupDetail
+            Clear-FailedFeatureState
+            $script:ExitCode = 4
+            return
+        }
+        Write-Line 'Compatibility scan found no hard block.'
+    }
+
+    $setupExit = $null
+    try {
+        $setupExit = Invoke-FeatureSetupOnce -Dir $dir -SetupPath $setupPath -ArgumentList $setupArgs -TimeoutHours 4
+    } catch {
+        Write-Line ("Result: ISO setup did not start: {0}" -f $_.Exception.Message)
+        $script:ExitCode = 2
+        return
+    }
+    if ($null -eq $setupExit) {
+        Write-Line 'Result: Setup did not report back. It may still be running; check for SetupHost before starting anything else.'
+        $script:ExitCode = 1
+        return
     }
 
     Write-Line ("Setup exit: {0} ({1})" -f $setupExit, (Format-WuHResult $setupExit))
     if ($setupExit -ne 0) {
-        Write-Line 'Result: Setup stopped before staging. Not rebooting. Check C:\$WINDOWS.~BT\Sources\Panther\setuperr.log.'
+        Write-Line 'Result: Setup stopped before staging. Not rebooting.'
+        $hint = Get-WuResultHint $setupExit
+        if ($hint) { Write-Line $hint }
+        Write-FeatureSetupDetail
+        Clear-FailedFeatureState
         $script:ExitCode = 2
         return
     }
@@ -793,8 +946,8 @@ function Invoke-UpdatePreCheck {
     if ($os) {
         Write-Line ("OS: {0} ({1}.{2})" -f $os.Caption.Trim(), $os.Version, $os.BuildNumber)
     }
-    if ($script:IsBuild22631 -and -not $Firmware) {
-        Write-Line 'Note: Build 22631 (Windows 11 23H2). Apply re-enables Windows Update services and WinRE when policy allows. Pending cumulative updates install before a version upgrade.'
+    if ($script:PreGermanium -and -not $Firmware) {
+        Write-Line ("Note: Build {0} is before Windows 11 24H2. Apply installs pending cumulative updates, then the next -Feature run upgrades straight to 26H2." -f $script:OsBuild)
     }
     Write-Line ("ComputerName: {0}" -f $env:COMPUTERNAME)
     Write-Line ("Channel: {0}" -f $script:Channel)
@@ -805,7 +958,12 @@ function Invoke-UpdatePreCheck {
         Write-Check Fail 'SystemDrive' 'Could not read system volume free space.'
     } else {
         Write-Line ("SystemDrive: {0} {1} GB free / {2} GB" -f $disk.DeviceID, $disk.FreeGB, $disk.SizeGB)
-        if ($Feature) {
+        if ($Feature -and $script:PreGermanium) {
+            if ($disk.FreeGB -lt 10) { Write-Check Fail 'DiskSpace' ("{0} GB free; the 26H2 jump needs at least 32 GB (critical below 10 GB)." -f $disk.FreeGB) }
+            elseif ($disk.FreeGB -lt 32) { Write-Check Fail 'DiskSpace' ("{0} GB free; 22H2/23H2 to 26H2 needs at least 32 GB." -f $disk.FreeGB) }
+            elseif ($disk.FreeGB -lt 40) { Write-Check Warn 'DiskSpace' ("{0} GB free; 40+ GB recommended for the 26H2 jump." -f $disk.FreeGB) }
+            else { Write-Check Pass 'DiskSpace' ("{0} GB free." -f $disk.FreeGB) }
+        } elseif ($Feature) {
             if ($disk.FreeGB -lt 10) { Write-Check Fail 'DiskSpace' ("{0} GB free; feature update needs at least 20 GB (critical below 10 GB)." -f $disk.FreeGB) }
             elseif ($disk.FreeGB -lt 20) { Write-Check Fail 'DiskSpace' ("{0} GB free; feature update typically needs 20+ GB." -f $disk.FreeGB) }
             elseif ($disk.FreeGB -lt 30) { Write-Check Warn 'DiskSpace' ("{0} GB free; 30+ GB recommended for feature update." -f $disk.FreeGB) }
@@ -823,14 +981,20 @@ function Invoke-UpdatePreCheck {
 
     $recs = @(Get-RecoveryPartitions)
     if ($recs.Count -eq 0) {
-        Write-Check Warn 'RecoveryPartition' 'No GPT Recovery / WinRE partition found. Feature updates and some CUs can fail if WinRE cannot be updated.'
+        if ($Feature -and $script:PreGermanium) {
+            Write-Check Fail 'RecoveryPartition' 'No GPT Recovery / WinRE partition found. The 26H2 jump fails without one.'
+        } else {
+            Write-Check Warn 'RecoveryPartition' 'No GPT Recovery / WinRE partition found. Feature updates and some CUs can fail if WinRE cannot be updated.'
+        }
     } else {
         foreach ($r in $recs) {
             $label = 'disk{0}p{1} {2} MB' -f $r.Disk, $r.Partition, $r.SizeMB
             if ($r.SizeMB -gt 0 -and $r.SizeMB -lt 250 -and -not $Firmware) {
-                Write-Check Fail 'RecoveryPartition' ("{0}  -  too small (need 250+ MB; 500+ MB safer). Common CU/WinRE failure." -f $label)
+                Write-Check Fail 'RecoveryPartition' ("{0}  -  too small (need 250+ MB; 1 GB for a 22H2/23H2 jump to 26H2)." -f $label)
             } elseif ($r.SizeMB -gt 0 -and $r.SizeMB -lt 250) {
                 Write-Check Warn 'RecoveryPartition' ("{0}  -  small WinRE partition. Firmware install does not use it." -f $label)
+            } elseif ($Feature -and $script:PreGermanium -and $r.SizeMB -gt 0 -and $r.SizeMB -lt 1000) {
+                Write-Check Fail 'RecoveryPartition' ("{0}  -  under 1000 MB. The 26H2 jump needs a larger recovery partition." -f $label)
             } elseif ($Feature -and $r.SizeMB -lt 750) {
                 Write-Check Warn 'RecoveryPartition' ("{0}  -  under 750 MB; feature updates often fail until WinRE is resized." -f $label)
             } elseif ($r.SizeMB -lt 500 -and -not $Firmware) {
@@ -838,6 +1002,13 @@ function Invoke-UpdatePreCheck {
             } else {
                 Write-Check Pass 'RecoveryPartition' $label
             }
+        }
+    }
+
+    if ($Feature -and $script:PreGermanium) {
+        $efiMb = Get-EfiPartitionMB
+        if ($null -ne $efiMb -and $efiMb -gt 0 -and $efiMb -lt 200) {
+            Write-Check Warn 'EfiPartition' ("{0} MB. Under 200 MB can fail the 26H2 jump." -f $efiMb)
         }
     }
 
@@ -905,8 +1076,10 @@ function Invoke-UpdatePreCheck {
     $pending = @(Test-PendingReboot)
     if ($pending.Count -gt 0) {
         $onlyRename = ($pending.Count -eq 1 -and $pending[0] -eq 'PendingFileRenameOperations')
-        if ($script:IsBuild22631 -and $onlyRename) {
+        if ($onlyRename) {
             Write-Check Warn 'PendingReboot' 'PendingFileRenameOperations only. No CBS or Windows Update reboot is pending, so this does not stop the install.'
+        } elseif ($Feature -and $script:PreGermanium) {
+            Write-Check Fail 'PendingReboot' (($pending -join ', ') + '  -  reboot before the 26H2 jump.')
         } else {
             Write-Check Warn 'PendingReboot' (($pending -join ', ') + '  -  finish the reboot before a reliable install.')
         }
@@ -914,7 +1087,7 @@ function Invoke-UpdatePreCheck {
         Write-Check Pass 'PendingReboot' 'No CBS/WU pending-reboot keys.'
     }
 
-    if ($Feature -and $script:IsBuild22631) {
+    if ($Feature) {
         Write-SafeguardHolds
     }
 
@@ -1013,7 +1186,7 @@ function Search-WindowsUpdates {
     }
 
     $qualityFirst = @()
-    if ($Feature -and $script:IsBuild22631) {
+    if ($Feature -and $script:PreGermanium) {
         foreach ($u in $all) {
             if (-not (Test-IsServicingUpdate $u)) { continue }
             $title = [string]$u.Title
@@ -1021,14 +1194,14 @@ function Search-WindowsUpdates {
             $qualityFirst += $u
         }
         if ($qualityFirst.Count -gt 0) {
-            Write-Line ("Build 22631: {0} cumulative or servicing-stack update(s) are still pending." -f $qualityFirst.Count)
+            Write-Line ("Build {0}: {1} cumulative or servicing-stack update(s) are still pending." -f $script:OsBuild, $qualityFirst.Count)
             foreach ($u in $qualityFirst) {
                 Write-Line ("QualityPending: {0} | {1}" -f $u.Title, (Get-KbList $u))
             }
             if ($CheckOnly) {
-                Write-Line 'Build 22631: install these before a version upgrade. This scan does not install them.'
+                Write-Line 'Install these before the 26H2 upgrade. This scan does not install them.'
             } else {
-                Write-Line 'Build 22631: this run installs those updates first. Run -Feature again after reboot for the version upgrade.'
+                Write-Line 'This run installs those updates first. Reboot, then run -Feature again. That run upgrades straight to Windows 11 26H2.'
                 $script:QualityFirst = $true
             }
         }
@@ -1235,7 +1408,7 @@ function Install-WindowsUpdates {
     if ($inst.RebootRequired) {
         Write-Line 'PENDING_REBOOT'
         if ($script:QualityFirst) {
-            Write-Line 'Build 22631: reboot finishes the cumulative updates. Run -Feature again after the PC is back for the version upgrade.'
+            Write-Line 'Reboot finishes the cumulative updates. Run -Feature again after the PC is back. That run upgrades straight to Windows 11 26H2.'
         }
         if ($script:DriversFirst) {
             Write-Line 'Driver updates need a restart before the version upgrade. Run -Feature again after the PC is back.'
@@ -1251,7 +1424,7 @@ function Install-WindowsUpdates {
         }
         Write-Line 'Result: Installed. Reboot is required. Not rebooting.'
         if ($script:QualityFirst) {
-            Write-Line 'Build 22631: reboot, then run -Feature again for the version upgrade.'
+            Write-Line 'Reboot, then run -Feature again. That run upgrades straight to Windows 11 26H2.'
         }
         $script:ExitCode = 1
         return
@@ -1263,7 +1436,7 @@ function Install-WindowsUpdates {
     }
     Write-Line 'Result: Installed. No reboot required.'
     if ($script:QualityFirst) {
-        Write-Line 'Build 22631: cumulative updates installed. Run -Feature again for the version upgrade.'
+        Write-Line 'Cumulative updates installed. Run -Feature again. That run upgrades straight to Windows 11 26H2.'
     }
     $script:ExitCode = 0
 }
@@ -1280,8 +1453,8 @@ if (Test-IsWindowsServer) {
     Write-Line 'AllowServer: this Windows Server is included.'
 }
 if (-not $CheckOnly) {
-    if ($script:IsBuild22631 -and -not $Firmware) {
-        Invoke-Build22631Prep
+    if ($script:PreGermanium -and -not $Firmware) {
+        Invoke-PreGermaniumPrep
     } else {
         Write-Section 'Prep'
         [void](Invoke-UpdateServicePrep -Reason 'Windows Update has to be running before a search or install.')
@@ -1372,7 +1545,7 @@ if ($CheckOnly) {
         Write-Line ("Result: {0} driver update(s) pending before a version upgrade." -f @($found.Drivers).Count)
         $script:ExitCode = 1
     } elseif ($Feature) {
-        Write-Line 'Result: No quality or driver updates waiting. Running -Feature without -CheckOnly stages the latest stable Windows 11 from ISO, whether or not Windows Update offers it.'
+        Write-Line 'Result: No quality or driver updates waiting. Running -Feature without -CheckOnly upgrades straight to Windows 11 26H2 from ISO.'
         $script:ExitCode = 1
     } else {
         Write-Line 'Result: Nothing to install.'
